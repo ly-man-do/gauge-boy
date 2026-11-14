@@ -1,0 +1,36 @@
+# Contributing to GaugeBoy
+
+Thanks for your interest. GaugeBoy is in early development (M0 spike), so the most useful help right now is testing adapters and cars.
+
+## Compatibility reports
+
+If you try GaugeBoy with a Wi-Fi ELM327 adapter or a vehicle, please open a GitHub issue with:
+
+- Adapter brand, model and reported ELM327 version (`ATI`).
+- Adapter network type and security (open, WEP, WPA2; access point or ad-hoc) and whether you had to set a manual IP on the 3DS.
+- 3DS model and firmware version.
+- Vehicle make, model, year and engine, and the protocol shown by `ATDPN`.
+- What worked, what didn't, and any error messages.
+
+An issue template for these reports will be added later. Results feed the compatibility list in `docs/`.
+
+## Before you change code
+
+- Read the [project brief](docs/gaugeboy-brief.md). It is the source of truth for scope; changes outside it should start as an issue.
+- Code is C11 built with devkitPro / devkitARM and libctru.
+- `source/elm327/` and `source/obd/` must stay free of 3DS headers so they build and run as host unit tests (`make test`). Add tests for any change there, including bad and partial adapter replies.
+- The full devkitPro build and `make test` must pass.
+
+## Rules that are not negotiable
+
+- **Safety:** no feature may require touching the 3DS while the vehicle is moving. Clearing codes always needs a confirmation dialog. Performance timers keep their closed-course warning, and there are no online leaderboards.
+- **No third-party IP:** no Nintendo or other logos, trademarks, fonts, game assets, music or sounds. Fonts must be open-licensed (e.g. SIL OFL). Music and sounds must be original, CC0 or CC-BY, with the source and license recorded in `CREDITS.md`.
+- **No proprietary data:** DTC descriptions are limited to the generic SAE J2012 codes; no copied manufacturer databases.
+
+## Issue tracking
+
+Development work is tracked with [Beads](https://github.com/gastownhall/beads) in `.beads/`. You don't need Beads to contribute; GitHub issues and pull requests are fine.
+
+## License
+
+By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE).
