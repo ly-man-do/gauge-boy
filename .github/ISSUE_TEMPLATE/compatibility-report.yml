@@ -10,8 +10,7 @@ body:
 
         **Safety:** test parked, or as a passenger. Never operate the 3DS while driving.
 
-        The app saves its log to `sdmc:/3ds/gaugeboy/spike-log.txt` on the SD card. Pasting the
-        relevant part below helps a lot.
+        The app saves its log to `sdmc:/3ds/gaugeboy/spike-log.txt` on the SD card. Pasting the relevant part below helps a lot.
 
   - type: input
     id: gaugeboy_version
