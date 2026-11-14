@@ -4,7 +4,9 @@ Thanks for your interest. GaugeBoy is in early development (M0 spike), so the mo
 
 ## Compatibility reports
 
-If you try GaugeBoy with a Wi-Fi ELM327 adapter or a vehicle, please open a GitHub issue with:
+If you try GaugeBoy with a Wi-Fi ELM327 adapter or a vehicle, please file a
+[compatibility report](https://github.com/ly-man-do/gauge-boy/issues/new?template=compatibility-report.yml).
+The form asks for:
 
 - Adapter brand, model and reported ELM327 version (`ATI`).
 - Adapter network type and security (open, WEP, WPA2; access point or ad-hoc) and whether you had to set a manual IP on the 3DS.
@@ -12,7 +14,7 @@ If you try GaugeBoy with a Wi-Fi ELM327 adapter or a vehicle, please open a GitH
 - Vehicle make, model, year and engine, and the protocol shown by `ATDPN`.
 - What worked, what didn't, and any error messages.
 
-An issue template for these reports will be added later. Results feed the compatibility list in `docs/`.
+Paste the relevant part of `sdmc:/3ds/gaugeboy/spike-log.txt` if you can. Results feed the compatibility list in `docs/`.
 
 ## Before you change code
 

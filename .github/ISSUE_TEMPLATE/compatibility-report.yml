@@ -1,0 +1,186 @@
+name: Adapter / vehicle compatibility report
+description: Tell us how GaugeBoy worked with your Wi-Fi ELM327 adapter, New 3DS and vehicle.
+title: "[Compat] <adapter> + <vehicle>"
+labels: ["compatibility"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing GaugeBoy. Reports feed the compatibility list in `docs/`.
+
+        **Safety:** test parked, or as a passenger. Never operate the 3DS while driving.
+
+        The app saves its log to `sdmc:/3ds/gaugeboy/spike-log.txt` on the SD card. Pasting the
+        relevant part below helps a lot.
+
+  - type: input
+    id: gaugeboy_version
+    attributes:
+      label: GaugeBoy version
+      description: Shown at the top of the screen, e.g. 0.0.0.
+      placeholder: 0.0.0
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "### Adapter"
+
+  - type: input
+    id: adapter
+    attributes:
+      label: Adapter brand and model
+      description: As printed on the adapter or its listing. Add a store link if you have one.
+      placeholder: e.g. unbranded "OBD2 WIFI" clone, blue case
+    validations:
+      required: true
+
+  - type: input
+    id: adapter_version
+    attributes:
+      label: ELM327 version reported
+      description: The reply to ATZ or ATI in the log, e.g. "ELM327 v1.5". Clones often report a version they don't fully implement.
+      placeholder: ELM327 v1.5
+    validations:
+      required: false
+
+  - type: input
+    id: adapter_address
+    attributes:
+      label: Adapter IP address and port
+      placeholder: 192.168.0.10:35000
+    validations:
+      required: false
+
+  - type: dropdown
+    id: network_security
+    attributes:
+      label: Adapter Wi-Fi security
+      options:
+        - Open (no password)
+        - WEP
+        - WPA / WPA2
+        - Don't know
+    validations:
+      required: true
+
+  - type: dropdown
+    id: network_mode
+    attributes:
+      label: Adapter Wi-Fi mode
+      description: The 3DS cannot join ad-hoc networks.
+      options:
+        - Access point (normal Wi-Fi network)
+        - Ad-hoc
+        - Don't know
+    validations:
+      required: true
+
+  - type: dropdown
+    id: manual_ip
+    attributes:
+      label: Did you need a manual IP address on the 3DS?
+      description: Many adapters have no DHCP server.
+      options:
+        - "Yes"
+        - "No"
+        - Don't know
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "### 3DS"
+
+  - type: dropdown
+    id: console
+    attributes:
+      label: Console
+      options:
+        - New Nintendo 3DS
+        - New Nintendo 3DS XL
+        - New Nintendo 2DS XL
+        - Other (please say in notes)
+    validations:
+      required: true
+
+  - type: input
+    id: firmware
+    attributes:
+      label: System version and Luma3DS version
+      description: System Settings shows the system version; Luma3DS shows its version when you hold SELECT at boot.
+      placeholder: e.g. 11.17.0-50U, Luma3DS v13.3
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "### Vehicle"
+
+  - type: input
+    id: vehicle
+    attributes:
+      label: Make, model, year and engine
+      placeholder: e.g. 2008 Honda Ridgeline 3.5L V6
+    validations:
+      required: true
+
+  - type: input
+    id: protocol
+    attributes:
+      label: Protocol (ATDPN result)
+      description: 'From the ATDPN button, e.g. "Protocol 6: ISO 15765-4 CAN (11 bit, 500 kbaud) (auto)".'
+      placeholder: Protocol 6
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "### Results"
+
+  - type: checkboxes
+    id: worked
+    attributes:
+      label: What worked?
+      description: Tick everything that worked at least once.
+      options:
+        - label: The 3DS joined the adapter's Wi-Fi and kept the connection saved
+        - label: CONNECT reached the adapter
+        - label: ATZ answered reliably (10 or more tries)
+        - label: ATSP0+0100 found the vehicle protocol
+        - label: ATRV showed a sensible voltage
+        - label: 0902 returned the VIN
+        - label: The app reconnected after closing and reopening the lid
+
+  - type: textarea
+    id: problems
+    attributes:
+      label: What didn't work?
+      description: Error messages, timeouts, anything odd. Say what you tapped and what happened.
+    validations:
+      required: false
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log excerpt
+      description: The relevant part of sdmc:/3ds/gaugeboy/spike-log.txt.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Setup steps you needed, photos of the adapter, other vehicles you tried.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: I tested while parked or as a passenger, not while driving.
+          required: true
