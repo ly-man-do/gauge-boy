@@ -90,12 +90,12 @@ BANNER_AUDIO	:=	meta/banner.wav
 RSF		:=	meta/gaugeboy.rsf
 
 # The .cia version comes from source/version.h.
-GB_VERSION_MAJOR	:=	$(shell sed -n 's/^\#define GB_VERSION_MAJOR \([0-9]*\)$$/\1/p' source/version.h)
-GB_VERSION_MINOR	:=	$(shell sed -n 's/^\#define GB_VERSION_MINOR \([0-9]*\)$$/\1/p' source/version.h)
-GB_VERSION_PATCH	:=	$(shell sed -n 's/^\#define GB_VERSION_PATCH \([0-9]*\)$$/\1/p' source/version.h)
+GB_VERSION_MAJOR	:=	$(shell sed -n 's/^\#define GB_VERSION_MAJOR \([0-9]*\)$$/\1/p' $(TOPDIR)/source/version.h)
+GB_VERSION_MINOR	:=	$(shell sed -n 's/^\#define GB_VERSION_MINOR \([0-9]*\)$$/\1/p' $(TOPDIR)/source/version.h)
+GB_VERSION_PATCH	:=	$(shell sed -n 's/^\#define GB_VERSION_PATCH \([0-9]*\)$$/\1/p' $(TOPDIR)/source/version.h)
 
-MAKEROM		?=	$(CURDIR)/tools/bin/makerom
-BANNERTOOL	?=	$(CURDIR)/tools/bin/bannertool
+MAKEROM		?=	$(TOPDIR)/tools/bin/makerom
+BANNERTOOL	?=	$(TOPDIR)/tools/bin/bannertool
 #GFXBUILD	:=	$(ROMFS)/gfx
 
 #---------------------------------------------------------------------------------
