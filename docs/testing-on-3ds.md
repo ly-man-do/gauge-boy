@@ -17,10 +17,10 @@ Pick one.
 **From GitHub (no build needed).** Every push builds the app.
 
 ```bash
-gh run download -R ly-man-do/gauge-boy -n gaugeboy-3dsx
+rm -f ~/Downloads/gaugeboy-ci/gaugeboy.3dsx && gh run download -R ly-man-do/gauge-boy -n gaugeboy-3dsx -D ~/Downloads/gaugeboy-ci
 ```
 
-That downloads the newest successful build's `gaugeboy.3dsx` into the current folder. In a browser: repo > **Actions** > latest **Build** run > **Artifacts** > `gaugeboy-3dsx` (it arrives as a zip; unzip it).
+That downloads the newest build's `gaugeboy.3dsx` into `~/Downloads/gaugeboy-ci/`. The `rm` is there because `gh` refuses to overwrite an existing file, so a second download (or one into the repo folder after a local build) would otherwise fail. In a browser: repo > **Actions** > latest **Build** run > **Artifacts** > `gaugeboy-3dsx` (it arrives as a zip; unzip it).
 
 **Build it yourself** (from the repo folder, with Docker running):
 
@@ -70,7 +70,13 @@ This sends the app over your home Wi-Fi and runs it at once, without touching th
 
 The `.cia` puts GaugeBoy on the HOME menu like a normal app, so you don't need the Homebrew Launcher to start it. It runs the same code as the `.3dsx`. You need **FBI** on the 3DS (from Universal-Updater).
 
-1. Get `gaugeboy.cia`: `gh run download -R ly-man-do/gauge-boy -n gaugeboy-cia`, or build it with:
+1. Get `gaugeboy.cia` from CI:
+
+   ```bash
+   rm -f ~/Downloads/gaugeboy-ci/gaugeboy.cia && gh run download -R ly-man-do/gauge-boy -n gaugeboy-cia -D ~/Downloads/gaugeboy-ci
+   ```
+
+   or build it with:
 
    ```bash
    docker run --rm --platform linux/amd64 -v "$PWD":/src -w /src devkitpro/devkitarm make cia
