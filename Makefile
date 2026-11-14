@@ -71,6 +71,12 @@ ROMFS		:=	romfs
 APP_TITLE		:=	GaugeBoy
 APP_DESCRIPTION	:=	OBD-II Deluxe
 APP_AUTHOR		:=	ly-man-do
+
+# .cia title ID (owner decision, gauge-boy-7v5.8). NEVER change it: updates
+# only install over earlier versions when the title ID matches.
+# APP_UNIQUE_ID is the middle part of the title ID, as makerom's -DAPP_UNIQUE_ID.
+APP_TITLE_ID	:=	0004000003DEDF00
+APP_UNIQUE_ID	:=	0x3DEDF
 #GFXBUILD	:=	$(ROMFS)/gfx
 
 #---------------------------------------------------------------------------------
