@@ -29,6 +29,14 @@ Paste the relevant part of `sdmc:/3ds/gaugeboy/spike-log.txt` if you can. Result
 - **No third-party IP:** no Nintendo or other logos, trademarks, fonts, game assets, music or sounds. Fonts must be open-licensed (e.g. SIL OFL). Music and sounds must be original, CC0 or CC-BY, with the source and license recorded in `CREDITS.md`.
 - **No proprietary data:** DTC descriptions are limited to the generic SAE J2012 codes; no copied manufacturer databases.
 
+## Releases (maintainer)
+
+1. Set the version in `source/version.h` (M0 = 0.0.x, M1 = 0.1.x ... M7 = 1.0.0).
+2. In `CHANGELOG.md`, move the Unreleased entries under `## [x.y.z] - YYYY-MM-DD`.
+3. Commit, push, then tag and push the tag: `git tag vx.y.z && git push origin vx.y.z`.
+
+The Release workflow checks that the tag, `source/version.h` and the changelog agree, runs the tests, builds `gaugeboy.3dsx` and `gaugeboy.cia`, and publishes them on a GitHub release. The file names never change, so `https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.cia` always gets the newest version.
+
 ## Issue tracking
 
 Development work is tracked with [Beads](https://github.com/gastownhall/beads) in `.beads/`. You don't need Beads to contribute; GitHub issues and pull requests are fine.

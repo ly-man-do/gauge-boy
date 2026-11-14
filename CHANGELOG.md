@@ -17,3 +17,4 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 - Settings file `sdmc:/3ds/gaugeboy/config.ini` with the adapter address (`[adapter]` `host` and `port`), created with defaults on first launch.
 - `make cia` builds `gaugeboy.cia` (title ID `0004000003DEDF00`, product code `CTR-P-GBOY`) with an original gauge icon, banner and banner chime; the `.3dsx` uses the same icon. CI builds and uploads the `.cia` too.
 - Guide for installing and testing on a real New 3DS (`docs/testing-on-3ds.md`).
+- Release workflow: pushing a `v*` tag runs the tests, builds `gaugeboy.3dsx` and `gaugeboy.cia` and publishes them on a GitHub release under those fixed names, so the `releases/latest/download/` links always get the newest version. It stops if the tag, `source/version.h` and `CHANGELOG.md` disagree.

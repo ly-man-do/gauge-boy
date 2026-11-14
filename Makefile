@@ -7,12 +7,25 @@
 #   make clean   remove build output
 #   make test    build and run host unit tests (host C compiler, no devkitPro)
 #   make emulator-check   run the driver against tools/run-emulator.sh
+#   make version print the version from source/version.h (no devkitPro)
 #
 # Based on the devkitPro 3DS application template.
 #---------------------------------------------------------------------------------
-ifneq ($(filter test test-clean emulator-check,$(MAKECMDGOALS)),)
+
+# The version comes from source/version.h. The devkitPro build re-runs this
+# Makefile from build/ with TOPDIR exported, so the path must not be relative.
+VERSION_H	:=	$(if $(TOPDIR),$(TOPDIR),$(CURDIR))/source/version.h
+GB_VERSION_MAJOR	:=	$(shell sed -n 's/^\#define GB_VERSION_MAJOR \([0-9]*\)$$/\1/p' $(VERSION_H))
+GB_VERSION_MINOR	:=	$(shell sed -n 's/^\#define GB_VERSION_MINOR \([0-9]*\)$$/\1/p' $(VERSION_H))
+GB_VERSION_PATCH	:=	$(shell sed -n 's/^\#define GB_VERSION_PATCH \([0-9]*\)$$/\1/p' $(VERSION_H))
+GB_VERSION		:=	$(GB_VERSION_MAJOR).$(GB_VERSION_MINOR).$(GB_VERSION_PATCH)
+
+ifneq ($(filter test test-clean emulator-check version,$(MAKECMDGOALS)),)
 #---------------------------------------------------------------------------------
-.PHONY: test test-clean emulator-check
+.PHONY: test test-clean emulator-check version
+
+version:
+	@echo $(GB_VERSION)
 
 test:
 	@$(MAKE) --no-print-directory -C tests run
@@ -88,11 +101,6 @@ ICON		:=	meta/icon.png
 BANNER_IMAGE	:=	meta/banner.png
 BANNER_AUDIO	:=	meta/banner.wav
 RSF		:=	meta/gaugeboy.rsf
-
-# The .cia version comes from source/version.h.
-GB_VERSION_MAJOR	:=	$(shell sed -n 's/^\#define GB_VERSION_MAJOR \([0-9]*\)$$/\1/p' $(TOPDIR)/source/version.h)
-GB_VERSION_MINOR	:=	$(shell sed -n 's/^\#define GB_VERSION_MINOR \([0-9]*\)$$/\1/p' $(TOPDIR)/source/version.h)
-GB_VERSION_PATCH	:=	$(shell sed -n 's/^\#define GB_VERSION_PATCH \([0-9]*\)$$/\1/p' $(TOPDIR)/source/version.h)
 
 MAKEROM		?=	$(TOPDIR)/tools/bin/makerom
 BANNERTOOL	?=	$(TOPDIR)/tools/bin/bannertool
@@ -253,8 +261,7 @@ cia: all
 		-DAPP_TITLE="$(APP_TITLE)" -DAPP_PRODUCT_CODE="$(APP_PRODUCT_CODE)" \
 		-DAPP_UNIQUE_ID="$(APP_UNIQUE_ID)" -DAPP_ROMFS="$(ROMFS)" \
 		-DAPP_VERSION_MAJOR="$(GB_VERSION_MAJOR)"
-	@python3 tools/check_cia.py $(TARGET).cia $(APP_TITLE_ID) $(APP_PRODUCT_CODE) \
-		$(GB_VERSION_MAJOR).$(GB_VERSION_MINOR).$(GB_VERSION_PATCH)
+	@python3 tools/check_cia.py $(TARGET).cia $(APP_TITLE_ID) $(APP_PRODUCT_CODE) $(GB_VERSION)
 	@echo built ... $(TARGET).cia
 
 #---------------------------------------------------------------------------------

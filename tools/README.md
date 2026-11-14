@@ -69,3 +69,8 @@ adapter and vehicle behavior is checked on hardware (see the M0 hardware test is
   ```bash
   python3 tools/make_meta_assets.py
   ```
+
+## Releases
+
+- `release_notes.py <version>` prints the `CHANGELOG.md` section for that version. The
+  release workflow uses it as the release text and stops if the section is missing.
