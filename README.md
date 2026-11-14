@@ -8,7 +8,7 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 
 ## Status
 
-**Early development: M0 spike.** There is nothing to install yet. The first milestone tests whether a New 3DS can join a Wi-Fi ELM327 adapter's network and talk to it reliably. If no tested adapter works, the project switches to a small ESP32 Wi-Fi bridge before going further.
+**Early development: M0 spike.** The current release is a test build for checking adapters. The first milestone tests whether a New 3DS can join a Wi-Fi ELM327 adapter's network and talk to it reliably. If no tested adapter works, the project switches to a small ESP32 Wi-Fi bridge before going further.
 
 | Milestone | Version | Scope |
 |---|---|---|
@@ -37,9 +37,12 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 
 ## Install
 
-No release yet. To try the current test build on your own New 3DS, follow [Testing on a real New 3DS](docs/testing-on-3ds.md).
+The current release is an **M0 test build**: an adapter test app, not the finished gauges. Download it from the [latest release](https://github.com/ly-man-do/gauge-boy/releases/latest):
 
-Releases will include a QR code you can scan with FBI (*Remote Install* > *Scan QR Code*), plus `.cia` and `.3dsx` files to copy to the SD card manually.
+- [`gaugeboy.cia`](https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.cia): install with FBI; GaugeBoy then appears on the HOME menu.
+- [`gaugeboy.3dsx`](https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.3dsx): copy to `sdmc:/3ds/gaugeboy/` and start it from the Homebrew Launcher.
+
+[Testing on a real New 3DS](docs/testing-on-3ds.md) walks through installing it, connecting to an adapter and reporting results. Later releases will add a QR code you can scan with FBI (*Remote Install* > *Scan QR Code*).
 
 ## Building
 

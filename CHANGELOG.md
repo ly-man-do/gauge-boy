@@ -4,6 +4,10 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.0.1] - 2026-11-14
+
+First test release of the M0 spike: an adapter test app for checking whether a New 3DS can talk to a Wi-Fi ELM327 adapter. It is not a finished diagnostics app yet.
+
 ### Added
 
 - Project brief (`docs/gaugeboy-brief.md`) and agent instructions (`CLAUDE.md`).
@@ -18,3 +22,6 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 - `make cia` builds `gaugeboy.cia` (title ID `0004000003DEDF00`, product code `CTR-P-GBOY`) with an original gauge icon, banner and banner chime; the `.3dsx` uses the same icon. CI builds and uploads the `.cia` too.
 - Guide for installing and testing on a real New 3DS (`docs/testing-on-3ds.md`).
 - Release workflow: pushing a `v*` tag runs the tests, builds `gaugeboy.3dsx` and `gaugeboy.cia` and publishes them on a GitHub release under those fixed names, so the `releases/latest/download/` links always get the newest version. It stops if the tag, `source/version.h` and `CHANGELOG.md` disagree.
+
+[Unreleased]: https://github.com/ly-man-do/gauge-boy/compare/v0.0.1...HEAD
+[0.0.1]: https://github.com/ly-man-do/gauge-boy/releases/tag/v0.0.1
