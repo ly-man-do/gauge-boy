@@ -43,7 +43,13 @@ Releases will include a QR code you can scan with FBI (*Remote Install* > *Scan 
 
 ## Building
 
-Build instructions will be added with the project skeleton. The app is written in C with devkitPro / devkitARM and libctru: `make` builds the `.3dsx`, `make cia` builds the `.cia`, and `make test` runs host unit tests.
+The app is written in C with devkitPro / devkitARM and libctru. The easiest way to build is the official devkitPro Docker image:
+
+```bash
+docker run --rm --platform linux/amd64 -v "$PWD":/src -w /src devkitpro/devkitarm make cia
+```
+
+`make` builds `gaugeboy.3dsx`, `make cia` also builds `gaugeboy.cia` (it downloads pinned copies of makerom and bannertool into `tools/bin/` on first use), and `make test` runs the host unit tests with your normal C compiler.
 
 To test without a car, see [tools/README.md](tools/README.md) for the ELM327 emulator.
 
@@ -58,4 +64,4 @@ Development uses [Beads](https://github.com/gastownhall/beads) for issue trackin
 
 ## License
 
-[MIT](LICENSE). All artwork, music and sounds are original or openly licensed; sources will be listed in `CREDITS.md`.
+[MIT](LICENSE). All artwork, music and sounds are original or openly licensed; sources are listed in [CREDITS.md](CREDITS.md).

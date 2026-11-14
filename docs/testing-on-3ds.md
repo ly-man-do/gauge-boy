@@ -66,6 +66,22 @@ This sends the app over your home Wi-Fi and runs it at once, without touching th
    docker run --rm --platform linux/amd64 -v "$PWD":/src -w /src devkitpro/devkitarm /opt/devkitpro/tools/bin/3dslink -a <3ds-ip> gaugeboy.3dsx
    ```
 
+### Option D: install the `.cia` (HOME menu icon)
+
+The `.cia` puts GaugeBoy on the HOME menu like a normal app, so you don't need the Homebrew Launcher to start it. It runs the same code as the `.3dsx`. You need **FBI** on the 3DS (from Universal-Updater).
+
+1. Get `gaugeboy.cia`: `gh run download -R ly-man-do/gauge-boy -n gaugeboy-cia`, or build it with:
+
+   ```bash
+   docker run --rm --platform linux/amd64 -v "$PWD":/src -w /src devkitpro/devkitarm make cia
+   ```
+
+2. Copy it anywhere on the SD card (for example `/cias/gaugeboy.cia`) with a card reader or FTP.
+3. In FBI: **SD** > find `gaugeboy.cia` > **Install and delete CIA** (or **Install CIA** to keep the file).
+4. GaugeBoy appears on the HOME menu with a gauge icon. Installing a newer `.cia` later updates it in place, because the title ID never changes.
+
+To remove it: FBI > **Titles** > GaugeBoy > **Delete Title**. Your `sdmc:/3ds/gaugeboy/` folder (config and log) stays.
+
 ## 3. Save the adapter's Wi-Fi on the 3DS
 
 Do this once per adapter, in the car with the adapter plugged in and the ignition on (most adapters only power up then).
@@ -85,7 +101,7 @@ The 3DS uses whichever saved connection is in range, so your home Wi-Fi slot can
 
 ## 4. Launch GaugeBoy
 
-Open the Homebrew Launcher the way you usually do. With a standard Luma3DS setup: open **Download Play**, press **L + Down + Select** for the Rosalina menu, choose **Miscellaneous options** > **Switch the hb. title to the current app**, back out with B, close Download Play with HOME, and open Download Play again.
+If you installed the `.cia`, start GaugeBoy from the HOME menu. Otherwise, open the Homebrew Launcher the way you usually do. With a standard Luma3DS setup: open **Download Play**, press **L + Down + Select** for the Rosalina menu, choose **Miscellaneous options** > **Switch the hb. title to the current app**, back out with B, close Download Play with HOME, and open Download Play again.
 
 Pick **GaugeBoy**. You should see the safety notice; tap the bottom screen to continue.
 

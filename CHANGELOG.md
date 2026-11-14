@@ -15,3 +15,5 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 - TCP transport (`source/transport/`): connects to the adapter (default `192.168.0.10:35000`) with a connect timeout, reads and writes with timeouts so nothing blocks indefinitely, detects dropped connections and reconnects, backing off from 0.5 s up to 8 s while the adapter is unreachable. Starts the 3DS network service.
 - M0 spike app: after the safety notice, the top screen shows a timestamped log and the bottom screen has touch buttons for CONNECT, ATZ, ATSP0+0100, ATDPN, ATRV and 0902 (VIN), plus log scrolling. Commands run on a worker thread; the log is also saved to `sdmc:/3ds/gaugeboy/spike-log.txt`.
 - Settings file `sdmc:/3ds/gaugeboy/config.ini` with the adapter address (`[adapter]` `host` and `port`), created with defaults on first launch.
+- `make cia` builds `gaugeboy.cia` (title ID `0004000003DEDF00`, product code `CTR-P-GBOY`) with an original gauge icon, banner and banner chime; the `.3dsx` uses the same icon. CI builds and uploads the `.cia` too.
+- Guide for installing and testing on a real New 3DS (`docs/testing-on-3ds.md`).

@@ -20,3 +20,5 @@ tests/build/
 tools/.venv/
 # ELM327 emulator log
 elm.log
+# .cia packaging tools downloaded by tools/get-cia-tools.sh
+tools/bin/

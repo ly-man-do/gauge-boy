@@ -55,3 +55,17 @@ address. It is not part of `make test` or CI because it needs the emulator runni
 The emulator is not a car or a real adapter: replies are instant or fixed-delay, there are no clone
 quirks, and the `car` scenario has no bank 2 fuel trims (the Ridgeline V6 has two banks). Real
 adapter and vehicle behavior is checked on hardware (see the M0 hardware test issues).
+
+## .cia packaging
+
+- `get-cia-tools.sh` downloads pinned makerom (v0.18.4) and bannertool (v1.2.2) into
+  `tools/bin/` (gitignored) and checks their SHA-256 hashes. `make cia` runs it on first use.
+  It needs Linux x86_64, so run `make cia` in the devkitPro Docker image.
+- `check_cia.py` reads the title ID, product code and version back out of a built `.cia`.
+  `make cia` runs it after every build, so a wrong title ID fails the build.
+- `make_meta_assets.py` regenerates the original HOME menu icon, banner and banner chime in
+  `meta/` (Python 3 standard library only):
+
+  ```bash
+  python3 tools/make_meta_assets.py
+  ```

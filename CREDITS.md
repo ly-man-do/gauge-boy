@@ -1,0 +1,28 @@
+# Credits
+
+Every asset and borrowed file in GaugeBoy, with its source and license. GaugeBoy itself is [MIT](LICENSE).
+
+## Art and sound
+
+| File | What | Source | License |
+|---|---|---|---|
+| `meta/icon.png` | HOME menu icon (tachometer) | Original, drawn by `tools/make_meta_assets.py` | MIT (this project) |
+| `meta/banner.png` | HOME menu banner | Original, drawn by `tools/make_meta_assets.py`; lettering is an original block font defined in that script | MIT (this project) |
+| `meta/banner.wav` | Banner chime | Original, synthesized by `tools/make_meta_assets.py` | MIT (this project) |
+
+## Build files
+
+| File | Source | License |
+|---|---|---|
+| `meta/gaugeboy.rsf` | Based on `3ds/template.rsf` from [Steveice10/buildtools](https://github.com/Steveice10/buildtools) (commit 89612c4). Copyright (C) 2016-2020 Steveice10. | MIT |
+
+## Build tools (not shipped)
+
+These run at build time only; nothing from them is included in GaugeBoy's source.
+
+| Tool | Version | Source | License |
+|---|---|---|---|
+| devkitARM, libctru | latest `devkitpro/devkitarm` image | [devkitPro](https://devkitpro.org/) | libctru: zlib |
+| makerom | v0.18.4 | [3DSGuy/Project_CTR](https://github.com/3DSGuy/Project_CTR) | MIT |
+| bannertool | v1.2.2 | [Epicpkmn11/bannertool](https://github.com/Epicpkmn11/bannertool) | MIT |
+| ELM327-emulator (dev only) | 4.0.0 | [Ircama/ELM327-emulator](https://github.com/Ircama/ELM327-emulator) | CC BY-NC-SA 4.0 |

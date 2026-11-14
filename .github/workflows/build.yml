@@ -37,3 +37,15 @@ jobs:
           name: gaugeboy-3dsx
           path: gaugeboy.3dsx
           if-no-files-found: error
+
+      # Downloads the pinned makerom and bannertool, packages the same .elf,
+      # then checks the title ID, product code and version inside the .cia.
+      - name: Build .cia
+        run: make cia
+
+      - name: Upload .cia
+        uses: actions/upload-artifact@v7
+        with:
+          name: gaugeboy-cia
+          path: gaugeboy.cia
+          if-no-files-found: error

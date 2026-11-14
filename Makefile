@@ -2,6 +2,8 @@
 # GaugeBoy: OBD-II Deluxe
 #
 #   make         build gaugeboy.3dsx (needs devkitPro / devkitARM)
+#   make cia     build gaugeboy.cia (downloads makerom and bannertool into
+#                tools/bin on first use; Linux x86_64, i.e. the devkitPro image)
 #   make clean   remove build output
 #   make test    build and run host unit tests (host C compiler, no devkitPro)
 #   make emulator-check   run the driver against tools/run-emulator.sh
@@ -79,6 +81,21 @@ APP_AUTHOR		:=	ly-man-do
 APP_TITLE_ID	:=	0004000003DEDF00
 APP_UNIQUE_ID	:=	0x3DEDF
 APP_PRODUCT_CODE	:=	CTR-P-GBOY
+
+# HOME menu icon (.3dsx and .cia) and .cia banner: original art made by
+# tools/make_meta_assets.py.
+ICON		:=	meta/icon.png
+BANNER_IMAGE	:=	meta/banner.png
+BANNER_AUDIO	:=	meta/banner.wav
+RSF		:=	meta/gaugeboy.rsf
+
+# The .cia version comes from source/version.h.
+GB_VERSION_MAJOR	:=	$(shell sed -n 's/^\#define GB_VERSION_MAJOR \([0-9]*\)$$/\1/p' source/version.h)
+GB_VERSION_MINOR	:=	$(shell sed -n 's/^\#define GB_VERSION_MINOR \([0-9]*\)$$/\1/p' source/version.h)
+GB_VERSION_PATCH	:=	$(shell sed -n 's/^\#define GB_VERSION_PATCH \([0-9]*\)$$/\1/p' source/version.h)
+
+MAKEROM		?=	$(CURDIR)/tools/bin/makerom
+BANNERTOOL	?=	$(CURDIR)/tools/bin/bannertool
 #GFXBUILD	:=	$(ROMFS)/gfx
 
 #---------------------------------------------------------------------------------
@@ -198,7 +215,7 @@ ifneq ($(ROMFS),)
 	export _3DSXFLAGS += --romfs=$(CURDIR)/$(ROMFS)
 endif
 
-.PHONY: all clean
+.PHONY: all clean cia
 
 #---------------------------------------------------------------------------------
 all: $(BUILD) $(GFXBUILD) $(DEPSDIR) $(ROMFS_T3XFILES) $(T3XHFILES)
@@ -218,9 +235,32 @@ $(DEPSDIR):
 endif
 
 #---------------------------------------------------------------------------------
+# gaugeboy.cia: the same .elf as the .3dsx, packaged with makerom. The title ID
+# check stops a typo in APP_UNIQUE_ID from shipping under a different title.
+#---------------------------------------------------------------------------------
+cia: all
+	@test "$$(printf '00040000%06X00' $(APP_UNIQUE_ID))" = "$(APP_TITLE_ID)" || \
+		{ echo "APP_UNIQUE_ID $(APP_UNIQUE_ID) does not match APP_TITLE_ID $(APP_TITLE_ID)"; exit 1; }
+	@test -n "$(GB_VERSION_MAJOR)" -a -n "$(GB_VERSION_MINOR)" -a -n "$(GB_VERSION_PATCH)" || \
+		{ echo "could not read the version from source/version.h"; exit 1; }
+	@if [ ! -x "$(MAKEROM)" ] || [ ! -x "$(BANNERTOOL)" ]; then sh tools/get-cia-tools.sh; fi
+	@$(BANNERTOOL) makebanner -i $(BANNER_IMAGE) -a $(BANNER_AUDIO) -o $(BUILD)/banner.bnr >/dev/null
+	@$(BANNERTOOL) makesmdh -s "$(APP_TITLE)" -l "$(APP_TITLE): $(APP_DESCRIPTION)" \
+		-p "$(APP_AUTHOR)" -i $(ICON) -o $(BUILD)/icon.icn >/dev/null
+	@$(MAKEROM) -f cia -o $(TARGET).cia -target t -exefslogo \
+		-elf $(TARGET).elf -rsf $(RSF) -icon $(BUILD)/icon.icn -banner $(BUILD)/banner.bnr \
+		-major $(GB_VERSION_MAJOR) -minor $(GB_VERSION_MINOR) -micro $(GB_VERSION_PATCH) \
+		-DAPP_TITLE="$(APP_TITLE)" -DAPP_PRODUCT_CODE="$(APP_PRODUCT_CODE)" \
+		-DAPP_UNIQUE_ID="$(APP_UNIQUE_ID)" -DAPP_ROMFS="$(ROMFS)" \
+		-DAPP_VERSION_MAJOR="$(GB_VERSION_MAJOR)"
+	@python3 tools/check_cia.py $(TARGET).cia $(APP_TITLE_ID) $(APP_PRODUCT_CODE) \
+		$(GB_VERSION_MAJOR).$(GB_VERSION_MINOR).$(GB_VERSION_PATCH)
+	@echo built ... $(TARGET).cia
+
+#---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf $(GFXBUILD)
+	@rm -fr $(BUILD) $(TARGET).3dsx $(TARGET).cia $(OUTPUT).smdh $(TARGET).elf $(GFXBUILD)
 	@$(MAKE) --no-print-directory -C tests clean
 
 #---------------------------------------------------------------------------------
