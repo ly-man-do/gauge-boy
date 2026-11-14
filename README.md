@@ -1,6 +1,6 @@
 # GaugeBoy: OBD-II Deluxe
 
-A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II port through a Wi-Fi ELM327 adapter. It reads check engine light codes, readiness monitors, fuel trims and live engine data, and shows them on the 3DS's two screens in a 2000s Japanese tuner style.
+A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II port through a Wi-Fi ELM327 adapter. It reads check engine light codes, readiness monitors, fuel trims and live engine data, and shows them on the 3DS's two screens in a bright, playful style that looks and feels like a 3DS game.
 
 > **Unofficial project.** GaugeBoy is an independent, fan-made homebrew project. It is not affiliated with, endorsed by or sponsored by Nintendo. Nintendo 3DS and New Nintendo 3DS are trademarks of Nintendo.
 
@@ -15,7 +15,7 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 | M0 Spike | 0.0.x | Connect to the adapter, send `ATZ`, show the reply; test QR install |
 | M1 Core read | 0.1.x | Check engine codes (stored, pending, permanent), readiness monitors, clear codes, VIN |
 | M2 Live data | 0.2.x | Live sensor data and fuel trims for both banks |
-| M3 UI polish | 0.3.x | Skeuomorphic gauges, stereoscopic 3D top screen, touch control panel |
+| M3 UI polish | 0.3.x | Toy-like 3D gauges, mascot car title screen, stereoscopic 3D top screen, touch control panel |
 | M4 Logging | 0.4.x | CSV session logs on the SD card |
 | M5 Audio | 0.5.x | Original music and sound effects |
 | M6 Fun modes | 0.6.x | Timers, shift light, G-meter, achievements and more |
@@ -27,7 +27,7 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 - **Fuel trims:** short-term, long-term and total trims for both banks on center-zero gauges.
 - **Live data:** RPM, speed, coolant temp, throttle, engine load, intake air temp, manifold vacuum and battery voltage.
 - **Logging:** CSV logs and a code history saved to the SD card.
-- **Style:** realistic tuner-style gauges and LCD readouts, with layered stereoscopic 3D on the top screen and touch-only controls on the bottom screen.
+- **Style:** chunky, toy-like gauges and low-poly models with thin dark outlines, a lime-green mascot car, layered stereoscopic 3D on the top screen and touch-only controls on the bottom screen. All art is original.
 
 ## Requirements
 
