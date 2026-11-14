@@ -144,6 +144,76 @@ static void test_textlog_wraps_long_lines(void)
     CHECK_EQ_INT((int)strlen(textlog_line(&log, 2)), TEXTLOG_INDENT + 11);
 }
 
+static void test_textlog_wraps_between_words(void)
+{
+    static textlog_t log;
+    textlog_init(&log);
+    /* The line that split "Wi-F" / "i" in Azahar. */
+    textlog_add(&log, "[   0.028] Adapter 127.0.0.1:35000. Join its Wi-Fi in System Settings,");
+    CHECK_EQ_INT(textlog_count(&log), 2);
+    CHECK_EQ_STR(textlog_line(&log, 0), "[   0.028] Adapter 127.0.0.1:35000. Join its");
+    CHECK_EQ_STR(textlog_line(&log, 1), "  Wi-Fi in System Settings,");
+}
+
+static void test_textlog_wrap_keeps_tokens_whole(void)
+{
+    static textlog_t log;
+    textlog_init(&log);
+    textlog_add(&log, "[   0.445] Not connected; connecting to 127.0.0.1:35000 ...");
+    CHECK_EQ_INT(textlog_count(&log), 2);
+    CHECK_EQ_STR(textlog_line(&log, 0), "[   0.445] Not connected; connecting to");
+    CHECK_EQ_STR(textlog_line(&log, 1), "  127.0.0.1:35000 ...");
+}
+
+static void test_textlog_wrap_at_exact_width(void)
+{
+    static textlog_t log;
+    char text[TEXTLOG_COLS + 16];
+    memset(text, 'a', TEXTLOG_COLS);
+    strcpy(text + TEXTLOG_COLS, "   bbb");
+
+    textlog_init(&log);
+    textlog_add(&log, text);
+    CHECK_EQ_INT(textlog_count(&log), 2);
+    CHECK_EQ_INT((int)strlen(textlog_line(&log, 0)), TEXTLOG_COLS);
+    CHECK_EQ_STR(textlog_line(&log, 1), "  bbb");
+
+    /* Only spaces after a full line: no blank continuation line. */
+    strcpy(text + TEXTLOG_COLS, "     ");
+    textlog_add(&log, text);
+    CHECK_EQ_INT(textlog_count(&log), 3);
+}
+
+static void test_textlog_hard_split_when_space_too_early(void)
+{
+    static textlog_t log;
+    char text[80];
+    /* Only space is at index 1, inside a timestamp-like prefix. */
+    memcpy(text, "[ ", 2);
+    memset(text + 2, 'x', 70);
+    text[72] = '\0';
+
+    textlog_init(&log);
+    textlog_add(&log, text);
+    CHECK_EQ_INT(textlog_count(&log), 2);
+    CHECK_EQ_INT((int)strlen(textlog_line(&log, 0)), TEXTLOG_COLS);
+    CHECK_EQ_INT((int)strlen(textlog_line(&log, 1)), TEXTLOG_INDENT + 72 - TEXTLOG_COLS);
+}
+
+static void test_textlog_no_trailing_spaces_at_breaks(void)
+{
+    static textlog_t log;
+    textlog_init(&log);
+    textlog_add(&log, "aaaaaaaaaa bbbbbbbbbb cccccccccc dddddddddd     eeeeeeeeee ffff");
+    for (int i = 0; i < textlog_count(&log); i++) {
+        const char *line = textlog_line(&log, i);
+        size_t n = strlen(line);
+        CHECK(n > 0 && line[n - 1] != ' ');
+        CHECK((int)n <= TEXTLOG_COLS);
+    }
+    CHECK_EQ_STR(textlog_line(&log, 1), "  eeeeeeeeee ffff");
+}
+
 static void test_textlog_newlines_and_bad_bytes(void)
 {
     static textlog_t log;
@@ -184,6 +254,11 @@ void suite_data(void)
     RUN_TEST(test_config_file_round_trip);
     RUN_TEST(test_textlog_add_and_read);
     RUN_TEST(test_textlog_wraps_long_lines);
+    RUN_TEST(test_textlog_wraps_between_words);
+    RUN_TEST(test_textlog_wrap_keeps_tokens_whole);
+    RUN_TEST(test_textlog_wrap_at_exact_width);
+    RUN_TEST(test_textlog_hard_split_when_space_too_early);
+    RUN_TEST(test_textlog_no_trailing_spaces_at_breaks);
     RUN_TEST(test_textlog_newlines_and_bad_bytes);
     RUN_TEST(test_textlog_drops_oldest_when_full);
 }

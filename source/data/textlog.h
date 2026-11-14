@@ -3,7 +3,8 @@
 
 /*
  * Ring buffer of fixed-width text lines for an on-screen log. Long
- * entries are wrapped; continuation lines are indented. When full, the
+ * entries are wrapped between words where possible (hard split for long
+ * tokens); continuation lines are indented. When full, the
  * oldest lines are dropped. Platform-free and not thread-safe: callers
  * that share it between threads must lock around every call.
  */

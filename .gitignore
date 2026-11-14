@@ -12,3 +12,6 @@ build/
 *.elf
 *.cia
 tests/build/
+
+# macOS
+.DS_Store
