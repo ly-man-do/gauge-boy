@@ -1,0 +1,37 @@
+name: Build
+
+# Build the .3dsx and run the host unit tests on every branch push and pull request.
+# Tagged releases are handled by a separate release workflow.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Official devkitPro image: devkitARM, libctru and a host gcc for the tests.
+    container: devkitpro/devkitarm:latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Host unit tests
+        run: make test
+
+      - name: Build .3dsx
+        run: make
+
+      - name: Upload .3dsx
+        uses: actions/upload-artifact@v7
+        with:
+          name: gaugeboy-3dsx
+          path: gaugeboy.3dsx
+          if-no-files-found: error
