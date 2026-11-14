@@ -37,7 +37,9 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 
 ## Install
 
-Not available yet. Releases will include a QR code you can scan with FBI (*Remote Install* > *Scan QR Code*), plus `.cia` and `.3dsx` files to copy to the SD card manually.
+No release yet. To try the current test build on your own New 3DS, follow [Testing on a real New 3DS](docs/testing-on-3ds.md).
+
+Releases will include a QR code you can scan with FBI (*Remote Install* > *Scan QR Code*), plus `.cia` and `.3dsx` files to copy to the SD card manually.
 
 ## Building
 
@@ -48,6 +50,7 @@ To test without a car, see [tools/README.md](tools/README.md) for the ELM327 emu
 ## Project docs
 
 - [Project brief](docs/gaugeboy-brief.md): scope, design and milestones.
+- [Testing on a real New 3DS](docs/testing-on-3ds.md): install the test build and run the adapter tests.
 - [Contributing](CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)
 
