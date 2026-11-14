@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "gauge_boy",
+  "project_id": "12e662f1-5093-4ea0-a7eb-d976b3d250e5"
+}
