@@ -11,3 +11,4 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 - README with the unofficial / not-affiliated statement and safety notice, MIT license, changelog and contributing guide.
 - Project skeleton: `make` builds `gaugeboy.3dsx`, which enables New 3DS speedup mode, shows the startup safety notice, and shows an "unsupported device" screen and exits on Old 3DS models.
 - Host unit tests: `make test` builds and runs `tests/` with the host C compiler using a small built-in assert harness.
+- ELM327 driver (`source/elm327/`): sends commands, reads replies up to the `>` prompt with a timeout, cleans up echo, blank lines, `SEARCHING...`, garbage bytes and lower-case clone replies, and reports adapter errors (`?`, `NO DATA`, `UNABLE TO CONNECT`, `BUS INIT: ...ERROR`, `CAN ERROR`, `STOPPED` and others). Includes the `ATZ` / `ATE0` / `ATL0` / `ATSP0` start-up sequence and `ATRV` / `ATDPN` readers.

@@ -1,5 +1,7 @@
 #include "harness.h"
 
+#include <stdarg.h>
+
 static int tests_run;
 static int tests_failed;
 static int current_failed;
@@ -7,6 +9,17 @@ static int current_failed;
 void gb_check_fail(const char *file, int line, const char *msg)
 {
     printf("    %s:%d: %s\n", file, line, msg);
+    current_failed = 1;
+}
+
+void gb_check_failf(const char *file, int line, const char *fmt, ...)
+{
+    va_list ap;
+    printf("    %s:%d: ", file, line);
+    va_start(ap, fmt);
+    vprintf(fmt, ap);
+    va_end(ap);
+    printf("\n");
     current_failed = 1;
 }
 

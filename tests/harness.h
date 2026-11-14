@@ -14,6 +14,8 @@
 #include <string.h>
 
 void gb_check_fail(const char *file, int line, const char *msg);
+/* printf-style failure message; marks the current test failed. */
+void gb_check_failf(const char *file, int line, const char *fmt, ...);
 void gb_run_test(const char *name, void (*fn)(void));
 void gb_suite(const char *name);
 int gb_test_summary(void);
@@ -28,10 +30,8 @@ int gb_test_summary(void);
         long long gb_a_ = (long long)(actual);                          \
         long long gb_e_ = (long long)(expected);                        \
         if (gb_a_ != gb_e_) {                                           \
-            char gb_msg_[160];                                          \
-            snprintf(gb_msg_, sizeof gb_msg_, "%s == %lld, expected %lld", \
-                     #actual, gb_a_, gb_e_);                            \
-            gb_check_fail(__FILE__, __LINE__, gb_msg_);                 \
+            gb_check_failf(__FILE__, __LINE__, "%s == %lld, expected %lld", \
+                           #actual, gb_a_, gb_e_);                      \
         }                                                               \
     } while (0)
 
@@ -40,11 +40,9 @@ int gb_test_summary(void);
         const char *gb_a_ = (actual);                                   \
         const char *gb_e_ = (expected);                                 \
         if (gb_a_ == NULL || gb_e_ == NULL || strcmp(gb_a_, gb_e_) != 0) { \
-            char gb_msg_[256];                                          \
-            snprintf(gb_msg_, sizeof gb_msg_, "%s == \"%s\", expected \"%s\"", \
-                     #actual, gb_a_ ? gb_a_ : "(null)",                 \
-                     gb_e_ ? gb_e_ : "(null)");                         \
-            gb_check_fail(__FILE__, __LINE__, gb_msg_);                 \
+            gb_check_failf(__FILE__, __LINE__, "%s == \"%s\", expected \"%s\"", \
+                           #actual, gb_a_ ? gb_a_ : "(null)",           \
+                           gb_e_ ? gb_e_ : "(null)");                   \
         }                                                               \
     } while (0)
 
