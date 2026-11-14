@@ -4,3 +4,11 @@
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Build output
+build/
+*.3dsx
+*.smdh
+*.elf
+*.cia
+tests/build/
