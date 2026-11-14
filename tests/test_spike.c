@@ -8,6 +8,8 @@
 
 #include "harness.h"
 #include "spike_actions.h"
+#include "data/textlog.h"
+#include "version.h"
 #include "test_server.h"
 
 /* Collects log lines into one buffer. */
@@ -152,6 +154,38 @@ static void test_spike_labels(void)
     CHECK_EQ_STR(spike_action_label(SPIKE_SEARCH), "ATSP0+0100");
 }
 
+static void test_spike_header_fits_every_state(void)
+{
+    char out[128];
+    /* The header is drawn on the top-screen row, which is as wide as the log. */
+    CHECK_EQ_INT(SPIKE_HEADER_COLS, TEXTLOG_COLS);
+    for (int connected = 0; connected <= 1; connected++) {
+        for (int busy = -1; busy < SPIKE_ACTION_COUNT; busy++) {
+            spike_format_header(out, sizeof out, connected != 0, busy);
+            if ((int)strlen(out) > SPIKE_HEADER_COLS) {
+                gb_check_failf(__FILE__, __LINE__, "header too long (%d): \"%s\"",
+                               (int)strlen(out), out);
+            }
+        }
+    }
+}
+
+static void test_spike_header_text(void)
+{
+    char out[128];
+    char expected[128];
+
+    snprintf(expected, sizeof expected, "GaugeBoy %s  [offline]", GB_VERSION);
+    CHECK_EQ_STR(spike_format_header(out, sizeof out, false, -1), expected);
+
+    snprintf(expected, sizeof expected, "GaugeBoy %s  [CONNECTED]  BUSY: ATSP0+0100", GB_VERSION);
+    CHECK_EQ_STR(spike_format_header(out, sizeof out, true, SPIKE_SEARCH), expected);
+
+    /* Out-of-range busy values show no BUSY label. */
+    snprintf(expected, sizeof expected, "GaugeBoy %s  [CONNECTED]", GB_VERSION);
+    CHECK_EQ_STR(spike_format_header(out, sizeof out, true, SPIKE_ACTION_COUNT), expected);
+}
+
 void suite_spike(void)
 {
     signal(SIGPIPE, SIG_IGN);
@@ -160,4 +194,6 @@ void suite_spike(void)
     RUN_TEST(test_spike_auto_connects_and_reports_errors);
     RUN_TEST(test_spike_unreachable_adapter_backs_off);
     RUN_TEST(test_spike_labels);
+    RUN_TEST(test_spike_header_fits_every_state);
+    RUN_TEST(test_spike_header_text);
 }

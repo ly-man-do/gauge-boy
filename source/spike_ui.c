@@ -148,10 +148,7 @@ static void draw_top(int scroll, int busy, bool connected)
     }
     LightLock_Unlock(&shared.lock);
 
-    snprintf(header, sizeof header, "GaugeBoy %s spike  %s%s%s", GB_VERSION,
-             connected ? "[CONNECTED]" : "[offline]",
-             busy >= 0 ? "  BUSY: " : "",
-             busy >= 0 ? spike_action_label((spike_action_t)busy) : "");
+    spike_format_header(header, sizeof header, connected, busy);
 
     consoleSelect(&top_console);
     printf("\x1b[0m");

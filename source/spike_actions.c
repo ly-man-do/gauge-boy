@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "version.h"
+
 void spike_init(spike_t *s, tcp_transport_t *transport, elm_t *elm,
                 spike_log_fn log, void *log_ctx)
 {
@@ -47,6 +49,16 @@ const char *spike_action_label(spike_action_t action)
     case SPIKE_ACTION_COUNT: break;
     }
     return "?";
+}
+
+char *spike_format_header(char *out, size_t out_len, bool connected, int busy)
+{
+    bool is_busy = busy >= 0 && busy < SPIKE_ACTION_COUNT;
+    snprintf(out, out_len, "GaugeBoy %s  %s%s%s", GB_VERSION,
+             connected ? "[CONNECTED]" : "[offline]",
+             is_busy ? "  BUSY: " : "",
+             is_busy ? spike_action_label((spike_action_t)busy) : "");
+    return out;
 }
 
 static void log_connect_failure(spike_t *s, tp_status_t st)

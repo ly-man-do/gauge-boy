@@ -7,6 +7,8 @@
  * text lines). No 3DS headers, so the host tests can run it over TCP.
  */
 
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include "elm327/elm327.h"
@@ -42,5 +44,11 @@ void spike_logf(spike_t *s, const char *fmt, ...);
 
 /* Button label, e.g. "ATSP0+0100". */
 const char *spike_action_label(spike_action_t action);
+
+/* Top-screen header, e.g. "GaugeBoy 0.0.0  [CONNECTED]  BUSY: ATSP0+0100".
+ * busy is the running action, or -1. Fits SPIKE_HEADER_COLS for any
+ * action label. Returns out. */
+#define SPIKE_HEADER_COLS 49
+char *spike_format_header(char *out, size_t out_len, bool connected, int busy);
 
 #endif
