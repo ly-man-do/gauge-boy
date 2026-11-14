@@ -1,7 +1,7 @@
 # CLAUDE.md: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.1.0
-**Matches project brief:** 1.1.0 (`docs/gaugeboy-brief.md`)
+**Version:** 1.2.0
+**Matches project brief:** 1.2.0 (`docs/gaugeboy-brief.md`)
 
 You are the developer on GaugeBoy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
 
@@ -87,12 +87,14 @@ docs/          Project brief, compatibility list
 
 ## 5. UI rules
 
-- Style: skeuomorphic, 2000s Japanese racing game / JDM tuner. See brief section 5b.
+- Style: look and feel like a Nintendo 3DS game, with the owner's reference palette (warm orange backdrop, lime-green accent). See brief section 5b.
+- Models: chunky, slightly toy-like low-poly models with colorful textures and vertex colors, and thin dark outlines on every model. Gauges are chunky, toy-like dials, not realistic tuner gauges.
+- Mascot car: lime green, no maker names, badges or logos.
 - Top screen: display only, stereoscopic 3D with layered gauges (housing, face, needle, glass). Depth follows the 3D slider; respect the max-depth setting.
 - Bottom screen: all navigation by touch. Buttons at least 40x40 px. Menus: METER / DIAG / TRIM / FUN / LOG / SETUP.
 - Must hold 60 fps on the top screen with the 3D slider at maximum. Pre-render static layers; redraw only needles and digits each frame.
 - Physical buttons are optional shortcuts only; every function must be reachable by touch.
-- Japanese sub-labels use an OFL font with Japanese glyphs, subset to the glyphs actually used.
+- Labels are English only; no Japanese sub-labels or Japanese font.
 
 ## 6. Safety rules (do not remove or weaken)
 
@@ -108,6 +110,7 @@ docs/          Project brief, compatibility list
 
 - License: MIT. Every dependency and asset must be compatible.
 - No Nintendo or third-party logos, trademarks, fonts, game assets, music or sounds. "GaugeBoy" lettering and logo must be original and must not imitate the Game Boy logo, fonts or colors.
+- The 3DS-game look is built from original art only. Ripped game assets (models, textures, banners) may be studied for size and structure but are never shipped, traced or converted.
 - Fonts: open-licensed (e.g. SIL OFL) only.
 - Music and sounds: original, commissioned or CC0 / CC-BY. Record the source and license of every asset in `CREDITS.md`.
 - DTC descriptions: generic SAE J2012 codes only; no copied manufacturer databases.
@@ -135,6 +138,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.2.0 | 2026-11-14 | Matches brief 1.2.0: 3DS-game visual direction (reference palette, toy-like gauges, outlines on all models, lime-green mascot car), English-only labels, ripped assets are references only |
 | 1.1.0 | 2026-11-13 | Matches brief 1.1.0. Follow-ups filed with `--deps discovered-from` (not `bd dep add`); explicit git policy (commit, never push); owner closes epics; go / no-go issue labeled `needs-owner`; approved test harness, ELM327 emulator and `.cia` tools; version-free release filenames; platform-free logic in `data/` and `fun/`; Wi-Fi reconnect; Time Attack auto-start; CEL warning under master mute and without DSP firmware; VIN decode limits; brief/CLAUDE.md version sync rule |
 | 1.0.0 | 2026-11-13 | Initial version, matching project brief 1.0.0 |
 

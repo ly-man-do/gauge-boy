@@ -1,8 +1,8 @@
 # Project Brief: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.1.0
+**Version:** 1.2.0
 **Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
-**Date:** 2026-11-13
+**Date:** 2026-11-14
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
 **Team:** Solo developer (project owner), with code written by Claude Code
 **Task tracking:** Beads (`bd`)
@@ -21,7 +21,7 @@ Build GaugeBoy: OBD-II Deluxe, a homebrew Nintendo 3DS application that connects
 - Show fuel trims for both banks, short-term and long-term, as live gauges and a dedicated trim screen (see section 5d).
 - Show live sensor data (Mode 01 PIDs): RPM, speed, coolant temp, throttle position, engine load, intake air temp and manifold vacuum, plus battery voltage (read from the adapter with `ATRV`, since PID 0x42 is often unsupported on older ECUs).
 - Use the dual screens well: gauges on the top screen, touch controls and menus on the bottom.
-- Give the app a distinct skeuomorphic 2000s Japanese racing game / JDM tuner look, with full stereoscopic 3D support on the top screen (see section 5b).
+- Make the app look and feel like a Nintendo 3DS game: bright, colorful, chunky low-poly models with thin dark outlines, toy-like gauges and a lime-green mascot car, with full stereoscopic 3D support on the top screen (see section 5b).
 - All menu navigation happens by touch on the bottom screen.
 - Include fun modes (timers, a G-meter, achievements and more) that make the app enjoyable beyond diagnostics (see section 5e).
 - Include original music and sound effects in the 2000s Japanese racing game style (see section 5f).
@@ -84,32 +84,34 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 - **Community input:** An issue template for adapter and vehicle compatibility reports, feeding the compatibility list.
 - **No proprietary data:** DTC descriptions limited to the generic SAE J2012 codes (P0xxx etc.); no copied manufacturer databases.
 
-## 5b. Visual Direction: 2000s JDM Tuner
+## 5b. Visual Direction: 3DS Game
 
-**Mood:** Early-2000s Japanese racing games and aftermarket tuning gear. Think tuning-shop menus, garage screens and in-car electronics from that era, with the feel of brands like HKS: technical, precise and a little aggressive.
+**Mood:** GaugeBoy should look and feel like a game made for the Nintendo 3DS: bright, clean and playful, with chunky low-poly 3D models, colorful textures and big, friendly touch menus. The owner's reference image sets the palette, the feel and the mascot car.
 
 **Reference points (for mood only):**
-- 2000s Japanese racing game menus and garage / tuning screens
-- Aftermarket boost controllers, turbo timers and digital meters of the era (segmented LCD readouts, amber or green backlights)
-- Tuner magazine layouts and parts-catalog spec sheets
+- The owner's reference image: a warm orange backdrop with a ring pattern, and chunky low-poly cars with thin dark outlines
+- 3DS games' menus, HOME menu banners and vehicle models, studied only for size and structure (triangle counts, texture sizes, how models are split into parts)
+- The owner's asset style guide (kept outside the repo), which lists every asset the app needs with sizes and budgets
 
-**Style: skeuomorphic.** Every element should look like a real physical object from a 2000s tuner car interior, not a flat interface.
-- **Gauges:** Real-looking meters with chrome or black-anodized bezels, printed gauge faces, glass with reflections and a soft glare highlight, needles that cast a slight shadow, and backlight glow.
-- **Digital readouts:** LCD panels with faint "ghost" segments showing behind the lit ones, a tinted plastic lens and backlight bleed at the edges.
-- **Surfaces:** Carbon-fiber weave, brushed aluminum, textured black plastic, machined screws and panel seams.
-- **Controls (bottom screen):** Rubber or plastic push buttons that visibly press in, toggle switches, rotary-style selectors and warning-light indicators, laid out like an aftermarket controller or head unit.
-- **Lighting:** Consistent light source (top-left) for highlights and shadows across all elements.
+**Style: 3DS-game 3D.**
+- **Models:** Chunky, slightly toy-like low-poly models with colorful textures and vertex colors, lit from the top left, with an optional shine highlight. Every model has thin dark outlines, like the cars in the reference image. Budgets: about 1,000 to 1,500 triangles for the mascot car (plus a low-detail version of about 300), about 200 to 400 per gauge, and under about 10,000 for the whole top-screen scene; textures usually 256x256 or smaller.
+- **Gauges:** Chunky, toy-like dials in the style of a 3DS game, not realistic tuner gauges: thick rounded bezels, bold numerals, a big needle and a glossy glass highlight.
+- **Digital readouts:** Bold, rounded digits on simple LCD-style panels.
+- **Controls (bottom screen):** Big, rounded, colorful buttons that visibly press in, each with an icon, plus toggles and sliders in the same style.
+- **Lighting:** Consistent light source (top-left) across models and UI art.
+
+**Mascot car:** A lime-green mascot car, modeled on the owner's reference image: a chunky low-poly model with thin dark outlines and no maker names, badges or logos. It appears on the HOME menu icon and banner, spins in 3D on the top-screen title, drives through the attract mode and is the garage card picture until the user takes a photo. Which vehicle it is based on is an open question (section 10).
 
 **Design language:**
-- **Colors:** Near-black background; signal colors such as racing red, warning amber and LCD green; carbon-fiber and brushed-metal textures as the main surfaces.
-- **Type:** Condensed, italic, wide-tracked sans-serif for headings; seven-segment / dot-matrix style digits for live values; small Japanese sub-labels (katakana or kanji) as accents (for example "回転数" under RPM). Japanese labels need an OFL font with Japanese glyphs (e.g. Noto Sans JP), subset to only the glyphs used so it stays small in romfs.
-- **Gauges:** Mix of analog sweep tachometer, bar graphs and segmented digital readouts; peak-hold markers; redline flash.
-- **Motion:** Fast slide-in menu transitions, startup "sweep" where needles go to max and back, blinking cursor on selected items.
+- **Colors:** Warm tan-orange backdrop (`#C58B4C`) with a darker ring pattern (`#876B39`); near-black ink (`#1A1610`) for outlines and linework; lime green (`#8FD42A`, highlight `#C6F27A`, shadow `#5E9A1A`) as the main accent; navy-to-blue glass (`#323868` to `#6C7AC8`); light neutrals for trim and panels. Signal colors stay for function only: amber for the CEL warning, red for redline, green for live values.
+- **Type:** A rounded, bold display font for headings; a clean UI font for menus and lists; bold digit styles for live values. Labels are in English only; there are no Japanese sub-labels.
+- **Gauges:** Mix of chunky analog dials, bar graphs and digital readouts; peak-hold markers; redline flash.
+- **Motion:** Bouncy, springy transitions; startup "sweep" where needles go to max and back; the selected item pulses.
 - **Sound:** Full music and sound effects; see section 5f.
 
 **Stereoscopic 3D (v1 scope):**
 - The top screen supports the 3D slider; the bottom screen is always 2D (hardware limit).
-- Each gauge is built as layers at different depths: housing and bezel at the back, gauge face, needle above the face, glass and glare on top. This gives the look of real meters set into a dash.
+- Each gauge is built as layers at different depths: housing and bezel at the back, gauge face, needle above the face, glass and highlight on top. The backdrop is split into depth layers too.
 - Pop-up alerts (redline, warning codes) appear slightly in front of the screen.
 - Depth scales with the slider; slider at zero gives a clean 2D view.
 - Option in SETUP to cap the maximum depth for comfort.
@@ -122,10 +124,10 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 - Physical buttons are optional shortcuts only (for example B for back, L/R to switch gauge layouts); every function can be reached by touch.
 
 **Screen layout:**
-- **Top screen (400x240, 3D):** Main gauge cluster in a skeuomorphic dash panel; selectable layouts (single big tach, 4-gauge grid, data list).
-- **Bottom screen (320x240, touch):** Control panel styled as an aftermarket controller, with push buttons for METER / DIAG (CEL codes) / TRIM (fuel trims) / FUN (fun modes) / LOG / SETUP, and sub-menus on the same panel. An amber CEL warning lamp on the panel lights when the CEL is on.
+- **Top screen (400x240, 3D):** Main gauge cluster on the orange backdrop; selectable layouts (single big tach, 4-gauge grid, data list).
+- **Bottom screen (320x240, touch):** Touch panel of big rounded buttons for METER / DIAG (CEL codes) / TRIM (fuel trims) / FUN (fun modes) / LOG / SETUP, with sub-menus on the same panel. An amber CEL warning lamp on the panel lights when the CEL is on.
 
-**Brand and IP rule:** The UI is *inspired by* the era and its brands but uses no third-party logos, trademarks, brand names, fonts or game assets. All artwork, icons and the app logo are original. Fonts must be open-licensed (e.g. SIL OFL) so they can ship in the open-source repo.
+**Brand and IP rule:** The app looks and feels like a 3DS game but uses no Nintendo or third-party characters, logos, trademarks, brand names, fonts, UI art, models, textures, music or sounds. Ripped game assets may be studied for size and structure only; they are never shipped, traced or converted. All artwork, models, icons and the app logo are original. Fonts must be open-licensed (e.g. SIL OFL) so they can ship in the open-source repo.
 
 **Theme system:** Colors and gauge styles live in a theme file on the SD card, so alternate color schemes can be added without code changes.
 
@@ -161,7 +163,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 | Clear codes | Mode 04 | Confirmation dialog explains it turns off the CEL and resets readiness monitors |
 
 - **Display:** Each code shown with its number (e.g. P0171), type (stored / pending / permanent), and a plain-English description from the generic SAE J2012 list. Codes without a generic description (manufacturer-specific, e.g. P1xxx) are shown as "Manufacturer-specific code".
-- **Top screen:** Skeuomorphic "fault display" panel listing the codes, styled like a 2000s scan tool LCD.
+- **Top screen:** "Fault display" panel listing the codes, in the same toy-like style as the gauges.
 - **Logging:** Codes are saved with a timestamp to the SD card each time they are read, so the user keeps a history after clearing.
 - **Freeze-frame data** (Mode 02, the snapshot taken when a code set) stays a stretch goal.
 
@@ -190,12 +192,12 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 |---|---|---|
 | **Time Attack timers** | 0–60 mph (or 0–100 km/h), 60–0 braking, and 1/4-mile estimate. Armed while stopped, with an arcade-style "3, 2, 1, GO" countdown; timing starts automatically on the first speed change, so no touch is needed once moving. Big results screen with personal bests | Vehicle speed (PID 0x0D), polled alone during a run as fast as the adapter allows, with crossing times interpolated between samples |
 | **Shift light** | Full-width row of LEDs on the top screen that fills as RPM rises and flashes at a user-set shift point, like an aftermarket shift light | RPM (PID 0x0C) |
-| **G-meter** | Live G-force ball and peak-hold readout, styled like a tuner G-sensor display | 3DS built-in accelerometer; user mounts the 3DS and taps "Calibrate" while stopped |
+| **G-meter** | Live G-force ball and peak-hold readout, styled as a chunky toy-like dial | 3DS built-in accelerometer; user mounts the 3DS and taps "Calibrate" while stopped |
 | **Rev Sync (parked only)** | Mini game: the needle sweeps on screen and you blip the throttle to match the target RPM. Scored in a 2000s arcade style. Locked unless vehicle speed is 0 | RPM, vehicle speed |
 | **Eco Challenge** | Live fuel economy estimate with a score and rank (C to S) for smooth driving over a trip | MAF (PID 0x10), or if MAF isn't supported, estimated from MAP, RPM and intake temp using the engine displacement from the vehicle settings and an assumed volumetric efficiency |
-| **Garage card** | Collectible-style "car card" for each vehicle: VIN-decoded manufacturer (from the WMI) and model year (VIN position 10), user-entered model name and nickname, total logged distance, personal bests and a photo taken with the 3DS camera. Decoding model names needs a database and stays out of v1 unless the owner approves a public-domain source (e.g. NHTSA vPIC) | VIN (Mode 09), logs, 3DS camera |
+| **Garage card** | Collectible-style "car card" for each vehicle: VIN-decoded manufacturer (from the WMI) and model year (VIN position 10), user-entered model name and nickname, total logged distance, personal bests and a photo taken with the 3DS camera (the mascot car until a photo is taken). Decoding model names needs a database and stays out of v1 unless the owner approves a public-domain source (e.g. NHTSA vPIC) | VIN (Mode 09), logs, 3DS camera |
 | **Achievements** | Unlockable stickers for milestones, e.g. "First Scan", "Clean Bill of Health" (no codes, all monitors ready), "Code Breaker" (first code cleared), "100 Miles Logged". Unlocks are saved to the SD card | App events |
-| **Attract mode** | When parked and idle, the screens play a demo sequence like a 2000s arcade cabinet: gauges sweep, logo spins in 3D, music plays | None (screensaver) |
+| **Attract mode** | When parked and idle, the screens play a demo sequence like a 2000s arcade cabinet: gauges sweep, logo spins in 3D, the mascot car drives across the top screen, music plays | None (screensaver) |
 
 - **Results screens:** Timer and challenge results use big arcade-style text ("NEW RECORD!") with matching sound effects, and can be saved as a screenshot to the SD card.
 - **Accuracy note:** OBD speed updates a few times per second, so timer results are estimates. The app labels them as estimates.
@@ -273,7 +275,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 | M0: Spike | 0.0.x | Join adapter Wi-Fi, open socket, send `ATZ`, print reply on screen; test FBI QR install from a GitHub release link |
 | M1: Core read | 0.1.x | Auto protocol detect, read VIN, CEL status, stored / pending / permanent codes with descriptions, readiness monitors, clear codes, code history log |
 | M2: Live data | 0.2.x | Polling of selected PIDs, supported-PID discovery, text dashboard, fuel trims for both banks (short-term, long-term, total) |
-| M3: UI polish | 0.3.x | Skeuomorphic 2000s JDM visual style: realistic gauges and LCDs, layered stereoscopic 3D on the top screen, touch control panel with pressable buttons, startup needle sweep, theme file, metric/imperial toggle, menu sounds |
+| M3: UI polish | 0.3.x | 3DS-game visual style: chunky toy-like gauges with outlines, mascot car on the title screen, layered stereoscopic 3D on the top screen, touch control panel with pressable buttons, startup needle sweep, theme file, metric/imperial toggle, menu sounds |
 | M4: Logging | 0.4.x | CSV logging to SD, session list, simple graph replay |
 | M5: Audio | 0.5.x | Sound effects for all UI events and alerts, music playback, jukebox, user music folder, volume settings, credits screen |
 | M6: Fun modes | 0.6.x | Time Attack timers, shift light, G-meter, Rev Sync, Eco Challenge, garage card, achievements, attract mode |
@@ -287,7 +289,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 - 2 to 3 Wi-Fi ELM327 adapters (different brands, v1.5 and v2.1 clones)
 - **Primary test vehicle: 2008 Honda Ridgeline** (3.5L V6, naturally aspirated). Notes:
   - Expected protocol: ISO 15765-4 CAN (11-bit, 500 kbps), since US 2008 model-year vehicles were required to use CAN. Confirm in M0 with `ATDPN` after auto-detect.
-  - No turbo, so there is no boost reading. The boost-style gauge will show manifold vacuum instead, which keeps the tuner-meter look. PID 0x0B gives absolute pressure, so vacuum = barometric pressure − MAP. Use barometric pressure from PID 0x33 if supported; otherwise use the MAP reading taken at key-on, engine-off.
+  - No turbo, so there is no boost reading. The boost-style gauge will show manifold vacuum instead, which keeps the boost-style dial. PID 0x0B gives absolute pressure, so vacuum = barometric pressure − MAP. Use barometric pressure from PID 0x33 if supported; otherwise use the MAP reading taken at key-on, engine-off.
   - Battery voltage comes from the adapter (`ATRV`), since PID 0x42 may not be supported.
   - Run `0100`/`0120`/`0140` supported-PID scans in M1 and record the results in the compatibility list.
   - Honda-specific data (e.g. VTEC status, transmission temperature) needs enhanced PIDs and stays out of v1.
@@ -310,13 +312,14 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 | Claude Code marks hardware-dependent work as done without a real test | Bugs only found in the car | `needs-hardware` label; only the owner closes those issues |
 | Agent loses track of long-running work across sessions | Repeated or half-finished work | Beads as the single task list; `bd ready` at the start of every session |
 | UI looks too close to a real brand | Trademark complaints, repo takedown | Original logo and art only; no brand names or marks; open-licensed fonts |
-| Solo developer scope creep (skeuomorphic art and 3D are time-consuming) | Delayed release | Keep text dashboard working first (M2); visual style in M3 builds on it; build one finished gauge in full detail before making the rest; stretch items stay out of 1.0 |
+| 3DS-game look plus the GaugeBoy name reads as an official Nintendo app | Trademark complaint or repo takedown | Original models, art and fonts only; nothing copied, traced or converted from Nintendo games; no Nintendo characters or UI elements; README disclaimer |
+| Solo developer scope creep (3D models and art are time-consuming) | Delayed release | Keep text dashboard working first (M2); visual style in M3 builds on it; build one finished gauge in full detail before making the rest; stretch items stay out of 1.0 |
 | Fun modes encourage street racing | Safety, reputation | Closed-course warning, no online leaderboards, Rev Sync locked unless stopped, no touch input needed while moving |
 | Slow OBD speed updates | Inaccurate timers | Poll speed only during timer runs; label results as estimates |
 | Sourcing original music as a solo developer | Delayed audio milestone | Start with CC0 / CC-BY tracks from open music libraries; commission or compose originals later; user music folder covers the gap |
 | Music, gauges and polling all at once | Stutter or frame drops | Audio and polling on separate threads; stream music instead of loading it into memory |
 | 3D rendering cost | Frame drops in 3D mode | Pre-rendered textures for static layers (bezel, face, glass); only needles and digits redrawn each frame |
-| Detailed textures use too much memory | Crashes or slow loading | Compressed texture formats; reuse shared materials (chrome, carbon) across gauges |
+| Detailed textures use too much memory | Crashes or slow loading | Compressed texture formats; reuse shared materials (plastic, chrome, glass) across gauges |
 
 ## 9. Success Criteria
 
@@ -340,6 +343,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 4. ~~Solo or team / timeline~~ Resolved in 0.5.0 and 0.7.0: solo, no fixed timeline.
 5. ~~Test vehicle~~ Resolved in 0.8.0: 2008 Honda Ridgeline as primary. Second vehicle still to be chosen.
 6. Music track list: sources agreed in 0.11.0 (mix of free licensed, original and commissioned); specific tracks still to be decided.
+7. Mascot car model: which vehicle the lime-green car is based on (the 1995 Suzuki Sidekick first proposed, or a car from the owner's reference image).
 
 ---
 
@@ -347,6 +351,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.2.0 | 2026-11-14 | New visual direction in section 5b: look and feel like a Nintendo 3DS game, with the owner's reference image for palette and feel; chunky toy-like gauges; thin dark outlines on all models; lime-green mascot car (icon, banner, title screen, attract mode, garage card); English labels only (Japanese sub-labels dropped); IP rule covers ripped assets; goals, DIAG, fun modes, M3, risks and open questions updated to match; `CLAUDE.md` updated to 1.2.0 |
 | 1.1.0 | 2026-11-13 | Review fixes: battery voltage via `ATRV`; manifold vacuum computed as baro − MAP with key-on fallback; M0 Wi-Fi checklist (manual IP, failed connection test, slots, sleep) and reconnect-on-wake; Japanese sub-label wording and font subsetting; version-free release filenames and a fixed `.cia` title ID; Time Attack arms while stopped and auto-starts, with interpolated speed samples; Eco Challenge MAP estimate uses engine displacement; VIN decode limited to manufacturer and year; master mute never silences the CEL chime, with a visual fallback when DSP firmware is missing; `CLAUDE.md` updated to 1.1.0 |
 | 1.0.0 | 2026-11-13 | Brief finalized as the project baseline; starting `CLAUDE.md` (v1.0.0) drafted alongside it. Open items carried forward: second test vehicle, music track list |
 | 0.13.0 | 2026-11-13 | Code to be written by Claude Code with Beads (`bd`) for task tracking; added section 5g (roles, Beads setup, epics per milestone, labels, CLAUDE.md rules, hardware-free testing); added two workflow risks |
