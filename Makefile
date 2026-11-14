@@ -4,18 +4,22 @@
 #   make         build gaugeboy.3dsx (needs devkitPro / devkitARM)
 #   make clean   remove build output
 #   make test    build and run host unit tests (host C compiler, no devkitPro)
+#   make emulator-check   run the driver against tools/run-emulator.sh
 #
 # Based on the devkitPro 3DS application template.
 #---------------------------------------------------------------------------------
-ifneq ($(filter test test-clean,$(MAKECMDGOALS)),)
+ifneq ($(filter test test-clean emulator-check,$(MAKECMDGOALS)),)
 #---------------------------------------------------------------------------------
-.PHONY: test test-clean
+.PHONY: test test-clean emulator-check
 
 test:
 	@$(MAKE) --no-print-directory -C tests run
 
 test-clean:
 	@$(MAKE) --no-print-directory -C tests clean
+
+emulator-check:
+	@$(MAKE) --no-print-directory -C tests emulator-check $(if $(EMU_HOST),EMU_HOST=$(EMU_HOST)) $(if $(EMU_PORT),EMU_PORT=$(EMU_PORT))
 
 #---------------------------------------------------------------------------------
 else

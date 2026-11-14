@@ -15,3 +15,8 @@ tests/build/
 
 # macOS
 .DS_Store
+
+# Dev-only Python environment for tools/ (ELM327 emulator)
+tools/.venv/
+# ELM327 emulator log
+elm.log

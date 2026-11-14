@@ -15,7 +15,7 @@ HDRS    := $(wildcard *.h) $(wildcard ../source/*.h) $(wildcard ../source/elm327
            ../source/spike_actions.h
 LDLIBS  := -pthread
 
-.PHONY: run clean
+.PHONY: run clean emulator-check
 
 run: $(BUILD)/run_tests
 	./$(BUILD)/run_tests
@@ -23,6 +23,18 @@ run: $(BUILD)/run_tests
 $(BUILD)/run_tests: $(SRCS) $(HDRS)
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) -o $@ $(SRCS) $(LDLIBS)
+
+# Driver + spike actions against a running ELM327 emulator (tools/run-emulator.sh).
+EMU_HOST ?= 127.0.0.1
+EMU_PORT ?= 35000
+EMU_SRCS := ../tools/emulator_check.c $(filter ../source/%,$(SRCS))
+
+emulator-check: $(BUILD)/emulator_check
+	./$(BUILD)/emulator_check $(EMU_HOST) $(EMU_PORT)
+
+$(BUILD)/emulator_check: $(EMU_SRCS) $(HDRS)
+	@mkdir -p $(BUILD)
+	$(CC) $(CFLAGS) -o $@ $(EMU_SRCS) $(LDLIBS)
 
 clean:
 	@rm -rf $(BUILD)

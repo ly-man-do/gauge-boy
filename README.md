@@ -43,6 +43,8 @@ Not available yet. Releases will include a QR code you can scan with FBI (*Remot
 
 Build instructions will be added with the project skeleton. The app is written in C with devkitPro / devkitARM and libctru: `make` builds the `.3dsx`, `make cia` builds the `.cia`, and `make test` runs host unit tests.
 
+To test without a car, see [tools/README.md](tools/README.md) for the ELM327 emulator.
+
 ## Project docs
 
 - [Project brief](docs/gaugeboy-brief.md): scope, design and milestones.
