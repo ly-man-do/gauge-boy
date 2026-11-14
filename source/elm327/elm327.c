@@ -476,3 +476,76 @@ const char *elm_status_str(elm_status_t status)
     }
     return "Unknown status";
 }
+
+const char *elm_protocol_name(int protocol)
+{
+    static const char *const names[] = {
+        "Automatic",
+        "SAE J1850 PWM (41.6 kbaud)",
+        "SAE J1850 VPW (10.4 kbaud)",
+        "ISO 9141-2 (5 baud init)",
+        "ISO 14230-4 KWP (5 baud init)",
+        "ISO 14230-4 KWP (fast init)",
+        "ISO 15765-4 CAN (11 bit, 500 kbaud)",
+        "ISO 15765-4 CAN (29 bit, 500 kbaud)",
+        "ISO 15765-4 CAN (11 bit, 250 kbaud)",
+        "ISO 15765-4 CAN (29 bit, 250 kbaud)",
+        "SAE J1939 CAN (29 bit, 250 kbaud)",
+        "USER1 CAN",
+        "USER2 CAN",
+    };
+    if (protocol < 0 || protocol >= (int)(sizeof names / sizeof names[0])) {
+        return "Unknown protocol";
+    }
+    return names[protocol];
+}
+
+size_t elm_escape_raw(const char *raw, size_t len, char *out, size_t out_len)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    size_t n = 0;
+
+    if (out_len == 0) {
+        return 0;
+    }
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)raw[i];
+        char piece[5];
+        size_t plen;
+
+        if (c == '\r') {
+            memcpy(piece, "\\r", 2);
+            plen = 2;
+        } else if (c == '\n') {
+            memcpy(piece, "\\n", 2);
+            plen = 2;
+        } else if (c == '\\') {
+            memcpy(piece, "\\\\", 2);
+            plen = 2;
+        } else if (c >= 0x20 && c <= 0x7e) {
+            piece[0] = (char)c;
+            plen = 1;
+        } else {
+            piece[0] = '\\';
+            piece[1] = 'x';
+            piece[2] = hex[c >> 4];
+            piece[3] = hex[c & 0xf];
+            plen = 4;
+        }
+
+        if (n + plen + 1 > out_len) {
+            /* Does not fit: end with "..." (may cut an escape short). */
+            size_t keep = out_len >= 4 ? out_len - 4 : 0;
+            n = n < keep ? n : keep;
+            size_t dots = out_len - 1 - n;
+            memcpy(out + n, "...", dots < 3 ? dots : 3);
+            n += dots < 3 ? dots : 3;
+            out[n] = '\0';
+            return n;
+        }
+        memcpy(out + n, piece, plen);
+        n += plen;
+    }
+    out[n] = '\0';
+    return n;
+}

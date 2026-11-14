@@ -545,6 +545,41 @@ static void test_read_protocol(void)
     CHECK(a);
 }
 
+static void test_protocol_names(void)
+{
+    CHECK_EQ_STR(elm_protocol_name(0), "Automatic");
+    CHECK_EQ_STR(elm_protocol_name(6), "ISO 15765-4 CAN (11 bit, 500 kbaud)");
+    CHECK_EQ_STR(elm_protocol_name(0xC), "USER2 CAN");
+    CHECK_EQ_STR(elm_protocol_name(13), "Unknown protocol");
+    CHECK_EQ_STR(elm_protocol_name(-1), "Unknown protocol");
+}
+
+static void test_escape_raw(void)
+{
+    char out[64];
+    static const char raw[] = "ATZ\r\nOK\\\x00\xff>";
+    size_t n = elm_escape_raw(raw, sizeof raw - 1, out, sizeof out);
+    CHECK_EQ_STR(out, "ATZ\\r\\nOK\\\\\\x00\\xFF>");
+    CHECK_EQ_INT((int)n, (int)strlen(out));
+}
+
+static void test_escape_raw_truncates(void)
+{
+    char out[10];
+    size_t n = elm_escape_raw("0123456789ABCDEF", 16, out, sizeof out);
+    CHECK_EQ_STR(out, "012345...");
+    CHECK_EQ_INT((int)n, 9);
+
+    /* Exactly fits: no dots. */
+    n = elm_escape_raw("012345678", 9, out, sizeof out);
+    CHECK_EQ_STR(out, "012345678");
+
+    char tiny[1];
+    CHECK_EQ_INT((int)elm_escape_raw("AB", 2, tiny, sizeof tiny), 0);
+    CHECK_EQ_STR(tiny, "");
+    CHECK_EQ_INT((int)elm_escape_raw("AB", 2, out, 0), 0);
+}
+
 static void test_status_strings(void)
 {
     for (int s = 0; s < ELM_STATUS_COUNT; s++) {
@@ -596,5 +631,8 @@ void suite_elm327(void)
     RUN_TEST(test_read_voltage);
     RUN_TEST(test_parse_protocol);
     RUN_TEST(test_read_protocol);
+    RUN_TEST(test_protocol_names);
+    RUN_TEST(test_escape_raw);
+    RUN_TEST(test_escape_raw_truncates);
     RUN_TEST(test_status_strings);
 }

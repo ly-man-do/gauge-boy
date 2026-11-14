@@ -109,4 +109,14 @@ bool elm_parse_protocol(const char *line, int *protocol, bool *automatic);
 
 const char *elm_status_str(elm_status_t status);
 
+/* Protocol description for an ATDPN / ATSPx number, e.g. 6 ->
+ * "ISO 15765-4 CAN (11 bit, 500 kbaud)". */
+const char *elm_protocol_name(int protocol);
+
+/* Copy raw adapter bytes as printable text for logs: CR -> \r, LF -> \n,
+ * backslash -> \\, other non-printable bytes -> \xNN. Always
+ * NUL-terminates (if out_len > 0) and ends with "..." when truncated.
+ * Returns the length written. */
+size_t elm_escape_raw(const char *raw, size_t len, char *out, size_t out_len);
+
 #endif

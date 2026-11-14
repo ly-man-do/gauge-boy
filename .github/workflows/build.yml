@@ -17,6 +17,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # A hung network test must not hold the runner for GitHub's 6 h default.
+    timeout-minutes: 15
     # Official devkitPro image: devkitARM, libctru and a host gcc for the tests.
     container: devkitpro/devkitarm:latest
     steps:
