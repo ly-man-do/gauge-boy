@@ -90,27 +90,28 @@ To remove it: FBI > **Titles** > GaugeBoy > **Delete Title**. Your `sdmc:/3ds/ga
 
 ## 3. Save the adapter's Wi-Fi on the 3DS
 
-Do this once per adapter, in the car with the adapter plugged in and the ignition on (most adapters only power up then).
+Do this once per adapter, in the car with the adapter plugged in and the ignition on (most adapters only power up then). Tested with the Vgate iCar Pro (`V-LINK`, ELM327 v2.3) on 2026-11-15.
 
 1. **System Settings** > **Internet Settings** > **Connection Settings**. Pick an empty slot (there are only 3; note which one you use).
-2. **New Connection** > **Manual Setup** > **Search for an Access Point**, and pick the adapter's network (the Vgate iCar Pro calls it `V-LINK`).
+2. **New Connection** > **Manual Setup** > **Search for an Access Point**, and pick the adapter's network (`V-LINK` for the Vgate iCar Pro).
    - If the adapter's network doesn't appear, it is probably ad-hoc or 5 GHz, which the 3DS can't join. Note that in your report.
-3. Enter the password if it has one, then **OK** to save.
-4. The **connection test will fail** because the adapter has no internet. That's expected. Make sure the slot is still saved.
-5. **If the 3DS can't get an IP address** (many adapters have no DHCP server), set one by hand: open the slot > **Change Settings**:
-   - **IP Address:** Auto-Obtain **No**; IP Address `192.168.0.11`, Subnet Mask `255.255.255.0`, Gateway `192.168.0.10`.
-   - **DNS:** Auto-Obtain **No**; Primary DNS `192.168.0.10`.
+3. Enter the password if it has one, then **OK** to save. The **connection test will fail** (error `003-2002`) because the adapter has no internet. That's expected; make sure the slot is still saved.
+4. Open the slot > **Change Settings** > **IP Address**:
+   - Auto-Obtain IP Address: **No**
+   - IP Address: `192.168.000.011`
+   - Subnet Mask: `255.255.255.000`
+   - Gateway: `192.168.000.010` (the adapter)
+5. **DNS**:
+   - Auto-Obtain DNS: **No**
+   - Primary DNS: `192.168.000.011` (the 3DS's own address, so the connection test asks GaugeBoy)
+   - Secondary DNS: `000.000.000.000`
+6. Save. The connection test will still fail: GaugeBoy isn't running yet.
 
-   This assumes the adapter is at `192.168.0.10`. If its manual says otherwise, use an address in the same subnet.
+This assumes the adapter is at `192.168.0.10`, as V-LINK and most Wi-Fi ELM327 adapters are. If yours differs, use its address as the Gateway, pick a free address in the same subnet for the 3DS, and use that same address as Primary DNS.
+
+Why: the 3DS drops a network that fails its internet connection test and won't let apps use it. GaugeBoy answers that test itself (a tiny DNS server and test page on the 3DS), so no other device is needed. When you tap **CONNECT**, GaugeBoy asks the 3DS to join the adapter's network and answers the test while it does. The log shows `Conntest:` lines when the 3DS asks GaugeBoy for the test page, and the `Network:` line shows the network, slot and the 3DS's IP. If this ever fails, `tools/fake_conntest.py` on a laptop on the adapter's network does the same job (see `tools/README.md`).
 
 The 3DS uses whichever saved connection is in range, so your home Wi-Fi slot can stay.
-
-Because the adapter has no internet, the 3DS fails its connection test on the adapter's network (error `003-2002`) and then won't let apps use it. GaugeBoy answers that test itself, so no other device is needed. For that, set the adapter's slot up like this (**Change Settings**):
-
-- **IP Address:** Auto-Obtain **No**; IP Address `192.168.0.11`, Subnet Mask `255.255.255.0`, Gateway `192.168.0.10`.
-- **DNS:** Auto-Obtain **No**; Primary DNS `192.168.0.11` (the 3DS's own address, so the test asks GaugeBoy); Secondary DNS `0.0.0.0`.
-
-The connection test in System Settings will still fail, because GaugeBoy isn't running then. That's expected. In GaugeBoy, tap **CONNECT**: it asks the 3DS to join the adapter's network and answers the test while it does. The log shows `Conntest:` lines when the 3DS asks GaugeBoy for the test page, and the `Network:` line shows which network and slot the 3DS is on and its IP address. If this doesn't work, `tools/fake_conntest.py` on a laptop on the adapter's network does the same job (see `tools/README.md`).
 
 ## 4. Launch GaugeBoy
 
@@ -169,5 +170,5 @@ File a [compatibility report](https://github.com/ly-man-do/gauge-boy/issues/new?
 | `Network error (errno 115 at socket(): ...)` | The 3DS isn't on the adapter's Wi-Fi. Tap CONNECT again and read the Wi-Fi join line above it. As a manual fallback, open the Rosalina menu (**L + Down + Select**) > **System configuration** > **Control wireless connection**, force the adapter's slot, then return to GaugeBoy. |
 | Adapter joined, but **Test Connection** fails with `003-2002` and CONNECT gives errno 115 | The 3DS rejects networks without internet. Answer its connection test with `tools/fake_conntest.py` on a computer on the adapter's network (see `tools/README.md`, "Fake 3DS connection test"). |
 | `Network:` shows your home network | The 3DS picked your home Wi-Fi. Move out of its range (or switch the router's Wi-Fi off) and relaunch. |
-| Joined, but every command says "did not answer" or "unreachable" | Set the manual IP (step 3.5) and check `host`/`port` in `config.ini` against the adapter's manual. |
+| Joined, but every command says "did not answer" or "unreachable" | Check the slot settings (step 3) and check `host`/`port` in `config.ini` against the adapter's manual. |
 | Garbled or odd replies | Keep the log: clone adapters misbehave, and the raw lines are what's needed to handle them. |
