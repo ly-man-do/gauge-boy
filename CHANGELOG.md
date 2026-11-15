@@ -6,6 +6,7 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ### Added
 
+- Plain-English descriptions for 9,342 generic trouble codes (P0, P2, P34-P3F, B0, B3, C0, C3, U0, U3) and a lookup for the coming DIAG screen; codes in manufacturer ranges show "Manufacturer-specific code". Descriptions come from [Wal33D/dtc-database](https://github.com/Wal33D/dtc-database) (MIT); see `CREDITS.md`.
 - QR codes for installing with FBI (*Remote Install* > *Scan QR Code*): one at the top of the README that always installs the newest release, and one per release (`gaugeboy-qr.png`, also shown in the release notes) for that exact version. Made with `tools/make_qr.py`.
 
 ## [0.0.2] - 2026-11-15
