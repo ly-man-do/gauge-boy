@@ -4,6 +4,7 @@
 
 #include "harness.h"
 #include "fake_io.h"
+#include "data/code_history.h"
 #include "data/diag_view.h"
 #include "obd/obd_diag.h"
 
@@ -256,6 +257,41 @@ static void test_clear_codes(void)
     CHECK(strstr(obd_clear_result_str(OBD_CLEAR_MOVING), "moving") != NULL);
 }
 
+static void test_code_history(void)
+{
+    static char csv[4096];
+    setup();
+    script_ridgeline();
+    CHECK_EQ_INT(obd_diag_scan(&elm, true, 2026, &diag, NULL, NULL, NULL), OBD_LINK_OK);
+
+    size_t n = code_history_scan_rows(&diag, "2026-11-15 16:10:40", csv, sizeof csv);
+    CHECK(n > 0 && n == strlen(csv));
+    CHECK_EQ_STR(csv,
+        "2026-11-15 16:10:40,2HJYK16618H000123,2008 Honda,ON,stored,P0171,System Too Lean Bank 1\n"
+        "2026-11-15 16:10:40,2HJYK16618H000123,2008 Honda,ON,stored,P1456,"
+        "Evaporative Emission Control System Leak Detected Fuel Tank System\n");
+
+    /* No codes: one "none" row. */
+    diag.stored.count = 0;
+    n = code_history_scan_rows(&diag, "2026-11-15 16:20:00", csv, sizeof csv);
+    CHECK_EQ_STR(csv, "2026-11-15 16:20:00,2HJYK16618H000123,2008 Honda,ON,none,,\n");
+
+    /* Nothing read: nothing written. */
+    static obd_diag_t empty;
+    memset(&empty, 0, sizeof empty);
+    CHECK_EQ_INT((int)code_history_scan_rows(&empty, "x", csv, sizeof csv), 0);
+
+    /* Clear row; a comma in the text gets quoted. */
+    n = code_history_clear_row(&diag, "2026-11-15 16:21:00", "Not cleared, car refused", csv,
+                               sizeof csv);
+    CHECK_EQ_STR(csv,
+        "2026-11-15 16:21:00,2HJYK16618H000123,2008 Honda,,cleared,,\"Not cleared, car refused\"\n");
+
+    /* Too small for a whole row: nothing half-written. */
+    CHECK_EQ_INT((int)code_history_clear_row(&diag, "2026-11-15 16:21:00", "x", csv, 20), 0);
+    CHECK_EQ_STR(csv, "");
+}
+
 void suite_diag(void)
 {
     gb_suite("diag");
@@ -265,4 +301,5 @@ void suite_diag(void)
     RUN_TEST(test_scan_lost_midway);
     RUN_TEST(test_paged_pieces);
     RUN_TEST(test_clear_codes);
+    RUN_TEST(test_code_history);
 }

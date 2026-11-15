@@ -162,6 +162,8 @@ Report anything garbled (colors, layout, text running off the screen).
 
 ## 7. Report the results
 
+Every scan and every clear is also added to `sdmc:/3ds/gaugeboy/code-history.csv` (date, VIN, car, check engine light, code type, code, description), which opens in any spreadsheet and keeps the codes after they're cleared.
+
 Tap **SAVE LOG** when you're done. It copies everything from this session to a new file and shows its name in the log, for example `sdmc:/3ds/gaugeboy/logs/gaugeboy-log-20261115-114205.txt` (date and time from the 3DS clock). Copy that file off the SD card (card reader, or FTP with ftpd) and attach it to your report. `sdmc:/3ds/gaugeboy/spike-log.txt` keeps every session, one after the other.
 
 File a [compatibility report](https://github.com/ly-man-do/gauge-boy/issues/new?template=compatibility-report.yml) per adapter with the saved log. Results go into the hardware test issue `gauge-boy-7v5.11`.

@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <time.h>
 
+#include "data/code_history.h"
 #include "data/config.h"
 #include "data/diag_view.h"
 #include "data/textlog.h"
@@ -332,6 +333,39 @@ static void setup_slot_preview(spike_t *s)
     spike_logf(s, "SETUP SLOT: slot %d needs changes; enter the NEW values in System Settings", slot);
 }
 
+/* Code history (worker thread): append rows to CONFIG_DIR/code-history.csv,
+ * writing the header when the file is new. */
+static void now_text(char *out, size_t len)
+{
+    time_t now = time(NULL);
+    struct tm *tm = gmtime(&now);   /* the 3DS clock is local time */
+    if (tm == NULL || strftime(out, len, "%Y-%m-%d %H:%M:%S", tm) == 0) {
+        snprintf(out, len, "unknown");
+    }
+}
+
+static void append_history(spike_t *s, const char *rows)
+{
+    if (rows[0] == '\0') {
+        return;
+    }
+    const char *path = CONFIG_DIR "/" CODE_HISTORY_FILE;
+    FILE *f = fopen(path, "a");
+    if (f == NULL) {
+        spike_logf(s, "! Could not write %s", path);
+        return;
+    }
+    fseek(f, 0, SEEK_END);
+    bool ok = true;
+    if (ftell(f) == 0) {
+        ok = fputs(CODE_HISTORY_HEADER, f) >= 0;
+    }
+    ok = ok && fputs(rows, f) >= 0;
+    if (fclose(f) != 0 || !ok) {
+        spike_logf(s, "! Could not write %s", path);
+    }
+}
+
 static void scan_progress(void *ctx, obd_diag_step_t step)
 {
     (void)ctx;
@@ -364,6 +398,12 @@ static void diag_scan(spike_t *s)
                       spike_trace_command, scan_progress, s);
         if (d.result != OBD_LINK_LOST) {
             reset_at_connect = s->transport->connects;
+        }
+        static char rows[4096];
+        char when[24];
+        now_text(when, sizeof when);
+        if (code_history_scan_rows(&d, when, rows, sizeof rows) > 0) {
+            append_history(s, rows);
         }
         if (d.result == OBD_LINK_OK) {
             spike_logf(s, "= Scan: CEL %s, %d stored, %d pending%s", 
@@ -406,6 +446,18 @@ static void clear_codes(spike_t *s)
         spike_logf(s, "! %s (code %02X)", obd_clear_result_str(res), nrc);
     } else {
         spike_logf(s, "%s %s", res == OBD_CLEAR_DONE ? "=" : "!", obd_clear_result_str(res));
+    }
+    {
+        static obd_diag_t before;
+        char row[512];
+        char when[24];
+        LightLock_Lock(&shared.lock);
+        before = shared.diag;
+        LightLock_Unlock(&shared.lock);
+        now_text(when, sizeof when);
+        if (code_history_clear_row(&before, when, obd_clear_result_str(res), row, sizeof row) > 0) {
+            append_history(s, row);
+        }
     }
     if (res == OBD_CLEAR_DONE) {
         diag_scan(s);
@@ -915,7 +967,7 @@ static void open_log_file(void)
         if (tm != NULL) {
             strftime(when, sizeof when, "%Y-%m-%d %H:%M:%S", tm);
         }
-        fprintf(log_file, "\n=== GaugeBoy %s spike session, %s ===\n", GB_VERSION, when);
+        fprintf(log_file, "\n=== GaugeBoy %s session, %s ===\n", GB_VERSION, when);
         fflush(log_file);
     }
 }
@@ -953,7 +1005,7 @@ void spike_ui_run(void)
 
     open_log_file();
     spike_init(&spike, &transport, &elm, log_sink, NULL);
-    spike_logf(&spike, "GaugeBoy %s M0 spike", GB_VERSION);
+    spike_logf(&spike, "GaugeBoy %s", GB_VERSION);
     if (log_file == NULL) {
         spike_logf(&spike, "! Could not open %s; log is on screen only", LOG_PATH);
     }
