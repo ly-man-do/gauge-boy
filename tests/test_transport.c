@@ -34,6 +34,19 @@ static void test_normalize_errno(void)
     CHECK_EQ_INT(tp_normalize_errno(-ENETDOWN), ENETDOWN); /* libctru socket() */
 }
 
+static void test_3ds_soc_errno(void)
+{
+    CHECK_EQ_INT(tp_3ds_soc_errno(0), 0);
+    CHECK_EQ_INT(tp_3ds_soc_errno(26), EINPROGRESS); /* seen on the V-LINK test */
+    CHECK_EQ_INT(tp_3ds_soc_errno(-26), EINPROGRESS);
+    CHECK_EQ_INT(tp_3ds_soc_errno(14), ECONNREFUSED);
+    CHECK_EQ_INT(tp_3ds_soc_errno(23), EHOSTUNREACH);
+    CHECK_EQ_INT(tp_3ds_soc_errno(30), EISCONN);
+    CHECK_EQ_INT(tp_3ds_soc_errno(38), ENETDOWN);
+    CHECK_EQ_INT(tp_3ds_soc_errno(76), ETIMEDOUT);
+    CHECK_EQ_INT(tp_3ds_soc_errno(999), EIO);
+}
+
 static void test_io_when_disconnected_fails(void)
 {
     tcp_transport_t t;
@@ -244,6 +257,7 @@ void suite_transport(void)
     gb_suite("transport");
     RUN_TEST(test_init_validates_address);
     RUN_TEST(test_normalize_errno);
+    RUN_TEST(test_3ds_soc_errno);
     RUN_TEST(test_io_when_disconnected_fails);
     RUN_TEST(test_connect_and_run_elm_command);
     RUN_TEST(test_read_times_out);

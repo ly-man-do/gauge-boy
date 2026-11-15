@@ -13,6 +13,8 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ### Fixed
 
+- On the 3DS, a TCP connect that was still in progress was reported as `errno 26: Text file busy` and abandoned. libctru returns the 3DS's raw socket error there (26 means "in progress"); GaugeBoy now translates it and keeps waiting until the connect timeout, then reports "Adapter did not answer".
+
 - The `Network:` line numbered connection slots one too high, and "Wi-Fi state unknown" now includes the system's error code.
 - Connection errors showed a negative errno with no description (for example `errno -115` when the 3DS had no network). They now show the positive value and its meaning (`errno 115: Network interface is not configured`).
 

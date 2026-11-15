@@ -83,4 +83,9 @@ const char *tp_status_str(tp_status_t status);
  * (socket() on a 3DS with no network sets errno to -ENETDOWN). */
 int tp_normalize_errno(int err);
 
+/* errno for a raw 3DS socket error number. libctru returns getsockopt
+ * SO_ERROR unconverted (26 is EINPROGRESS there, not ETXTBSY). Unknown
+ * values map to EIO. */
+int tp_3ds_soc_errno(int raw);
+
 #endif

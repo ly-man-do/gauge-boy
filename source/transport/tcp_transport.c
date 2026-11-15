@@ -107,6 +107,38 @@ static tp_status_t fail_socket(tcp_transport_t *t, int fd, tp_status_t status,
     return status;
 }
 
+static void tp_sleep_ms(unsigned ms)
+{
+#ifdef __3DS__
+    svcSleepThread((s64)ms * 1000000LL);
+#else
+    struct timespec ts = { (time_t)(ms / 1000u), (long)(ms % 1000u) * 1000000L };
+    nanosleep(&ts, NULL);
+#endif
+}
+
+int tp_3ds_soc_errno(int raw)
+{
+    /* Horizon's socket error numbers (POSIX names in alphabetical order),
+     * as in libctru's soc_common.c. Only the ones connect() can report. */
+    switch (raw < 0 ? -raw : raw) {
+    case 0:  return 0;
+    case 6:  return EAGAIN;
+    case 7:  return EALREADY;
+    case 13: return ECONNABORTED;
+    case 14: return ECONNREFUSED;
+    case 15: return ECONNRESET;
+    case 23: return EHOSTUNREACH;
+    case 26: return EINPROGRESS;
+    case 30: return EISCONN;
+    case 38: return ENETDOWN;
+    case 39: return ENETRESET;
+    case 40: return ENETUNREACH;
+    case 76: return ETIMEDOUT;
+    default: return EIO;
+    }
+}
+
 tp_status_t tcp_transport_connect(tcp_transport_t *t, unsigned timeout_ms)
 {
     struct sockaddr_in addr;
@@ -142,32 +174,50 @@ tp_status_t tcp_transport_connect(tcp_transport_t *t, unsigned timeout_ms)
             return fail_socket(t, fd, TP_ERR_CONNECT, "connect()", errno);
         }
 
-        struct pollfd p = { fd, POLLOUT, 0 };
         uint64_t deadline = tp_now_ms() + timeout_ms;
-        int pr;
         for (;;) {
             uint64_t now = tp_now_ms();
-            unsigned left = now >= deadline ? 0u : (unsigned)(deadline - now);
-            pr = poll(&p, 1, clamp_timeout(left));
-            if (pr >= 0 || errno != EINTR) {
+            if (now >= deadline) {
+                return fail_socket(t, fd, TP_ERR_TIMEOUT, "connect()", ETIMEDOUT);
+            }
+            struct pollfd p = { fd, POLLOUT, 0 };
+            int pr = poll(&p, 1, clamp_timeout((unsigned)(deadline - now)));
+            if (pr < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                return fail_socket(t, fd, TP_ERR_SOCKET, "poll()", errno);
+            }
+            if (pr == 0) {
+                return fail_socket(t, fd, TP_ERR_TIMEOUT, "connect()", ETIMEDOUT);
+            }
+
+            int err = 0;
+            socklen_t len = sizeof err;
+            if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) != 0) {
+                if (p.revents & (POLLERR | POLLHUP)) {
+                    return fail_socket(t, fd, TP_ERR_CONNECT, "connect()", ECONNREFUSED);
+                }
+                break; /* writable and no error to read: connected */
+            }
+#ifdef __3DS__
+            err = tp_3ds_soc_errno(err);
+#endif
+            if (err == 0) {
                 break;
             }
-        }
-        if (pr == 0) {
-            return fail_socket(t, fd, TP_ERR_TIMEOUT, "connect()", ETIMEDOUT);
-        }
-        if (pr < 0) {
-            return fail_socket(t, fd, TP_ERR_SOCKET, "poll()", errno);
-        }
-
-        int err = 0;
-        socklen_t len = sizeof err;
-        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) == 0) {
-            if (err != 0) {
+            if (err != EINPROGRESS && err != EALREADY) {
                 return fail_socket(t, fd, TP_ERR_CONNECT, "connect()", err);
             }
-        } else if (p.revents & (POLLERR | POLLHUP)) {
-            return fail_socket(t, fd, TP_ERR_CONNECT, "connect()", ECONNREFUSED);
+            /* Still connecting (the 3DS can wake poll early): ask connect()
+             * again, which says EISCONN once done, then wait a little. */
+            if (connect(fd, (struct sockaddr *)&addr, sizeof addr) == 0 || errno == EISCONN) {
+                break;
+            }
+            if (errno != EINPROGRESS && errno != EALREADY && errno != EWOULDBLOCK) {
+                return fail_socket(t, fd, TP_ERR_CONNECT, "connect()", errno);
+            }
+            tp_sleep_ms(20);
         }
     }
 
