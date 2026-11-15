@@ -8,7 +8,7 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 
 ## Status
 
-**Early development: M0 spike.** The current release is a test build for checking adapters. The first milestone tests whether a New 3DS can join a Wi-Fi ELM327 adapter's network and talk to it reliably. If no tested adapter works, the project switches to a small ESP32 Wi-Fi bridge before going further.
+**Early development: M0 spike done (0.0.2), M1 next.** The current release is a test build for checking adapters, not the finished gauges. M0 proved that a New 3DS can talk to a Wi-Fi ELM327 adapter directly: tested with a Vgate iCar Pro (`V-LINK`) in a 2008 Honda Ridgeline, where it reads the adapter version, protocol, battery voltage and VIN. Work now moves to M1 (check engine codes and readiness monitors).
 
 | Milestone | Version | Scope |
 |---|---|---|
@@ -32,8 +32,16 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 ## Requirements
 
 - New Nintendo 3DS, New 3DS XL or New 2DS XL with custom firmware (Luma3DS). Older 3DS models are not supported.
-- A Wi-Fi ELM327 OBD-II adapter. Bluetooth adapters cannot work because the 3DS has no Bluetooth radio.
+- A Wi-Fi ELM327 OBD-II adapter that makes a 2.4 GHz network (most do). Bluetooth adapters cannot work because the 3DS has no Bluetooth radio, and the 3DS can't join ad-hoc or 5 GHz networks.
 - A car with an OBD-II port (US cars from 1996 on).
+
+## Tested adapters
+
+| Adapter | Reports as | Network | Result |
+|---|---|---|---|
+| Vgate iCar Pro Wi-Fi | ELM327 v2.3 | `V-LINK`, adapter at `192.168.0.10:35000` | Works (0.0.2), with the slot setup below |
+
+More adapters will be tested later; reports are welcome (see [Testing on a real New 3DS](docs/testing-on-3ds.md)).
 
 ## Install
 
@@ -42,7 +50,19 @@ The current release is an **M0 test build**: an adapter test app, not the finish
 - [`gaugeboy.cia`](https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.cia): install with FBI; GaugeBoy then appears on the HOME menu.
 - [`gaugeboy.3dsx`](https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.3dsx): copy to `sdmc:/3ds/gaugeboy/` and start it from the Homebrew Launcher.
 
-[Testing on a real New 3DS](docs/testing-on-3ds.md) walks through installing it, connecting to an adapter and reporting results. Later releases will add a QR code you can scan with FBI (*Remote Install* > *Scan QR Code*).
+Later releases will add a QR code you can scan with FBI (*Remote Install* > *Scan QR Code*).
+
+### Set up the adapter's Wi-Fi
+
+The adapter's network has no internet, so the 3DS fails its connection test there (error `003-2002`) and normally drops it. GaugeBoy answers that test itself, which only works with this setup:
+
+1. In **System Settings > Internet Settings > Connection Settings**, save the adapter's network (e.g. `V-LINK`) in a free slot. The connection test fails; that's expected.
+2. Open that slot > **Change Settings**:
+   - **IP Address:** Auto-Obtain **No**; IP `192.168.000.011`, Subnet Mask `255.255.255.000`, Gateway `192.168.000.010`
+   - **DNS:** Auto-Obtain **No**; Primary DNS `192.168.000.011` (the 3DS's own address), Secondary DNS `000.000.000.000`
+3. In GaugeBoy, tap **SLOT** until it shows that slot, then **SETUP SLOT** to check the settings, then **CONNECT** and **ATZ**.
+
+This assumes the adapter is at `192.168.0.10`, as most are. [Testing on a real New 3DS](docs/testing-on-3ds.md) has the details, the test steps and how to report results; **SAVE LOG** saves a session log to `sdmc:/3ds/gaugeboy/logs/` to attach.
 
 ## Building
 
