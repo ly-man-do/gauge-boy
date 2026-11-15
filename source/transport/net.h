@@ -36,4 +36,10 @@ void net_set_wifi_slot(int slot);
  * "(not set up)") if the slot is empty or can't be read. */
 bool net_slot_name(int slot, char *out, size_t len);
 
+/* Read-only: one line describing slot 1-3's saved IP settings, e.g.
+ * "IP manual 192.168.0.11 mask 255.255.255.0 gw 192.168.0.10, DNS manual
+ * 192.168.0.11 / 0.0.0.0, MTU 1400 (raw IP c0a8000b)". Returns false if
+ * the slot can't be read. */
+bool net_slot_ip_settings(int slot, char *out, size_t len);
+
 #endif

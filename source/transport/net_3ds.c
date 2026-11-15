@@ -217,6 +217,94 @@ bool net_slot_name(int slot, char *out, size_t len)
     return true;
 }
 
+/* ac:i getters for the loaded slot (after ACI_LoadNetworkSetting). Command
+ * IDs from zaksabeast/3ds-Ghidra-Scripts ctr_services.py; the buffer
+ * layout follows libctru's ACI_GetNetworkWirelessEssidSecuritySsid. */
+static Result aci_get_word(u16 cmd, u32 *out)
+{
+    u32 *cmdbuf = getThreadCommandBuffer();
+    cmdbuf[0] = IPC_MakeHeader(cmd, 0, 0);
+    Result ret = svcSendSyncRequest(*acGetSessionHandle());
+    if (R_FAILED(ret)) {
+        return ret;
+    }
+    *out = cmdbuf[2];
+    return (Result)cmdbuf[1];
+}
+
+static Result aci_get_buffer(u16 cmd, void *buf, size_t size)
+{
+    u32 *cmdbuf = getThreadCommandBuffer();
+    u32 *staticbufs = getThreadStaticBuffers();
+    u32 backup[2];
+    memcpy(backup, staticbufs, sizeof backup);
+    cmdbuf[0] = IPC_MakeHeader(cmd, 0, 0);
+    staticbufs[0] = IPC_Desc_StaticBuffer(size, 0);
+    staticbufs[1] = (u32)buf;
+    Result ret = svcSendSyncRequest(*acGetSessionHandle());
+    memcpy(staticbufs, backup, sizeof backup);
+    return R_SUCCEEDED(ret) ? (Result)cmdbuf[1] : ret;
+}
+
+#define ACI_GET_DHCP        0x447
+#define ACI_GET_AUTO_DNS    0x449
+#define ACI_GET_IP          0x44B
+#define ACI_GET_GATEWAY     0x44D
+#define ACI_GET_NETMASK     0x44F
+#define ACI_GET_DNS1        0x451
+#define ACI_GET_DNS2        0x453
+#define ACI_GET_MTU         0x46D
+
+static void ip_text(char *out, size_t len, const u8 b[4])
+{
+    snprintf(out, len, "%u.%u.%u.%u", b[0], b[1], b[2], b[3]);
+}
+
+bool net_slot_ip_settings(int slot, char *out, size_t len)
+{
+    if (len == 0) {
+        return false;
+    }
+    snprintf(out, len, "can't read");
+    if (slot < 1 || slot > 3 || !ac_open()) {
+        return false;
+    }
+    Result r = ACI_LoadNetworkSetting((u32)(slot - 1));
+    u32 dhcp = 0, auto_dns = 0, mtu = 0;
+    u8 ip[4] = {0}, mask[4] = {0}, gw[4] = {0}, dns1[4] = {0}, dns2[4] = {0};
+    Result failed = 0;
+#define GET(call) do { Result rr = (call); if (R_FAILED(rr) && failed == 0) failed = rr; } while (0)
+    if (R_FAILED(r)) {
+        snprintf(out, len, "can't load slot (0x%08lX)", (unsigned long)r);
+        return false;
+    }
+    GET(aci_get_word(ACI_GET_DHCP, &dhcp));
+    GET(aci_get_word(ACI_GET_AUTO_DNS, &auto_dns));
+    GET(aci_get_buffer(ACI_GET_IP, ip, sizeof ip));
+    GET(aci_get_buffer(ACI_GET_NETMASK, mask, sizeof mask));
+    GET(aci_get_buffer(ACI_GET_GATEWAY, gw, sizeof gw));
+    GET(aci_get_buffer(ACI_GET_DNS1, dns1, sizeof dns1));
+    GET(aci_get_buffer(ACI_GET_DNS2, dns2, sizeof dns2));
+    GET(aci_get_word(ACI_GET_MTU, &mtu));
+#undef GET
+    char a[16], m[16], g[16], d1[16], d2[16];
+    ip_text(a, sizeof a, ip);
+    ip_text(m, sizeof m, mask);
+    ip_text(g, sizeof g, gw);
+    ip_text(d1, sizeof d1, dns1);
+    ip_text(d2, sizeof d2, dns2);
+    snprintf(out, len, "IP %s(%lu) %s mask %s gw %s, DNS %s(%lu) %s / %s, MTU %lu (raw IP %02x%02x%02x%02x)%s",
+             dhcp ? "auto" : "manual", (unsigned long)dhcp, a, m, g,
+             auto_dns ? "auto" : "manual", (unsigned long)auto_dns, d1, d2,
+             (unsigned long)mtu, ip[0], ip[1], ip[2], ip[3],
+             failed != 0 ? " [some reads failed]" : "");
+    if (failed != 0) {
+        size_t used = strlen(out);
+        snprintf(out + used, len - used, " 0x%08lX", (unsigned long)failed);
+    }
+    return failed == 0;
+}
+
 static void join_failed(char *msg, size_t len, const char *what, Result r)
 {
     u32 code = 0, detail = 0;

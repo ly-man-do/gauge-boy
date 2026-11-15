@@ -418,6 +418,14 @@ void spike_ui_run(void)
         }
         spike_logf(&spike, "Wi-Fi slots: 1 \"%s\", 2 \"%s\", 3 \"%s\"; using %s (tap SLOT)",
                    names[0], names[1], names[2], using);
+        /* Read-only check of each saved slot's IP settings (gauge-boy-7v5.30). */
+        for (int i = 0; i < CONFIG_WIFI_SLOTS; i++) {
+            char ipset[200];
+            if (strcmp(names[i], "(not set up)") != 0) {
+                net_slot_ip_settings(i + 1, ipset, sizeof ipset);
+                spike_logf(&spike, "Slot %d: %s", i + 1, ipset);
+            }
+        }
     }
     spike_logf(&spike, "Adapter %s:%u. Join its Wi-Fi in System Settings,",
                cfg.adapter_host, (unsigned)cfg.adapter_port);
