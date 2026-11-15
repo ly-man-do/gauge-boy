@@ -1,6 +1,6 @@
 # Project Brief: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.4.0
+**Version:** 1.5.0
 **Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
 **Date:** 2026-11-14
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -21,7 +21,7 @@ Build GaugeBoy: OBD-II Deluxe, a homebrew Nintendo 3DS application that connects
 - Show fuel trims for both banks, short-term and long-term, as live gauges and a dedicated trim screen (see section 5d).
 - Show live sensor data (Mode 01 PIDs): RPM, speed, coolant temp, throttle position, engine load, intake air temp and manifold vacuum, plus battery voltage (read from the adapter with `ATRV`, since PID 0x42 is often unsupported on older ECUs).
 - Use the dual screens well: gauges on the top screen, touch controls and menus on the bottom.
-- Make the app look and feel like a Nintendo 3DS game: bright, colorful, chunky low-poly models with thin dark outlines, toy-like gauges and a lime-green mascot car, with full stereoscopic 3D support on the top screen (see section 5b).
+- Make the app look and feel like a Nintendo 3DS game: bright, colorful, chunky low-poly models with thin dark outlines, toy-like gauges and a teal mascot car, with full stereoscopic 3D support on the top screen (see section 5b).
 - All menu navigation happens by touch on the bottom screen.
 - Include fun modes (timers, a G-meter, achievements and more) that make the app enjoyable beyond diagnostics (see section 5e).
 - Include original music and sound effects in the style of a 3DS game (see section 5f).
@@ -99,10 +99,10 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 - **Controls (bottom screen):** Big, rounded, colorful buttons that visibly press in, each with an icon, plus toggles and sliders in the same style.
 - **Lighting:** Consistent light source (top-left) across models and UI art.
 
-**Mascot car:** A lime-green toy version of a 1995 Suzuki Sidekick (a compact SUV with a boxy body, upright windshield, black fender flares and bumpers, and a spare tire on the tailgate), based on the shape of the real car: a chunky low-poly model with thin dark outlines and no maker names, badges or logos. It appears on the HOME menu icon and banner, spins in 3D on the top-screen title, drives through the attract mode and is the garage card picture until the user takes a photo.
+**Mascot car:** A teal toy version of a 1995 Suzuki Sidekick (a compact SUV with a boxy body, upright windshield, black fender flares and bumpers, and a spare tire on the tailgate), based on the shape of the real car: a chunky low-poly model with thin dark outlines and no maker names, badges or logos. It appears on the HOME menu icon and banner, spins in 3D on the top-screen title, drives through the attract mode and is the garage card picture until the user takes a photo.
 
 **Design language:**
-- **Colors:** Warm tan-orange backdrop (`#C58B4C`) with a darker tan (`#876B39`) for patterns and panel edges; near-black ink (`#1A1610`) for outlines and linework; lime green (`#8FD42A`, highlight `#C6F27A`, shadow `#5E9A1A`) as the main accent; navy-to-blue glass (`#323868` to `#6C7AC8`); light neutrals for trim and panels. Signal colors stay for function only: amber for the CEL warning, red for redline, green for live values.
+- **Colors:** Warm tan-orange backdrop (`#C58B4C`) with a darker tan (`#876B39`) for patterns and panel edges; near-black ink (`#1A1610`) for outlines and linework; lime green (`#8FD42A`, highlight `#C6F27A`, shadow `#5E9A1A`) as the main UI accent; teal (`#2BAE9F`, highlight `#7ADBCD`, shadow `#1A7A70`) for the mascot car; navy-to-blue glass (`#323868` to `#6C7AC8`); light neutrals for trim and panels. Signal colors stay for function only: amber for the CEL warning, red for redline, green for live values.
 - **Type:** A rounded, bold display font for headings; a clean UI font for menus and lists; bold digit styles for live values. Labels are in English only; there are no Japanese sub-labels.
 - **Gauges:** Mix of chunky analog dials, bar graphs and digital readouts; peak-hold markers; redline flash.
 - **Motion:** Bouncy, springy transitions; startup "sweep" where needles go to max and back; the selected item pulses.
@@ -342,7 +342,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 4. ~~Solo or team / timeline~~ Resolved in 0.5.0 and 0.7.0: solo, no fixed timeline.
 5. ~~Test vehicle~~ Resolved in 0.8.0: 2008 Honda Ridgeline as primary. Second vehicle still to be chosen.
 6. Music track list: sources agreed in 0.11.0 (mix of free licensed, original and commissioned); specific tracks still to be decided.
-7. ~~Mascot car model~~ Resolved in 1.3.0: a 1995 Suzuki Sidekick, in lime green, with no names or badges.
+7. ~~Mascot car model~~ Resolved in 1.3.0: a 1995 Suzuki Sidekick, in teal (lime green until 1.5.0), with no names or badges.
 
 ---
 
@@ -350,6 +350,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.5.0 | 2026-11-14 | Mascot car color changes from lime green to teal (`#2BAE9F`, from the owner's Sidekick photo); lime stays the main UI accent; goals, section 5b and open question 7 updated; `CLAUDE.md` updated to 1.5.0 |
 | 1.4.0 | 2026-11-14 | Owner's reference image removed from section 5b (mood, reference points, model outlines, mascot car); the mascot car is based on the real 1995 Sidekick; palette values unchanged, the ring pattern color is now a darker tan for patterns and panel edges; `CLAUDE.md` updated to 1.4.0 |
 | 1.3.0 | 2026-11-14 | Mascot car set to a 1995 Suzuki Sidekick (closes open question 7); music and sound effects move to a 3DS-game style (section 5f, goals); `CLAUDE.md` updated to 1.3.0 |
 | 1.2.0 | 2026-11-14 | New visual direction in section 5b: look and feel like a Nintendo 3DS game, with the owner's reference image for palette and feel; chunky toy-like gauges; thin dark outlines on all models; lime-green mascot car (icon, banner, title screen, attract mode, garage card); English labels only (Japanese sub-labels dropped); IP rule covers ripped assets; goals, DIAG, fun modes, M3, risks and open questions updated to match; `CLAUDE.md` updated to 1.2.0 |

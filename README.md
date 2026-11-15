@@ -27,7 +27,7 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 - **Fuel trims:** short-term, long-term and total trims for both banks on center-zero gauges.
 - **Live data:** RPM, speed, coolant temp, throttle, engine load, intake air temp, manifold vacuum and battery voltage.
 - **Logging:** CSV logs and a code history saved to the SD card.
-- **Style:** chunky, toy-like gauges and low-poly models with thin dark outlines, a lime-green mascot car, layered stereoscopic 3D on the top screen and touch-only controls on the bottom screen. All art is original.
+- **Style:** chunky, toy-like gauges and low-poly models with thin dark outlines, a teal mascot car, layered stereoscopic 3D on the top screen and touch-only controls on the bottom screen. All art is original.
 
 ## Requirements
 
