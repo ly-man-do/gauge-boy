@@ -1,6 +1,6 @@
 # Project Brief: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.7.0
+**Version:** 1.8.0
 **Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
 **Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -84,7 +84,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 - **Versioning:** Semantic versioning (`MAJOR.MINOR.PATCH`), with tagged releases matching the milestones in section 6.
 - **Builds:** GitHub Actions using the official devkitPro Docker image to build `.3dsx` and `.cia` on every tag.
 - **Community input:** An issue template for adapter and vehicle compatibility reports, feeding the compatibility list.
-- **No proprietary data:** DTC descriptions limited to the generic SAE J2012 codes (P0xxx etc.); no copied manufacturer databases.
+- **DTC descriptions:** generic codes for every car, plus manufacturer-specific codes for 32 makes, from the open (MIT) [Wal33D/dtc-database](https://github.com/Wal33D/dtc-database) (owner decision, 2026-11-15); credited in `CREDITS.md`, to be confirmed before 1.0.
 
 ## 5b. Visual Direction: 3DS Game
 
@@ -163,7 +163,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 | Readiness monitors | Mode 01, PID 01 | Complete / incomplete status for catalyst, O2 sensor, EVAP, etc.; useful before an emissions test |
 | Clear codes | Mode 04 | Confirmation dialog explains it turns off the CEL and resets readiness monitors |
 
-- **Display:** Each code shown with its number (e.g. P0171), type (stored / pending / permanent), and a plain-English description from the generic SAE J2012 list. Codes without a generic description (manufacturer-specific, e.g. P1xxx) are shown as "Manufacturer-specific code".
+- **Display:** Each code shown with its number (e.g. P0171), type (stored / pending / permanent), and a plain-English description from the generic SAE J2012 list. Manufacturer-specific codes (e.g. P1xxx) get the make's description when the make is known (from the VIN's manufacturer code, or chosen in SETUP) and listed; otherwise they show "Manufacturer-specific code".
 - **Top screen:** "Fault display" panel listing the codes, in the same toy-like style as the gauges.
 - **Logging:** Codes are saved with a timestamp to the SD card each time they are read, so the user keeps a history after clearing.
 - **Freeze-frame data** (Mode 02, the snapshot taken when a code set) stays a stretch goal.
@@ -352,6 +352,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.8.0 | 2026-11-15 | DTC descriptions: generic plus manufacturer-specific codes for 32 makes from Wal33D/dtc-database (MIT), by owner decision (sections 5a, 5d); `CLAUDE.md` updated to 1.11.0 |
 | 1.7.0 | 2026-11-15 | Protocol support covers all OBD-II protocols the ELM327 and the tested Vgate iCar Pro handle (section 4), J1939 detected but not read in v1; M1 auto-detect across all of them; the Ridgeline uses ISO 9141-2, not CAN (section 7); `CLAUDE.md` updated to 1.9.0 |
 | 1.6.0 | 2026-11-14 | Mascot car fender flares and bumpers are body-colored (was black), as in the owner's Sidekick photo; `CLAUDE.md` updated to 1.6.0 |
 | 1.5.0 | 2026-11-14 | Mascot car color changes from lime green to teal (`#2BAE9F`, from the owner's Sidekick photo); lime stays the main UI accent; goals, section 5b and open question 7 updated; `CLAUDE.md` updated to 1.5.0 |

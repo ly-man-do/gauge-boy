@@ -77,6 +77,69 @@ static void test_table_sorted_and_clean(void)
     }
 }
 
+static void test_makes(void)
+{
+    CHECK_EQ_INT(obd_dtc_make_count(), 32);
+    int honda = obd_dtc_make_find("Honda");
+    CHECK(honda >= 0);
+    CHECK_EQ_STR(obd_dtc_make_name(honda), "Honda");
+    CHECK_EQ_INT(obd_dtc_make_find("HONDA"), honda);
+    CHECK_EQ_INT(obd_dtc_make_find("chevy"), obd_dtc_make_find("Chevrolet"));
+    CHECK(obd_dtc_make_find("Chevrolet") >= 0);
+    CHECK_EQ_INT(obd_dtc_make_find("VW"), obd_dtc_make_find("Volkswagen"));
+    CHECK_EQ_INT(obd_dtc_make_find("Suzuki Sidekick"), -1);
+    CHECK_EQ_INT(obd_dtc_make_find(NULL), -1);
+    CHECK(obd_dtc_make_name(-1) == NULL && obd_dtc_make_name(32) == NULL);
+}
+
+static void test_manufacturer_descriptions(void)
+{
+    int honda = obd_dtc_make_find("Honda");
+    int ford = obd_dtc_make_find("Ford");
+    /* The same code means different things on different makes. */
+    CHECK_EQ_STR(obd_dtc_text_for("P1456", honda),
+                 "Evaporative Emission Control System Leak Detected Fuel Tank System");
+    CHECK_EQ_STR(obd_dtc_text_for("P1000", ford), "OBD System Readiness Test Not Complete");
+    CHECK(obd_dtc_description_for("P1456", ford) == NULL ||
+          strcmp(obd_dtc_description_for("P1456", ford),
+                 obd_dtc_description_for("P1456", honda)) != 0);
+    /* Unknown make or code not listed for the make. */
+    CHECK_EQ_STR(obd_dtc_text_for("P1456", -1), "Manufacturer-specific code");
+    CHECK_EQ_STR(obd_dtc_text_for("P1FFF", honda), "Manufacturer-specific code");
+    /* Generic codes ignore the make. */
+    CHECK_EQ_STR(obd_dtc_text_for("P0171", honda), "System Too Lean Bank 1");
+    CHECK_EQ_STR(obd_dtc_text_for("P0171", -1), "System Too Lean Bank 1");
+    CHECK_EQ_STR(obd_dtc_text_for("nope", honda), "Not a valid code");
+}
+
+static void test_mfr_table_sorted_and_clean(void)
+{
+    CHECK(dtc_mfr_count > 2000);
+    for (unsigned i = 0; i < dtc_mfr_count; i++) {
+        const dtc_mfr_desc_t *e = &dtc_mfr_table[i];
+        if (i > 0 && dtc_mfr_table[i - 1].key > e->key) {
+            gb_check_failf(__FILE__, __LINE__, "manufacturer table not sorted at %u", i);
+            return;
+        }
+        if (e->makes == 0 || (e->makes >> dtc_make_count) != 0) {
+            gb_check_failf(__FILE__, __LINE__, "entry %u has a bad make mask", i);
+            return;
+        }
+        uint16_t key = e->key;
+        char code[6];
+        snprintf(code, sizeof code, "%c%04X", "PCBU"[key >> 14], key & 0x3FFF);
+        if (obd_dtc_is_generic(code)) {
+            gb_check_failf(__FILE__, __LINE__, "entry %u (%s) is in a generic range", i, code);
+            return;
+        }
+        size_t n = strlen(e->text);
+        if (n == 0 || n > 128) {
+            gb_check_failf(__FILE__, __LINE__, "entry %u has length %d", i, (int)n);
+            return;
+        }
+    }
+}
+
 void suite_dtc(void)
 {
     gb_suite("dtc");
@@ -84,4 +147,7 @@ void suite_dtc(void)
     RUN_TEST(test_generic_ranges);
     RUN_TEST(test_descriptions);
     RUN_TEST(test_table_sorted_and_clean);
+    RUN_TEST(test_makes);
+    RUN_TEST(test_manufacturer_descriptions);
+    RUN_TEST(test_mfr_table_sorted_and_clean);
 }

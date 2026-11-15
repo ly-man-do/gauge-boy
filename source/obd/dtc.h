@@ -7,7 +7,8 @@
  * Generic codes (SAE-controlled ranges P0, P2, P34-P3F, B0, B3, C0, C3,
  * U0, U3) mean the same on every car and come with a description.
  * Codes in the manufacturer ranges (P1, P30-P33, B1, B2, C1, C2, U1, U2)
- * mean different things on different makes, so they are reported as
+ * mean different things on different makes: they get a description when
+ * the car's make is known and listed (the *_for functions), otherwise
  * "Manufacturer-specific code" (brief section 5d).
  *
  * Descriptions: generated table from Wal33D/dtc-database (MIT), see
@@ -33,7 +34,22 @@ const char *obd_dtc_description(const char *code);
  * "Not a valid code". */
 const char *obd_dtc_text(const char *code);
 
-/* Number of codes with a description (for the credits / about screen). */
+/* Number of generic codes with a description (credits / about screen). */
 unsigned obd_dtc_description_count(void);
+
+/* ---------- manufacturer-specific descriptions ---------- */
+
+/* Makes with manufacturer-specific descriptions: 0 .. count-1. */
+int obd_dtc_make_count(void);
+const char *obd_dtc_make_name(int make);   /* "Honda"; NULL if out of range */
+
+/* Make index for a name ("Honda", "HONDA", "chevrolet", "Chevy"), or -1. */
+int obd_dtc_make_find(const char *name);
+
+/* Like obd_dtc_description / obd_dtc_text, but for a car of the given
+ * make (index from obd_dtc_make_find; -1 = unknown). Generic codes give
+ * the generic text whatever the make. */
+const char *obd_dtc_description_for(const char *code, int make);
+const char *obd_dtc_text_for(const char *code, int make);
 
 #endif

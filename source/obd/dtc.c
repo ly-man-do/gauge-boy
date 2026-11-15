@@ -1,6 +1,8 @@
 #include "dtc.h"
 
+#include <ctype.h>
 #include <stddef.h>
+#include <string.h>
 
 #include "dtc_desc_data.h"
 
@@ -83,18 +85,101 @@ const char *obd_dtc_description(const char *code)
 
 const char *obd_dtc_text(const char *code)
 {
-    uint16_t key;
-    if (!obd_dtc_key(code, &key)) {
-        return "Not a valid code";
-    }
-    if (!key_is_generic(key)) {
-        return "Manufacturer-specific code";
-    }
-    const char *d = obd_dtc_description(code);
-    return d != NULL ? d : "Generic code (no description)";
+    return obd_dtc_text_for(code, -1);
 }
 
 unsigned obd_dtc_description_count(void)
 {
     return dtc_desc_count;
+}
+
+/* ---------- manufacturer-specific ---------- */
+
+int obd_dtc_make_count(void)
+{
+    return (int)dtc_make_count;
+}
+
+const char *obd_dtc_make_name(int make)
+{
+    return make >= 0 && make < (int)dtc_make_count ? dtc_make_names[make] : NULL;
+}
+
+static bool same_name(const char *a, const char *b)
+{
+    for (; *a != '\0' && *b != '\0'; a++, b++) {
+        if (tolower((unsigned char)*a) != tolower((unsigned char)*b)) {
+            return false;
+        }
+    }
+    return *a == '\0' && *b == '\0';
+}
+
+int obd_dtc_make_find(const char *name)
+{
+    if (name == NULL) {
+        return -1;
+    }
+    /* Other spellings of a listed make. */
+    static const char *const aliases[][2] = {
+        { "Chevy", "Chevrolet" },
+        { "Mercedes", "Mercedes-Benz" },
+        { "VW", "Volkswagen" },
+        { "General Motors", "GM" },
+    };
+    for (size_t i = 0; i < sizeof aliases / sizeof aliases[0]; i++) {
+        if (same_name(name, aliases[i][0])) {
+            name = aliases[i][1];
+            break;
+        }
+    }
+    for (unsigned i = 0; i < dtc_make_count; i++) {
+        if (same_name(name, dtc_make_names[i])) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
+const char *obd_dtc_description_for(const char *code, int make)
+{
+    uint16_t key;
+    if (!obd_dtc_key(code, &key)) {
+        return NULL;
+    }
+    if (key_is_generic(key)) {
+        return obd_dtc_description(code);
+    }
+    if (make < 0 || make >= (int)dtc_make_count) {
+        return NULL;
+    }
+    uint64_t bit = (uint64_t)1 << make;
+    unsigned lo = 0, hi = dtc_mfr_count;
+    while (lo < hi) {
+        unsigned mid = lo + (hi - lo) / 2;
+        if (dtc_mfr_table[mid].key < key) {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    for (; lo < dtc_mfr_count && dtc_mfr_table[lo].key == key; lo++) {
+        if (dtc_mfr_table[lo].makes & bit) {
+            return dtc_mfr_table[lo].text;
+        }
+    }
+    return NULL;
+}
+
+const char *obd_dtc_text_for(const char *code, int make)
+{
+    uint16_t key;
+    if (!obd_dtc_key(code, &key)) {
+        return "Not a valid code";
+    }
+    const char *d = obd_dtc_description_for(code, make);
+    if (d != NULL) {
+        return d;
+    }
+    return key_is_generic(key) ? "Generic code (no description)" : "Manufacturer-specific code";
 }
