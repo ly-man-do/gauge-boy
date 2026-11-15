@@ -131,6 +131,22 @@ doing the same job, pending the owner's go / no-go decision (`gauge-boy-7v5.13`)
   python3 tools/make_meta_assets.py
   ```
 
+## QR codes
+
+`make_qr.py` makes the FBI install QR codes (*Remote Install* > *Scan QR Code*) with
+[segno](https://github.com/heuer/segno) (BSD, dev and CI only, hash-pinned in
+`requirements-release.txt`):
+
+```sh
+python3 -m venv /tmp/qr && /tmp/qr/bin/pip install --require-hashes -r tools/requirements-release.txt
+/tmp/qr/bin/python tools/make_qr.py                      # docs/qr-latest.png: newest release (README)
+/tmp/qr/bin/python tools/make_qr.py --version 0.0.2 --out gaugeboy-qr.png
+```
+
+The stable code points at `releases/latest/download/gaugeboy.cia`, so it only needs remaking if
+the repository moves. The release workflow makes each release's code and attaches it as
+`gaugeboy-qr.png`.
+
 ## Releases
 
 - `release_notes.py <version>` prints the `CHANGELOG.md` section for that version. The

@@ -1,0 +1,7 @@
+# Release tooling (dev and CI only, never shipped). Hash-pinned: install with
+#   pip install --require-hashes -r tools/requirements-release.txt
+# segno: QR codes for FBI install (tools/make_qr.py). BSD licence, no
+# dependencies on Python 3.10+.
+segno==1.6.6 \
+    --hash=sha256:28c7d081ed0cf935e0411293a465efd4d500704072cdb039778a2ab8736190c7 \
+    --hash=sha256:e60933afc4b52137d323a4434c8340e0ce1e58cec71439e46680d4db188f11b3

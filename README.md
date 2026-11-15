@@ -2,6 +2,10 @@
 
 A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II port through a Wi-Fi ELM327 adapter. It reads check engine light codes, readiness monitors, fuel trims and live engine data, and shows them on the 3DS's two screens in a bright, playful style that looks and feels like a 3DS game.
 
+<img src="docs/qr-latest.png" alt="QR code that installs the latest GaugeBoy .cia with FBI" width="160" align="right">
+
+**Install on a New 3DS with custom firmware:** open FBI, choose *Remote Install* > *Scan QR Code* and scan this code. It always installs the newest release. Then set up the adapter's Wi-Fi as described under [Install](#install).
+
 > **Unofficial project.** GaugeBoy is an independent, fan-made homebrew project. It is not affiliated with, endorsed by or sponsored by Nintendo. Nintendo 3DS and New Nintendo 3DS are trademarks of Nintendo.
 
 > **Safety.** GaugeBoy is not for use by the driver while driving. Use it parked, or let a passenger operate it. Performance timers are for closed courses and track days only.
@@ -50,7 +54,7 @@ The current release is an **M0 test build**: an adapter test app, not the finish
 - [`gaugeboy.cia`](https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.cia): install with FBI; GaugeBoy then appears on the HOME menu.
 - [`gaugeboy.3dsx`](https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.3dsx): copy to `sdmc:/3ds/gaugeboy/` and start it from the Homebrew Launcher.
 
-Later releases will add a QR code you can scan with FBI (*Remote Install* > *Scan QR Code*).
+Or scan the QR code at the top of this page with FBI (*Remote Install* > *Scan QR Code*) to install the `.cia` directly. Each release page also has a QR code for that exact version.
 
 ### Set up the adapter's Wi-Fi
 

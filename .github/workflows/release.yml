@@ -1,7 +1,8 @@
 name: Release
 
 # Pushing a tag like v0.0.1 builds gaugeboy.3dsx and gaugeboy.cia and publishes
-# them on a GitHub release. Asset names never carry a version, so
+# them on a GitHub release, with gaugeboy-qr.png: an FBI QR code for that
+# version's .cia, also shown in the release notes. Asset names never carry a version, so
 #   https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.cia
 # always points at the newest release (the FBI QR install link).
 #
@@ -51,15 +52,30 @@ jobs:
             sh -c 'make test && make test-clean && make cia'
           ls -l gaugeboy.3dsx gaugeboy.cia
 
+      # FBI install QR for this version's .cia (segno, hash-pinned, CI only).
+      - name: QR code for this release
+        run: |
+          python3 -m venv "$RUNNER_TEMP/qr-venv"
+          "$RUNNER_TEMP/qr-venv/bin/pip" install --quiet --require-hashes -r tools/requirements-release.txt
+          "$RUNNER_TEMP/qr-venv/bin/python" tools/make_qr.py --version "$VERSION" --out gaugeboy-qr.png
+          {
+            echo
+            echo "### Install with FBI"
+            echo
+            echo "![QR code for GaugeBoy $VERSION](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/gaugeboy-qr.png)"
+            echo
+            echo "In FBI choose *Remote Install* > *Scan QR Code* and scan this code to install exactly this version. The QR code in the README always installs the newest release."
+          } >> "$RUNNER_TEMP/notes.md"
+
       # Not a prerelease: releases/latest/download/... only follows full releases.
       # A re-run replaces the assets on the existing release.
       - name: Publish release
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" gaugeboy.3dsx gaugeboy.cia --clobber
+            gh release upload "$TAG" gaugeboy.3dsx gaugeboy.cia gaugeboy-qr.png --clobber
             gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
           else
-            gh release create "$TAG" gaugeboy.3dsx gaugeboy.cia \
+            gh release create "$TAG" gaugeboy.3dsx gaugeboy.cia gaugeboy-qr.png \
               --verify-tag --title "GaugeBoy $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
           fi
 

@@ -4,6 +4,10 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- QR codes for installing with FBI (*Remote Install* > *Scan QR Code*): one at the top of the README that always installs the newest release, and one per release (`gaugeboy-qr.png`, also shown in the release notes) for that exact version. Made with `tools/make_qr.py`.
+
 ## [0.0.2] - 2026-11-15
 
 Last M0 release: the 3DS now talks to a real Wi-Fi OBD-II adapter. Tested with a Vgate iCar Pro (`V-LINK`, ELM327 v2.3) in a 2008 Honda Ridgeline. The 3DS normally drops a Wi-Fi network that has no internet, so GaugeBoy answers the 3DS's connection test itself. The adapter's Wi-Fi slot needs a manual IP and DNS; see `docs/testing-on-3ds.md` section 3.
