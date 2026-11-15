@@ -232,6 +232,21 @@ static void test_spike_header_text(void)
     CHECK_EQ_STR(spike_format_header(out, sizeof out, true, SPIKE_ACTION_COUNT), expected);
 }
 
+static void test_spike_log_name(void)
+{
+    char out[64];
+    struct tm when;
+    memset(&when, 0, sizeof when);
+    when.tm_year = 2026 - 1900;
+    when.tm_mon = 10;   /* November */
+    when.tm_mday = 15;
+    when.tm_hour = 11;
+    when.tm_min = 42;
+    when.tm_sec = 5;
+    CHECK_EQ_STR(spike_format_log_name(out, sizeof out, &when), "gaugeboy-log-20261115-114205.txt");
+    CHECK_EQ_STR(spike_format_log_name(out, sizeof out, NULL), "gaugeboy-log.txt");
+}
+
 void suite_spike(void)
 {
     signal(SIGPIPE, SIG_IGN);
@@ -243,4 +258,5 @@ void suite_spike(void)
     RUN_TEST(test_spike_labels);
     RUN_TEST(test_spike_header_fits_every_state);
     RUN_TEST(test_spike_header_text);
+    RUN_TEST(test_spike_log_name);
 }

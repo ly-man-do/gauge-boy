@@ -20,6 +20,7 @@
 #include "version.h"
 
 #define LOG_PATH      CONFIG_DIR "/spike-log.txt"
+#define LOGS_DIR      CONFIG_DIR "/logs"   /* SAVE LOG copies go here */
 #define QUEUE_MAX     8
 #define WORKER_STACK  (64 * 1024)
 #define FLASH_MS      150
@@ -32,8 +33,10 @@
 
 #define BTN_SCROLL_OLDER (-1)
 #define BTN_SCROLL_NEWER (-2)
+#define BTN_SAVE_LOG     100   /* runs on the worker like a spike action */
 
-/* Bottom-screen buttons in 8x8 console cells: 19x6 cells = 152x48 px. */
+/* Bottom-screen buttons in 8x8 console cells: 19x6 cells = 152x48 px;
+ * the bottom row has three 12-13 cell (96-104 px) buttons. */
 typedef struct {
     const char *label;
     int action;          /* spike_action_t, or BTN_SCROLL_* */
@@ -47,8 +50,9 @@ static const button_t buttons[] = {
     { NULL,       SPIKE_PROTOCOL,   20, 9, 19, 6 },
     { NULL,       SPIKE_VOLTAGE,    0, 16, 19, 6 },
     { NULL,       SPIKE_VIN,        20, 16, 19, 6 },
-    { "OLDER ^",  BTN_SCROLL_OLDER, 0, 23, 19, 6 },
-    { "NEWER v",  BTN_SCROLL_NEWER, 20, 23, 19, 6 },
+    { "OLDER ^",  BTN_SCROLL_OLDER, 0, 23, 12, 6 },
+    { "SAVE LOG", BTN_SAVE_LOG,     13, 23, 13, 6 },
+    { "NEWER v",  BTN_SCROLL_NEWER, 27, 23, 12, 6 },
 };
 #define BUTTON_COUNT ((int)(sizeof buttons / sizeof buttons[0]))
 
@@ -65,7 +69,8 @@ static struct {
     volatile bool quit;
 } shared;
 
-static FILE *log_file;  /* main thread at startup / shutdown, worker thread otherwise */
+static FILE *log_file;  /* written under shared.lock */
+static long session_start = -1; /* offset of this session in LOG_PATH */
 
 static PrintConsole top_console;
 static PrintConsole bottom_console;
@@ -100,6 +105,54 @@ static void enqueue(int action)
     LightEvent_Signal(&shared.wake);
 }
 
+/* SAVE LOG (worker thread): copy this session's part of LOG_PATH to a
+ * new file in LOGS_DIR, so it can be copied off the SD card and shared. */
+static void save_log(spike_t *s)
+{
+    static char buf[4096];
+
+    LightLock_Lock(&shared.lock);
+    long end = -1;
+    if (log_file != NULL) {
+        fflush(log_file);
+        end = ftell(log_file);
+    }
+    LightLock_Unlock(&shared.lock);
+    if (end < 0 || session_start < 0 || end < session_start) {
+        spike_logf(s, "! Can't save the log: no log file (is the SD card in?)");
+        return;
+    }
+
+    time_t now = time(NULL);
+    char name[64];
+    char path[128];
+    spike_format_log_name(name, sizeof name, gmtime(&now));
+    snprintf(path, sizeof path, "%s/%s", LOGS_DIR, name);
+    mkdir(LOGS_DIR, 0777);
+
+    FILE *in = fopen(LOG_PATH, "rb");
+    FILE *out = in != NULL ? fopen(path, "wb") : NULL;
+    long left = end - session_start;
+    bool ok = in != NULL && out != NULL && fseek(in, session_start, SEEK_SET) == 0;
+    while (ok && left > 0) {
+        size_t want = left < (long)sizeof buf ? (size_t)left : sizeof buf;
+        size_t got = fread(buf, 1, want, in);
+        ok = got > 0 && fwrite(buf, 1, got, out) == got;
+        left -= (long)got;
+    }
+    if (out != NULL && fclose(out) != 0) {
+        ok = false;
+    }
+    if (in != NULL) {
+        fclose(in);
+    }
+    if (ok) {
+        spike_logf(s, "= Log saved: %s (%ld bytes)", path, end - session_start);
+    } else {
+        spike_logf(s, "! Could not save the log to %s", path);
+    }
+}
+
 static void worker_main(void *arg)
 {
     spike_t *spike = arg;
@@ -120,7 +173,11 @@ static void worker_main(void *arg)
                 break;
             }
 
-            spike_run(spike, (spike_action_t)action);
+            if (action == BTN_SAVE_LOG) {
+                save_log(spike);
+            } else {
+                spike_run(spike, (spike_action_t)action);
+            }
 
             LightLock_Lock(&shared.lock);
             shared.busy = -1;
@@ -234,6 +291,8 @@ static void open_log_file(void)
     mkdir(CONFIG_DIR, 0777);
     log_file = fopen(LOG_PATH, "a");
     if (log_file != NULL) {
+        fseek(log_file, 0, SEEK_END);
+        session_start = ftell(log_file);
         time_t now = time(NULL);
         struct tm *tm = gmtime(&now);
         char when[32] = "unknown time";

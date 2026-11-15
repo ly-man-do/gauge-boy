@@ -230,3 +230,15 @@ void spike_run(spike_t *s, spike_action_t action)
         break;
     }
 }
+
+char *spike_format_log_name(char *out, size_t out_len, const struct tm *when)
+{
+    if (when == NULL) {
+        snprintf(out, out_len, "gaugeboy-log.txt");
+    } else {
+        snprintf(out, out_len, "gaugeboy-log-%04d%02d%02d-%02d%02d%02d.txt",
+                 when->tm_year + 1900, when->tm_mon + 1, when->tm_mday,
+                 when->tm_hour, when->tm_min, when->tm_sec);
+    }
+    return out;
+}

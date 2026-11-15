@@ -6,6 +6,7 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ### Added
 
+- SAVE LOG button on the adapter test screen (between OLDER and NEWER): saves this session's log to `sdmc:/3ds/gaugeboy/logs/gaugeboy-log-<date>-<time>.txt` for sharing.
 - GaugeBoy answers the 3DS's internet connection test itself: a background thread runs a tiny DNS server and the test page on the 3DS, so the 3DS keeps a Wi-Fi OBD-II adapter's network without a laptop or other device. The adapter's connection slot needs a manual IP with Primary DNS set to that same IP (see `docs/testing-on-3ds.md`). Not yet confirmed on a real 3DS.
 - `tools/fake_conntest.py`: a small DNS and web server that answers the 3DS's internet connection test, so a 3DS can stay on a Wi-Fi OBD-II adapter's network that has no internet. Dev tool for proving the fix; test steps in `tools/README.md`.
 - CONNECT (and the automatic reconnect) first asks the 3DS to join a saved Wi-Fi connection if it isn't on one, the way Luma3DS's "Force wireless connection" does, to reach adapters that have no internet (not yet confirmed on a real 3DS). The result, including the system's error codes on failure, is logged.

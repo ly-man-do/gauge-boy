@@ -130,9 +130,9 @@ If your adapter uses a different address, edit the file (card reader or FTP) and
 
 ## 5. Smoke test (at home, no adapter)
 
-1. The bottom screen shows 8 buttons: CONNECT, ATZ, ATSP0+0100, ATDPN, ATRV, 0902 VIN, OLDER, NEWER. A tap flashes the button yellow; while an action runs it turns red and the top header shows `BUSY`.
+1. The bottom screen shows 9 buttons: CONNECT, ATZ, ATSP0+0100, ATDPN, ATRV, 0902 VIN, and OLDER, SAVE LOG, NEWER along the bottom. A tap flashes the button yellow; while an action runs it turns red and the top header shows `BUSY`.
 2. Tap **ATZ**. About 3 seconds later the log shows "Adapter did not answer" (or "refused or unreachable"). The buttons keep responding meanwhile.
-3. OLDER / NEWER scroll the log.
+3. OLDER / NEWER scroll the log. SAVE LOG writes this session's log to its own file (see step 7).
 4. Exit with **START**. On the SD card, `sdmc:/3ds/gaugeboy/spike-log.txt` has the same lines as the screen.
 
 Report anything garbled (colors, layout, text running off the screen).
@@ -155,7 +155,9 @@ Report anything garbled (colors, layout, text running off the screen).
 
 ## 7. Report the results
 
-File a [compatibility report](https://github.com/ly-man-do/gauge-boy/issues/new?template=compatibility-report.yml) per adapter and paste the relevant part of `spike-log.txt`. Results go into the hardware test issue `gauge-boy-7v5.11`.
+Tap **SAVE LOG** when you're done. It copies everything from this session to a new file and shows its name in the log, for example `sdmc:/3ds/gaugeboy/logs/gaugeboy-log-20261115-114205.txt` (date and time from the 3DS clock). Copy that file off the SD card (card reader, or FTP with ftpd) and attach it to your report. `sdmc:/3ds/gaugeboy/spike-log.txt` keeps every session, one after the other.
+
+File a [compatibility report](https://github.com/ly-man-do/gauge-boy/issues/new?template=compatibility-report.yml) per adapter with the saved log. Results go into the hardware test issue `gauge-boy-7v5.11`.
 
 ## Troubleshooting
 

@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <time.h>
 
 #include "elm327/elm327.h"
 #include "transport/tcp_transport.h"
@@ -62,6 +63,10 @@ const char *spike_action_label(spike_action_t action);
 /* Top-screen header, e.g. "GaugeBoy 0.0.0  [CONNECTED]  BUSY: ATSP0+0100".
  * busy is the running action, or -1. Fits SPIKE_HEADER_COLS for any
  * action label. Returns out. */
+/* File name for a saved log, "gaugeboy-log-20261115-114205.txt".
+ * Returns out. */
+char *spike_format_log_name(char *out, size_t out_len, const struct tm *when);
+
 #define SPIKE_HEADER_COLS 49
 char *spike_format_header(char *out, size_t out_len, bool connected, int busy);
 
