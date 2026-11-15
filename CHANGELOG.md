@@ -6,7 +6,7 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ### Added
 
-- SETUP SLOT button on the adapter test screen: fills in the chosen Wi-Fi slot's IP and DNS settings for the adapter (manual IP 192.168.0.11, mask 255.255.255.0, gateway = the adapter, DNS = the 3DS itself) after a confirmation screen showing the current and new values. Only those settings change. The buttons are now in three columns. Not yet confirmed on a real 3DS.
+- SETUP SLOT button on the adapter test screen: fills in the chosen Wi-Fi slot's IP and DNS settings for the adapter (manual IP 192.168.0.11, mask 255.255.255.0, gateway = the adapter, DNS = the 3DS itself) after a confirmation screen showing the current and new values. Only those settings change, and the edited settings are read back and compared before anything is saved. The buttons are now in three columns. Not yet confirmed on a real 3DS.
 - The adapter test app's start-up log shows each saved Wi-Fi slot's IP settings (automatic or manual IP, mask, gateway, DNS, MTU), read-only. First step towards GaugeBoy filling in the adapter slot's settings itself.
 - SLOT button on the adapter test screen: choose which System Settings connection slot (any, 1, 2 or 3) CONNECT uses, so another saved network in range (such as home Wi-Fi) doesn't take over. Saved as `wifi_slot` in `config.ini`; the start-up log lists each slot's network name. Moving the 3DS off a network the system joined is not yet confirmed on a real 3DS.
 - SAVE LOG button on the adapter test screen (between OLDER and NEWER): saves this session's log to `sdmc:/3ds/gaugeboy/logs/gaugeboy-log-<date>-<time>.txt` for sharing.

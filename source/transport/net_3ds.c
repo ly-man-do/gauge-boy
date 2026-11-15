@@ -333,14 +333,71 @@ static Result aci_set_word(u16 cmd, u32 value)
     return R_FAILED(ret) ? ret : (Result)cmdbuf[1];
 }
 
-static Result aci_set_buffer(u16 cmd, const void *buf, size_t size)
+/* How an address is handed to the ac:i setters. Not documented to us:
+ * a static buffer (id 0) was refused on hardware with 0xD9001830, so the
+ * other descriptor kinds are tried in turn. A wrong guess is either
+ * refused or caught by the read-back check before anything is saved. */
+enum { ADDR_STATIC0, ADDR_STATIC1, ADDR_STATIC2, ADDR_MAPPED_R, ADDR_MODES };
+static const char *const addr_mode_names[ADDR_MODES] = {
+    "static buffer 0", "static buffer 1", "static buffer 2", "mapped buffer",
+};
+static int addr_mode = -1; /* the one that worked, or -1 */
+
+static Result aci_set_buffer_mode(u16 cmd, const void *buf, size_t size, int mode)
 {
     u32 *cmdbuf = getThreadCommandBuffer();
     cmdbuf[0] = IPC_MakeHeader(cmd, 0, 2);
-    cmdbuf[1] = IPC_Desc_StaticBuffer(size, 0);
+    switch (mode) {
+    case ADDR_STATIC0:  cmdbuf[1] = IPC_Desc_StaticBuffer(size, 0); break;
+    case ADDR_STATIC1:  cmdbuf[1] = IPC_Desc_StaticBuffer(size, 1); break;
+    case ADDR_STATIC2:  cmdbuf[1] = IPC_Desc_StaticBuffer(size, 2); break;
+    default:            cmdbuf[1] = IPC_Desc_Buffer(size, IPC_BUFFER_R); break;
+    }
     cmdbuf[2] = (u32)buf;
     Result ret = svcSendSyncRequest(*acGetSessionHandle());
     return R_FAILED(ret) ? ret : (Result)cmdbuf[1];
+}
+
+static Result aci_get_buffer(u16 cmd, void *buf, size_t size);
+#define ACI_GET_IP_FOR_PROBE 0x44B
+
+/* Find how the setters take an address: for each mode, write a test
+ * address to the loaded copy's IP field and read it back. Only a mode
+ * whose value really arrives counts (an accepted call that stores
+ * something else is caught too). The caller writes the real IP after.
+ * *tried gets each refused mode for the log. */
+static Result detect_addr_mode(u16 set_ip_cmd, char *tried, size_t tried_len)
+{
+    static u8 probe[4] = { 10, 11, 12, 13 };
+    Result r = -1;
+    for (int m = 0; m < ADDR_MODES; m++) {
+        r = aci_set_buffer_mode(set_ip_cmd, probe, 4, m);
+        u8 back[4] = { 0, 0, 0, 0 };
+        if (R_SUCCEEDED(r)) {
+            Result g = aci_get_buffer(ACI_GET_IP_FOR_PROBE, back, 4);
+            if (R_SUCCEEDED(g) && memcmp(back, probe, 4) == 0) {
+                addr_mode = m;
+                return 0;
+            }
+            r = R_FAILED(g) ? g : -1;
+        }
+        size_t used = strlen(tried);
+        if (r == -1) {
+            snprintf(tried + used, tried_len - used, "%s%s stored %u.%u.%u.%u", used ? ", " : "",
+                     addr_mode_names[m], back[0], back[1], back[2], back[3]);
+        } else {
+            snprintf(tried + used, tried_len - used, "%s%s 0x%08lX", used ? ", " : "",
+                     addr_mode_names[m], (unsigned long)r);
+        }
+    }
+    return r;
+}
+
+static Result aci_set_buffer(u16 cmd, const void *buf, size_t size, char *tried, size_t tried_len)
+{
+    (void)tried;
+    (void)tried_len;
+    return aci_set_buffer_mode(cmd, buf, size, addr_mode >= 0 ? addr_mode : ADDR_STATIC0);
 }
 
 static Result aci_empty(u16 cmd)
@@ -378,25 +435,68 @@ bool net_slot_write(int slot, const net_ip_settings_t *in, char *err, size_t err
     memcpy(dns1, in->dns1, 4);
     memcpy(dns2, in->dns2, 4);
 
+    char tried[160] = "";
     const char *step = "load";
     Result r = ACI_LoadNetworkSetting((u32)(slot - 1));
 #define STEP(name, call) do { if (R_SUCCEEDED(r)) { step = (name); r = (call); } } while (0)
     STEP("IP auto-obtain", aci_set_word(ACI_SET_DHCP, in->dhcp ? 1 : 0));
     STEP("DNS auto-obtain", aci_set_word(ACI_SET_AUTO_DNS, in->auto_dns ? 1 : 0));
-    STEP("IP address", aci_set_buffer(ACI_SET_IP, ip, 4));
-    STEP("subnet mask", aci_set_buffer(ACI_SET_NETMASK, mask, 4));
-    STEP("gateway", aci_set_buffer(ACI_SET_GATEWAY, gw, 4));
-    STEP("primary DNS", aci_set_buffer(ACI_SET_DNS1, dns1, 4));
-    STEP("secondary DNS", aci_set_buffer(ACI_SET_DNS2, dns2, 4));
+    if (addr_mode < 0) {
+        STEP("finding how to pass addresses", detect_addr_mode(ACI_SET_IP, tried, sizeof tried));
+    }
+    STEP("IP address", aci_set_buffer(ACI_SET_IP, ip, 4, tried, sizeof tried));
+    STEP("subnet mask", aci_set_buffer(ACI_SET_NETMASK, mask, 4, tried, sizeof tried));
+    STEP("gateway", aci_set_buffer(ACI_SET_GATEWAY, gw, 4, tried, sizeof tried));
+    STEP("primary DNS", aci_set_buffer(ACI_SET_DNS1, dns1, 4, tried, sizeof tried));
+    STEP("secondary DNS", aci_set_buffer(ACI_SET_DNS2, dns2, 4, tried, sizeof tried));
+    if (R_FAILED(r)) {
+        /* Drop the half-edited copy so nothing else picks it up. */
+        (void)ACI_LoadNetworkSetting((u32)(slot - 1));
+        snprintf(err, err_len, "%s failed (0x%08lX; tried %s); nothing saved", step,
+                 (unsigned long)r, tried[0] ? tried : "-");
+        return false;
+    }
+
+    /* Check the edited copy holds exactly what was asked before saving it:
+     * a wrong way of passing the addresses could be accepted but store
+     * something else. */
+    u32 dhcp = 0, auto_dns = 0;
+    u8 got[5][4];
+    memset(got, 0, sizeof got);
+    Result rr = aci_get_word(ACI_GET_DHCP, &dhcp);
+    if (R_SUCCEEDED(rr)) rr = aci_get_word(ACI_GET_AUTO_DNS, &auto_dns);
+    if (R_SUCCEEDED(rr)) rr = aci_get_buffer(ACI_GET_IP, got[0], 4);
+    if (R_SUCCEEDED(rr)) rr = aci_get_buffer(ACI_GET_NETMASK, got[1], 4);
+    if (R_SUCCEEDED(rr)) rr = aci_get_buffer(ACI_GET_GATEWAY, got[2], 4);
+    if (R_SUCCEEDED(rr)) rr = aci_get_buffer(ACI_GET_DNS1, got[3], 4);
+    if (R_SUCCEEDED(rr)) rr = aci_get_buffer(ACI_GET_DNS2, got[4], 4);
+    bool same = R_SUCCEEDED(rr) && ((dhcp & 0xFF) != 0) == in->dhcp &&
+                ((auto_dns & 0xFF) != 0) == in->auto_dns &&
+                memcmp(got[0], in->ip, 4) == 0 && memcmp(got[1], in->mask, 4) == 0 &&
+                memcmp(got[2], in->gateway, 4) == 0 && memcmp(got[3], in->dns1, 4) == 0 &&
+                memcmp(got[4], in->dns2, 4) == 0;
+    if (!same) {
+        (void)ACI_LoadNetworkSetting((u32)(slot - 1));
+        addr_mode = -1;
+        snprintf(err, err_len, "check before saving found IP %u.%u.%u.%u DNS %u.%u.%u.%u "
+                 "(read 0x%08lX); nothing saved",
+                 got[0][0], got[0][1], got[0][2], got[0][3], got[3][0], got[3][1], got[3][2],
+                 got[3][3], (unsigned long)rr);
+        return false;
+    }
+
     STEP("update slot", aci_set_word(ACI_UPDATE_SETTING, (u32)(slot - 1)));
     STEP("save settings", aci_empty(ACI_FLUSH_SETTING));
 #undef STEP
     if (R_FAILED(r)) {
-        /* Drop the half-edited copy so nothing else picks it up. */
         (void)ACI_LoadNetworkSetting((u32)(slot - 1));
-        snprintf(err, err_len, "%s failed (0x%08lX); nothing saved", step, (unsigned long)r);
+        snprintf(err, err_len, "%s failed (0x%08lX); not saved", step, (unsigned long)r);
         return false;
     }
+    /* On success err says how the addresses were passed (for the log). */
+    snprintf(err, err_len, "addresses passed as %s%s%s",
+             addr_mode >= 0 ? addr_mode_names[addr_mode] : "?",
+             tried[0] ? "; refused: " : "", tried);
     return true;
 }
 

@@ -256,7 +256,7 @@ static void setup_slot_save(spike_t *s)
         return;
     }
 
-    char err[80];
+    char err[240];
     if (!net_slot_write(slot, &plan, err, sizeof err)) {
         spike_logf(s, "! Slot %d not changed: %s", slot, err);
         return;
@@ -264,6 +264,7 @@ static void setup_slot_save(spike_t *s)
     char now[200];
     net_slot_ip_settings(slot, now, sizeof now);
     spike_logf(s, "= Slot %d saved: %s", slot, now);
+    spike_logf(s, "  (%s)", err);
     spike_logf(s, "Tap CONNECT to use it (the 3DS may rejoin the network).");
 }
 
