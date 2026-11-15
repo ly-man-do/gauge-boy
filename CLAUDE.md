@@ -1,6 +1,6 @@
 # CLAUDE.md: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.6.0
+**Version:** 1.7.0
 **Matches project brief:** 1.6.0 (`docs/gaugeboy-brief.md`)
 
 You are the developer on GaugeBoy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
@@ -47,10 +47,11 @@ Use Beads (`bd`) for all task tracking. Do not create markdown TODO lists, plan 
 - Outputs: `.3dsx` and `.cia`. Release asset filenames carry no version number (`gaugeboy.3dsx`, `gaugeboy.cia`) so the "latest release" QR link never breaks.
 - SD card data folder: `sdmc:/3ds/gaugeboy/`.
 
-**Approved tools and dependencies (owner-approved in 1.1.0):**
+**Approved tools and dependencies (owner-approved in 1.1.0 and 1.7.0):**
 - Host unit tests: a minimal hand-rolled assert harness in `tests/` (no third-party test framework).
 - ELM327 emulator: the Python `ELM327-emulator` package, dev-only (never shipped); its config lives in `tools/`.
 - `.cia` packaging: `makerom` and `bannertool`. The `.cia` title ID is chosen once (an M0 `needs-owner` issue) and never changed.
+- 3D modeling: Blender, dev-only (never shipped). Models are built by Blender Python scripts in `tools/` so they can be regenerated, and a `tools/` converter turns the export into C data for citro3d. Scripts are MIT (GPL-compatible, as Blender's API needs); Blender's license does not cover the models it makes.
 - Anything else still needs owner approval (section 9).
 
 ## 3. Code layout
@@ -139,6 +140,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.7.0 | 2026-11-14 | Blender approved as a dev-only 3D modeling tool (section 2): scripted models in `tools/`, converted to C data for citro3d |
 | 1.6.0 | 2026-11-14 | Matches brief 1.6.0: the mascot car's fender flares and bumpers are body-colored |
 | 1.5.0 | 2026-11-14 | Matches brief 1.5.0: the mascot car is teal; lime stays the UI accent |
 | 1.4.0 | 2026-11-14 | Matches brief 1.4.0: the owner's reference image is dropped; the style comes from the brief's palette and the real 1995 Sidekick |
