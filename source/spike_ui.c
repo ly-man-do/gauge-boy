@@ -284,6 +284,7 @@ void spike_ui_run(void)
     if (!net_ok) {
         spike_logf(&spike, "! Network service did not start (is Wi-Fi on?)");
     }
+    spike.net_up = net_bring_up;
     spike.net_info = net_describe;
     {
         char info[160];

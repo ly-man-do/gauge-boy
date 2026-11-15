@@ -14,6 +14,7 @@ void spike_init(spike_t *s, tcp_transport_t *transport, elm_t *elm,
     s->log = log;
     s->log_ctx = log_ctx;
     s->start_ms = tp_now_ms();
+    s->net_up = NULL;
     s->net_info = NULL;
 
     elm_io_t io = tcp_transport_io(transport);
@@ -66,8 +67,8 @@ static void log_connect_failure(spike_t *s, tp_status_t st)
 {
     const tcp_transport_t *t = s->transport;
     if (t->last_errno != 0) {
-        spike_logf(s, "! %s (errno %d: %s)", tp_status_str(st), t->last_errno,
-                   strerror(t->last_errno));
+        spike_logf(s, "! %s (errno %d at %s: %s)", tp_status_str(st), t->last_errno,
+                   t->last_step[0] != '\0' ? t->last_step : "?", strerror(t->last_errno));
     } else {
         spike_logf(s, "! %s", tp_status_str(st));
     }
@@ -75,6 +76,14 @@ static void log_connect_failure(spike_t *s, tp_status_t st)
 
 static void log_net_info(spike_t *s)
 {
+    if (s->net_up != NULL) {
+        char msg[160];
+        msg[0] = '\0';
+        bool up = s->net_up(msg, sizeof msg);
+        if (msg[0] != '\0') {
+            spike_logf(s, "%s%s", up ? "" : "! ", msg);
+        }
+    }
     if (s->net_info != NULL) {
         char info[160];
         info[0] = '\0';

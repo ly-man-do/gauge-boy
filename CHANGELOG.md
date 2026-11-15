@@ -6,10 +6,13 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ### Added
 
+- CONNECT (and the automatic reconnect) first asks the 3DS to join a saved Wi-Fi connection if it isn't on one, the way Luma3DS's "Force wireless connection" does, to reach adapters that have no internet (not yet confirmed on a real 3DS). The result, including the system's error codes on failure, is logged.
+- Connection errors name the call that failed, for example `errno 115 at socket()`.
 - The adapter test app logs a `Network:` line at start-up and before every connect attempt: whether the 3DS is on Wi-Fi, the network name and saved-connection slot, and the 3DS's own IP address (or "no IP address").
 
 ### Fixed
 
+- The `Network:` line numbered connection slots one too high, and "Wi-Fi state unknown" now includes the system's error code.
 - Connection errors showed a negative errno with no description (for example `errno -115` when the 3DS had no network). They now show the positive value and its meaning (`errno 115: Network interface is not configured`).
 
 ## [0.0.1] - 2026-11-14

@@ -57,6 +57,7 @@ tp_status_t tcp_transport_init(tcp_transport_t *t, const char *host, uint16_t po
 
     memset(t, 0, sizeof *t);
     t->fd = -1;
+    t->last_step = "";
     t->backoff_min_ms = TP_BACKOFF_MIN_MS;
     t->backoff_max_ms = TP_BACKOFF_MAX_MS;
 
@@ -88,15 +89,18 @@ int tp_normalize_errno(int err)
 }
 
 /* Drop the connection after an error; errno_value 0 means peer closed. */
-static void drop(tcp_transport_t *t, int errno_value)
+static void drop(tcp_transport_t *t, const char *step, int errno_value)
 {
     t->last_errno = tp_normalize_errno(errno_value);
+    t->last_step = step;
     tcp_transport_close(t);
 }
 
-static tp_status_t fail_socket(tcp_transport_t *t, int fd, tp_status_t status, int err)
+static tp_status_t fail_socket(tcp_transport_t *t, int fd, tp_status_t status,
+                               const char *step, int err)
 {
     t->last_errno = tp_normalize_errno(err);
+    t->last_step = step;
     if (fd >= 0) {
         close(fd);
     }
@@ -118,12 +122,12 @@ tp_status_t tcp_transport_connect(tcp_transport_t *t, unsigned timeout_ms)
 
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
-        return fail_socket(t, -1, TP_ERR_SOCKET, errno);
+        return fail_socket(t, -1, TP_ERR_SOCKET, "socket()", errno);
     }
 
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-        return fail_socket(t, fd, TP_ERR_SOCKET, errno);
+        return fail_socket(t, fd, TP_ERR_SOCKET, "fcntl()", errno);
     }
 
     /* Small request / reply messages: send them at once. Failure is harmless. */
@@ -135,7 +139,7 @@ tp_status_t tcp_transport_connect(tcp_transport_t *t, unsigned timeout_ms)
 
     if (connect(fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
         if (errno != EINPROGRESS && errno != EWOULDBLOCK && errno != EALREADY) {
-            return fail_socket(t, fd, TP_ERR_CONNECT, errno);
+            return fail_socket(t, fd, TP_ERR_CONNECT, "connect()", errno);
         }
 
         struct pollfd p = { fd, POLLOUT, 0 };
@@ -150,25 +154,26 @@ tp_status_t tcp_transport_connect(tcp_transport_t *t, unsigned timeout_ms)
             }
         }
         if (pr == 0) {
-            return fail_socket(t, fd, TP_ERR_TIMEOUT, ETIMEDOUT);
+            return fail_socket(t, fd, TP_ERR_TIMEOUT, "connect()", ETIMEDOUT);
         }
         if (pr < 0) {
-            return fail_socket(t, fd, TP_ERR_SOCKET, errno);
+            return fail_socket(t, fd, TP_ERR_SOCKET, "poll()", errno);
         }
 
         int err = 0;
         socklen_t len = sizeof err;
         if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) == 0) {
             if (err != 0) {
-                return fail_socket(t, fd, TP_ERR_CONNECT, err);
+                return fail_socket(t, fd, TP_ERR_CONNECT, "connect()", err);
             }
         } else if (p.revents & (POLLERR | POLLHUP)) {
-            return fail_socket(t, fd, TP_ERR_CONNECT, ECONNREFUSED);
+            return fail_socket(t, fd, TP_ERR_CONNECT, "connect()", ECONNREFUSED);
         }
     }
 
     t->fd = fd;
     t->last_errno = 0;
+    t->last_step = "";
     t->connects++;
     t->backoff_ms = 0;
     t->next_attempt_ms = 0;
@@ -218,14 +223,14 @@ int tcp_transport_write(tcp_transport_t *t, const char *data, size_t len)
         if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
             uint64_t now = tp_now_ms();
             if (now >= deadline) {
-                drop(t, ETIMEDOUT);
+                drop(t, "send()", ETIMEDOUT);
                 return -1;
             }
             struct pollfd p = { t->fd, POLLOUT, 0 };
             (void)poll(&p, 1, clamp_timeout((unsigned)(deadline - now)));
             continue;
         }
-        drop(t, n < 0 ? errno : EPIPE);
+        drop(t, "send()", n < 0 ? errno : EPIPE);
         return -1;
     }
     return 0;
@@ -252,7 +257,7 @@ int tcp_transport_read(tcp_transport_t *t, char *buf, size_t len, unsigned timeo
         if (errno == EINTR) {
             return 0;
         }
-        drop(t, errno);
+        drop(t, "poll()", errno);
         return -1;
     }
 
@@ -261,13 +266,13 @@ int tcp_transport_read(tcp_transport_t *t, char *buf, size_t len, unsigned timeo
         return (int)n;
     }
     if (n == 0) {
-        drop(t, 0); /* peer closed */
+        drop(t, "recv()", 0); /* peer closed */
         return -1;
     }
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
         return 0;
     }
-    drop(t, errno);
+    drop(t, "recv()", errno);
     return -1;
 }
 

@@ -133,6 +133,7 @@ static void test_spike_unreachable_adapter_backs_off(void)
 
     spike_run(&s, SPIKE_ATZ);
     CHECK_LOGGED(&cap, "! Adapter refused or unreachable (errno ");
+    CHECK_LOGGED(&cap, " at connect(): ");
     spike_run(&s, SPIKE_ATZ);
     CHECK_LOGGED(&cap, "! Not connected; auto retry in 0.");
 
@@ -146,6 +147,15 @@ static void test_spike_unreachable_adapter_backs_off(void)
 static void fake_net_info(char *out, size_t len)
 {
     snprintf(out, len, "Wi-Fi on, \"V-LINK\", 3DS IP 192.168.0.11");
+}
+
+static int net_up_calls;
+
+static bool fake_net_up_fails(char *msg, size_t len)
+{
+    net_up_calls++;
+    snprintf(msg, len, "Wi-Fi join failed (test)");
+    return false;
 }
 
 static void test_spike_logs_network_before_connect(void)
@@ -168,6 +178,13 @@ static void test_spike_logs_network_before_connect(void)
     /* The Network line comes before the connect attempt. */
     const char *net = strstr(cap.text, "Network:");
     CHECK(net != NULL && strstr(net, "Connecting to") != NULL);
+    /* net_up runs before the Network line; a failure is logged with "! ". */
+    net_up_calls = 0;
+    s.net_up = fake_net_up_fails;
+    spike_run(&s, SPIKE_CONNECT);
+    CHECK_EQ_INT(net_up_calls, 1);
+    const char *join = strstr(cap.text, "] ! Wi-Fi join failed (test)\n");
+    CHECK(join != NULL && strstr(join, "Network:") != NULL);
     /* errno is shown as a positive number. */
     CHECK(strstr(cap.text, "(errno -") == NULL);
 }

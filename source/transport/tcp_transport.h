@@ -46,6 +46,7 @@ typedef struct {
     uint16_t port;
     int fd;                     /* -1 when not connected */
     int last_errno;             /* errno of the last failure (positive), 0 if none / peer closed */
+    const char *last_step;      /* call that failed, e.g. "socket()"; "" if none */
     unsigned backoff_min_ms;
     unsigned backoff_max_ms;
     unsigned backoff_ms;        /* delay after the last failed attempt, 0 after success */

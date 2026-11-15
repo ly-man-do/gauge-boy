@@ -166,6 +166,7 @@ static void test_connect_refused(void)
     CHECK(tp_now_ms() - start < 1000);
     CHECK(!tcp_transport_connected(&t));
     CHECK(t.last_errno != 0);
+    CHECK_EQ_STR(t.last_step, "connect()");
 }
 
 static void test_connect_timeout_is_bounded(void)

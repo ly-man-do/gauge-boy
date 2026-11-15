@@ -30,12 +30,20 @@ typedef void (*spike_log_fn)(void *ctx, const char *line);
  * state, network name, own IP) into out. */
 typedef void (*spike_net_info_fn)(char *out, size_t len);
 
+/* Makes sure the console's network link is up before a connect attempt
+ * (on the 3DS: asks the system to join a saved Wi-Fi network). Writes a
+ * log line into msg, or leaves it empty if there is nothing to report.
+ * Returns false if the link could not be brought up. */
+typedef bool (*spike_net_up_fn)(char *msg, size_t len);
+
 typedef struct {
     tcp_transport_t *transport;
     elm_t *elm;
     spike_log_fn log;
     void *log_ctx;
     uint64_t start_ms;   /* timestamps are relative to this */
+    spike_net_up_fn net_up;     /* optional, NULL after spike_init; called
+                                   before each connect attempt */
     spike_net_info_fn net_info; /* optional, NULL after spike_init; logged
                                    as "Network: ..." before each connect */
 } spike_t;

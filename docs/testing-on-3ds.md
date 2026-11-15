@@ -105,6 +105,8 @@ Do this once per adapter, in the car with the adapter plugged in and the ignitio
 
 The 3DS uses whichever saved connection is in range, so your home Wi-Fi slot can stay.
 
+Because the adapter has no internet, the 3DS may not stay on its network by itself. GaugeBoy handles this: when you tap CONNECT and the 3DS isn't on Wi-Fi, it asks the 3DS to join a saved connection (like Rosalina's **Force wireless connection**) and logs the result. The `Network:` line in the log shows which network and slot the 3DS is on and its IP address.
+
 ## 4. Launch GaugeBoy
 
 If you installed the `.cia`, start GaugeBoy from the HOME menu. Otherwise, open the Homebrew Launcher the way you usually do. With a standard Luma3DS setup: open **Download Play**, press **L + Down + Select** for the Rosalina menu, choose **Miscellaneous options** > **Switch the hb. title to the current app**, back out with B, close Download Play with HOME, and open Download Play again.
@@ -157,5 +159,7 @@ File a [compatibility report](https://github.com/ly-man-do/gauge-boy/issues/new?
 | GaugeBoy isn't in the Homebrew Launcher | Check the path is `/3ds/gaugeboy/gaugeboy.3dsx` and the file isn't a zip. |
 | "Unsupported device" | It's an Old 3DS / 2DS. GaugeBoy needs a New 3DS model. |
 | Adapter network not listed | Ignition on? Adapter LED lit? The 3DS can't see ad-hoc or 5 GHz networks. |
+| `Network error (errno 115 at socket(): ...)` | The 3DS isn't on the adapter's Wi-Fi. Tap CONNECT again and read the Wi-Fi join line above it. As a manual fallback, open the Rosalina menu (**L + Down + Select**) > **System configuration** > **Control wireless connection**, force the adapter's slot, then return to GaugeBoy. |
+| `Network:` shows your home network | The 3DS picked your home Wi-Fi. Move out of its range (or switch the router's Wi-Fi off) and relaunch. |
 | Joined, but every command says "did not answer" or "unreachable" | Set the manual IP (step 3.5) and check `host`/`port` in `config.ini` against the adapter's manual. |
 | Garbled or odd replies | Keep the log: clone adapters misbehave, and the raw lines are what's needed to handle them. |

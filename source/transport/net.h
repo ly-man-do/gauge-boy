@@ -19,4 +19,12 @@ void net_exit(void);
  * Matches spike_net_info_fn. */
 void net_describe(char *out, size_t len);
 
+/* If the console is not on Wi-Fi, asks the system to join one of the
+ * saved connections, as Luma3DS's "Force wireless connection" does, and
+ * waits up to NET_JOIN_TIMEOUT_MS. Call from the worker thread, never the
+ * render loop. Matches spike_net_up_fn: msg gets a log line, or stays
+ * empty if the console was already on Wi-Fi. */
+#define NET_JOIN_TIMEOUT_MS 20000u
+bool net_bring_up(char *msg, size_t len);
+
 #endif
