@@ -247,6 +247,63 @@ static void test_spike_log_name(void)
     CHECK_EQ_STR(spike_format_log_name(out, sizeof out, NULL), "gaugeboy-log.txt");
 }
 
+static void test_spike_plan_slot(void)
+{
+    net_ip_settings_t p;
+    CHECK(spike_plan_slot("192.168.0.10", &p));
+    CHECK(!p.dhcp && !p.auto_dns);
+    static const uint8_t ip[4] = { 192, 168, 0, 11 }, mask[4] = { 255, 255, 255, 0 },
+                         gw[4] = { 192, 168, 0, 10 }, zero[4] = { 0, 0, 0, 0 };
+    CHECK(memcmp(p.ip, ip, 4) == 0);
+    CHECK(memcmp(p.mask, mask, 4) == 0);
+    CHECK(memcmp(p.gateway, gw, 4) == 0);
+    CHECK(memcmp(p.dns1, ip, 4) == 0);   /* DNS = the 3DS itself */
+    CHECK(memcmp(p.dns2, zero, 4) == 0);
+
+    /* Adapter at .11: the 3DS takes .12. */
+    CHECK(spike_plan_slot("10.0.4.11", &p));
+    CHECK(p.ip[0] == 10 && p.ip[2] == 4 && p.ip[3] == 12 && p.dns1[3] == 12 && p.gateway[3] == 11);
+
+    CHECK(!spike_plan_slot("obd.local", &p));
+    CHECK(!spike_plan_slot(NULL, &p));
+}
+
+static void test_spike_slot_matches_and_compare(void)
+{
+    net_ip_settings_t plan, now;
+    CHECK(spike_plan_slot("192.168.0.10", &plan));
+    now = plan;
+    CHECK(spike_slot_matches(&now, &plan));
+    now.auto_dns = true;
+    CHECK(!spike_slot_matches(&now, &plan));
+
+    /* Fresh slot: automatic IP and DNS, all zero. */
+    memset(&now, 0, sizeof now);
+    now.dhcp = true;
+    now.auto_dns = true;
+    char lines[8][SPIKE_COMPARE_COLS];
+    int n = spike_format_slot_compare(&now, &plan, lines, 8);
+    CHECK_EQ_INT(n, 6);
+    CHECK_EQ_STR(lines[0], "      NOW             NEW");
+    CHECK_EQ_STR(lines[1], "IP    auto            192.168.0.11");
+    CHECK_EQ_STR(lines[2], "Mask  auto            255.255.255.0");
+    CHECK_EQ_STR(lines[3], "Gate  auto            192.168.0.10");
+    CHECK_EQ_STR(lines[4], "DNS 1 auto            192.168.0.11");
+    CHECK_EQ_STR(lines[5], "DNS 2 auto            0.0.0.0");
+
+    /* Widest values still fit the bottom screen (39 columns). */
+    memset(&now, 255, sizeof now);
+    now.dhcp = false;
+    now.auto_dns = false;
+    memset(plan.dns2, 255, 4);
+    n = spike_format_slot_compare(&now, &plan, lines, 8);
+    for (int i = 0; i < n; i++) {
+        CHECK((int)strlen(lines[i]) <= 39);
+    }
+    /* max limits the lines. */
+    CHECK_EQ_INT(spike_format_slot_compare(&now, &plan, lines, 2), 2);
+}
+
 void suite_spike(void)
 {
     signal(SIGPIPE, SIG_IGN);
@@ -259,4 +316,6 @@ void suite_spike(void)
     RUN_TEST(test_spike_header_fits_every_state);
     RUN_TEST(test_spike_header_text);
     RUN_TEST(test_spike_log_name);
+    RUN_TEST(test_spike_plan_slot);
+    RUN_TEST(test_spike_slot_matches_and_compare);
 }

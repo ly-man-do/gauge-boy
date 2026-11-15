@@ -8,6 +8,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /* Returns false if the soc service could not start (e.g. Wi-Fi switched off). */
 bool net_init(void);
@@ -41,5 +42,26 @@ bool net_slot_name(int slot, char *out, size_t len);
  * 192.168.0.11 / 0.0.0.0, MTU 1400 (raw IP c0a8000b)". Returns false if
  * the slot can't be read. */
 bool net_slot_ip_settings(int slot, char *out, size_t len);
+
+/* A connection slot's IP settings. Addresses are 4 bytes in network
+ * order, as typed in System Settings (192.168.0.11 = c0 a8 00 0b). */
+typedef struct {
+    bool dhcp;          /* IP Address: Auto-Obtain */
+    bool auto_dns;      /* DNS: Auto-Obtain */
+    uint8_t ip[4];
+    uint8_t mask[4];
+    uint8_t gateway[4];
+    uint8_t dns1[4];
+    uint8_t dns2[4];
+} net_ip_settings_t;
+
+/* Read slot 1-3's saved IP settings. On failure err gets a reason. */
+bool net_slot_read(int slot, net_ip_settings_t *out, char *err, size_t err_len);
+
+/* Write slot 1-3's IP settings (only the fields above; the network name,
+ * password, MTU and proxy are kept) and save them to the system
+ * settings. Changes the 3DS's System Settings: only after the user has
+ * confirmed. On failure err gets a reason and nothing is saved. */
+bool net_slot_write(int slot, const net_ip_settings_t *in, char *err, size_t err_len);
 
 #endif

@@ -13,6 +13,7 @@
 #include <time.h>
 
 #include "elm327/elm327.h"
+#include "transport/net.h"
 #include "transport/tcp_transport.h"
 
 typedef enum {
@@ -66,6 +67,22 @@ const char *spike_action_label(spike_action_t action);
 /* File name for a saved log, "gaugeboy-log-20261115-114205.txt".
  * Returns out. */
 char *spike_format_log_name(char *out, size_t out_len, const struct tm *when);
+
+/* SETUP SLOT plan for the adapter's connection slot: manual IP in the
+ * adapter's /24 (.11, or .12 if the adapter itself is .11), mask
+ * 255.255.255.0, gateway = the adapter, primary DNS = the 3DS's own IP
+ * (so GaugeBoy answers the connection test), secondary DNS 0.0.0.0.
+ * False if adapter_host isn't a dotted IPv4 address. */
+bool spike_plan_slot(const char *adapter_host, net_ip_settings_t *plan);
+
+/* True if the slot already has the plan's settings. */
+bool spike_slot_matches(const net_ip_settings_t *now, const net_ip_settings_t *plan);
+
+/* NOW / NEW table for the confirmation screen, one row per line, each
+ * shorter than SPIKE_COMPARE_COLS. Returns the number of lines (<= max). */
+#define SPIKE_COMPARE_COLS 40
+int spike_format_slot_compare(const net_ip_settings_t *now, const net_ip_settings_t *plan,
+                              char lines[][SPIKE_COMPARE_COLS], int max);
 
 #define SPIKE_HEADER_COLS 49
 char *spike_format_header(char *out, size_t out_len, bool connected, int busy);

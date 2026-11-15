@@ -35,9 +35,12 @@
 #define BTN_SCROLL_NEWER (-2)
 #define BTN_SAVE_LOG     100   /* runs on the worker like a spike action */
 #define BTN_WIFI_SLOT    101   /* worker: next Wi-Fi slot, saved to config.ini */
+#define BTN_SETUP_SLOT   102   /* worker: read the slot, show the confirmation */
+#define BTN_SETUP_SAVE   103   /* worker: write the confirmed slot settings */
+#define BTN_SETUP_CANCEL (-3)  /* UI: close the confirmation */
 
-/* Bottom-screen buttons in 8x8 console cells: 19x6 cells = 152x48 px;
- * the bottom row has four 9-cell (72x48 px) buttons. */
+/* Bottom-screen buttons in 8x8 console cells: 12-13x6 cells = 96-104x48 px.
+ * The third row has the Wi-Fi slot buttons, the last one the log ones. */
 typedef struct {
     const char *label;
     int action;          /* spike_action_t, or BTN_SCROLL_* */
@@ -45,18 +48,27 @@ typedef struct {
 } button_t;
 
 static const button_t buttons[] = {
-    { NULL,       SPIKE_CONNECT,    0,  2, 19, 6 },
-    { NULL,       SPIKE_ATZ,        20, 2, 19, 6 },
-    { NULL,       SPIKE_SEARCH,     0,  9, 19, 6 },
-    { NULL,       SPIKE_PROTOCOL,   20, 9, 19, 6 },
-    { NULL,       SPIKE_VOLTAGE,    0, 16, 19, 6 },
-    { NULL,       SPIKE_VIN,        20, 16, 19, 6 },
-    { "OLDER ^",  BTN_SCROLL_OLDER, 0, 23, 9, 6 },
-    { "SAVE LOG", BTN_SAVE_LOG,     10, 23, 9, 6 },
-    { NULL,       BTN_WIFI_SLOT,    20, 23, 9, 6 },  /* "SLOT ANY" / "SLOT 2" */
-    { "NEWER v",  BTN_SCROLL_NEWER, 30, 23, 9, 6 },
+    { NULL,         SPIKE_CONNECT,    0,  2, 12, 6 },
+    { NULL,         SPIKE_ATZ,        13, 2, 13, 6 },
+    { NULL,         SPIKE_SEARCH,     27, 2, 12, 6 },
+    { NULL,         SPIKE_PROTOCOL,   0,  9, 12, 6 },
+    { NULL,         SPIKE_VOLTAGE,    13, 9, 13, 6 },
+    { NULL,         SPIKE_VIN,        27, 9, 12, 6 },
+    { NULL,         BTN_WIFI_SLOT,    0, 16, 12, 6 },  /* "SLOT ANY" / "SLOT 2" */
+    { "SETUP SLOT", BTN_SETUP_SLOT,   13, 16, 13, 6 },
+    { "OLDER ^",    BTN_SCROLL_OLDER, 0, 23, 12, 6 },
+    { "SAVE LOG",   BTN_SAVE_LOG,     13, 23, 13, 6 },
+    { "NEWER v",    BTN_SCROLL_NEWER, 27, 23, 12, 6 },
 };
 #define BUTTON_COUNT ((int)(sizeof buttons / sizeof buttons[0]))
+
+/* Shown instead of the buttons above while a slot change waits for OK. */
+static const button_t confirm_buttons[] = {
+    { "SAVE",   BTN_SETUP_SAVE,   0,  22, 19, 6 },
+    { "CANCEL", BTN_SETUP_CANCEL, 20, 22, 19, 6 },
+};
+#define CONFIRM_BUTTON_COUNT ((int)(sizeof confirm_buttons / sizeof confirm_buttons[0]))
+#define CONFIRM_LINES 6
 
 /* Shared between the UI thread and the worker; guarded by lock. */
 static struct {
@@ -69,6 +81,12 @@ static struct {
     int busy;          /* action running, or -1 */
     bool connected;
     int wifi_slot;     /* copy of app_cfg->wifi_slot for the SLOT label */
+    bool confirm;      /* SETUP SLOT confirmation showing */
+    int confirm_slot;
+    char confirm_title[SPIKE_COMPARE_COLS];
+    char confirm_lines[CONFIRM_LINES][SPIKE_COMPARE_COLS];
+    int confirm_count;
+    net_ip_settings_t confirm_plan;
     volatile bool quit;
 } shared;
 
@@ -181,6 +199,74 @@ static void next_wifi_slot(spike_t *s)
     }
 }
 
+/* SETUP SLOT (worker): read the chosen slot and, if it differs from what
+ * GaugeBoy needs, show NOW / NEW for the user to SAVE or CANCEL. */
+static void setup_slot_preview(spike_t *s)
+{
+    LightLock_Lock(&shared.lock);
+    int slot = shared.wifi_slot;
+    char host[sizeof app_cfg->adapter_host];
+    strcpy(host, app_cfg->adapter_host);
+    LightLock_Unlock(&shared.lock);
+
+    if (slot == 0) {
+        spike_logf(s, "! SETUP SLOT: tap SLOT first to pick the adapter's slot");
+        return;
+    }
+    char name[40];
+    if (!net_slot_name(slot, name, sizeof name)) {
+        spike_logf(s, "! SETUP SLOT: slot %d is empty; save the adapter's Wi-Fi in System Settings first", slot);
+        return;
+    }
+    net_ip_settings_t now, plan;
+    char err[80];
+    if (!net_slot_read(slot, &now, err, sizeof err)) {
+        spike_logf(s, "! SETUP SLOT: %s", err);
+        return;
+    }
+    if (!spike_plan_slot(host, &plan)) {
+        spike_logf(s, "! SETUP SLOT: adapter address %s isn't an IPv4 address", host);
+        return;
+    }
+    if (spike_slot_matches(&now, &plan)) {
+        spike_logf(s, "= Slot %d \"%s\" is already set up for GaugeBoy", slot, name);
+        return;
+    }
+
+    LightLock_Lock(&shared.lock);
+    shared.confirm_slot = slot;
+    shared.confirm_plan = plan;
+    snprintf(shared.confirm_title, sizeof shared.confirm_title, "Set up slot %d \"%.20s\"?", slot, name);
+    shared.confirm_count = spike_format_slot_compare(&now, &plan, shared.confirm_lines, CONFIRM_LINES);
+    shared.confirm = true;
+    LightLock_Unlock(&shared.lock);
+    spike_logf(s, "SETUP SLOT: check the new settings on the bottom screen, then SAVE or CANCEL");
+}
+
+/* SAVE on the confirmation (worker): write the slot, read it back. */
+static void setup_slot_save(spike_t *s)
+{
+    LightLock_Lock(&shared.lock);
+    bool pending = shared.confirm;
+    int slot = shared.confirm_slot;
+    net_ip_settings_t plan = shared.confirm_plan;
+    shared.confirm = false;
+    LightLock_Unlock(&shared.lock);
+    if (!pending) {
+        return;
+    }
+
+    char err[80];
+    if (!net_slot_write(slot, &plan, err, sizeof err)) {
+        spike_logf(s, "! Slot %d not changed: %s", slot, err);
+        return;
+    }
+    char now[200];
+    net_slot_ip_settings(slot, now, sizeof now);
+    spike_logf(s, "= Slot %d saved: %s", slot, now);
+    spike_logf(s, "Tap CONNECT to use it (the 3DS may rejoin the network).");
+}
+
 static void worker_main(void *arg)
 {
     spike_t *spike = arg;
@@ -205,6 +291,10 @@ static void worker_main(void *arg)
                 save_log(spike);
             } else if (action == BTN_WIFI_SLOT) {
                 next_wifi_slot(spike);
+            } else if (action == BTN_SETUP_SLOT) {
+                setup_slot_preview(spike);
+            } else if (action == BTN_SETUP_SAVE) {
+                setup_slot_save(spike);
             } else {
                 spike_run(spike, (spike_action_t)action);
             }
@@ -286,13 +376,59 @@ static void draw_button(const button_t *b, bool flash, bool busy)
     printf("\x1b[0m");
 }
 
+/* The SETUP SLOT confirmation: NOW / NEW table, SAVE and CANCEL. */
+static void draw_confirm(void)
+{
+    char title[SPIKE_COMPARE_COLS];
+    char lines[CONFIRM_LINES][SPIKE_COMPARE_COLS];
+    LightLock_Lock(&shared.lock);
+    int n = shared.confirm_count;
+    memcpy(title, shared.confirm_title, sizeof title);
+    memcpy(lines, shared.confirm_lines, sizeof lines);
+    LightLock_Unlock(&shared.lock);
+
+    consoleSelect(&bottom_console);
+    printf("\x1b[0m");
+    for (int r = 0; r < 30; r++) {
+        print_row(r, BOTTOM_COLS, "");
+    }
+    print_row(0, BOTTOM_COLS, title);
+    print_row(1, BOTTOM_COLS, "IP settings for GaugeBoy:");
+    for (int i = 0; i < n; i++) {
+        print_row(3 + i, BOTTOM_COLS, lines[i]);
+    }
+    print_row(11, BOTTOM_COLS, "Name and password stay the same.");
+    print_row(13, BOTTOM_COLS, "This changes System Settings > Internet");
+    print_row(14, BOTTOM_COLS, "Settings for this slot. You can change");
+    print_row(15, BOTTOM_COLS, "it back there at any time.");
+    for (int i = 0; i < CONFIRM_BUTTON_COUNT; i++) {
+        draw_button(&confirm_buttons[i], false, false);
+    }
+}
+
 static void draw_bottom(const gb_config_t *cfg, const uint64_t *flash_until,
                         uint64_t now, int busy)
 {
     char line[BOTTOM_COLS + 1];
 
+    LightLock_Lock(&shared.lock);
+    bool confirm = shared.confirm;
+    LightLock_Unlock(&shared.lock);
+    static bool cleared_after_confirm = true;
+    if (confirm) {
+        draw_confirm();
+        cleared_after_confirm = false;
+        return;
+    }
+
     consoleSelect(&bottom_console);
     printf("\x1b[0m");
+    if (!cleared_after_confirm) {
+        for (int r = 0; r < 30; r++) {
+            print_row(r, BOTTOM_COLS, "");
+        }
+        cleared_after_confirm = true;
+    }
     snprintf(line, sizeof line, "Adapter %s:%u", cfg->adapter_host,
              (unsigned)cfg->adapter_port);
     print_row(0, BOTTOM_COLS, line);
@@ -303,12 +439,12 @@ static void draw_bottom(const gb_config_t *cfg, const uint64_t *flash_until,
     print_row(29, BOTTOM_COLS, "START: exit  Up/Down L/R: scroll");
 }
 
-static int button_at(int px, int py)
+static int button_at(const button_t *list, int count, int px, int py)
 {
     int col = px / 8;
     int row = py / 8;
-    for (int i = 0; i < BUTTON_COUNT; i++) {
-        const button_t *b = &buttons[i];
+    for (int i = 0; i < count; i++) {
+        const button_t *b = &list[i];
         if (col >= b->col && col < b->col + b->w && row >= b->row && row < b->row + b->h) {
             return i;
         }
@@ -445,6 +581,7 @@ void spike_ui_run(void)
     int drawn_scroll = -1;
     int drawn_busy = -2;
     bool drawn_connected = false;
+    bool drawn_confirm = false;
     bool bottom_dirty = true;
 
     while (aptMainLoop()) {
@@ -455,10 +592,25 @@ void spike_ui_run(void)
         if (down & KEY_START) {
             break;
         }
-        if (down & KEY_TOUCH) {
+        LightLock_Lock(&shared.lock);
+        bool confirming = shared.confirm;
+        LightLock_Unlock(&shared.lock);
+        if ((down & KEY_TOUCH) && confirming) {
             touchPosition tp;
             hidTouchRead(&tp);
-            int i = button_at(tp.px, tp.py);
+            int i = button_at(confirm_buttons, CONFIRM_BUTTON_COUNT, tp.px, tp.py);
+            if (i >= 0 && confirm_buttons[i].action == BTN_SETUP_SAVE && worker != NULL) {
+                enqueue(BTN_SETUP_SAVE);
+            } else if (i >= 0 && confirm_buttons[i].action == BTN_SETUP_CANCEL) {
+                LightLock_Lock(&shared.lock);
+                shared.confirm = false;
+                LightLock_Unlock(&shared.lock);
+                spike_logf(&spike, "SETUP SLOT cancelled; nothing changed");
+            }
+        } else if (down & KEY_TOUCH) {
+            touchPosition tp;
+            hidTouchRead(&tp);
+            int i = button_at(buttons, BUTTON_COUNT, tp.px, tp.py);
             if (i >= 0) {
                 flash_until[i] = now + FLASH_MS;
                 bottom_dirty = true;
@@ -481,7 +633,12 @@ void spike_ui_run(void)
         unsigned version = shared.log.version;
         int busy = shared.busy;
         bool connected = shared.connected;
+        bool confirm_now = shared.confirm;
         LightLock_Unlock(&shared.lock);
+        if (confirm_now != drawn_confirm) {
+            drawn_confirm = confirm_now;
+            bottom_dirty = true;
+        }
 
         if (version != drawn_version || scroll != drawn_scroll || busy != drawn_busy ||
             connected != drawn_connected) {

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "data/config.h"
 #include "version.h"
 
 void spike_init(spike_t *s, tcp_transport_t *transport, elm_t *elm,
@@ -241,4 +242,68 @@ char *spike_format_log_name(char *out, size_t out_len, const struct tm *when)
                  when->tm_hour, when->tm_min, when->tm_sec);
     }
     return out;
+}
+
+bool spike_plan_slot(const char *adapter_host, net_ip_settings_t *plan)
+{
+    unsigned a, b, c, d;
+    memset(plan, 0, sizeof *plan);
+    if (adapter_host == NULL || !config_valid_ipv4(adapter_host) ||
+        sscanf(adapter_host, "%u.%u.%u.%u", &a, &b, &c, &d) != 4) {
+        return false;
+    }
+    uint8_t own = d == 11 ? 12 : 11;
+    const uint8_t ip[4] = { (uint8_t)a, (uint8_t)b, (uint8_t)c, own };
+    const uint8_t gw[4] = { (uint8_t)a, (uint8_t)b, (uint8_t)c, (uint8_t)d };
+    const uint8_t mask[4] = { 255, 255, 255, 0 };
+    plan->dhcp = false;
+    plan->auto_dns = false;
+    memcpy(plan->ip, ip, 4);
+    memcpy(plan->mask, mask, 4);
+    memcpy(plan->gateway, gw, 4);
+    memcpy(plan->dns1, ip, 4);
+    memset(plan->dns2, 0, 4);
+    return true;
+}
+
+bool spike_slot_matches(const net_ip_settings_t *now, const net_ip_settings_t *plan)
+{
+    return now->dhcp == plan->dhcp && now->auto_dns == plan->auto_dns &&
+           memcmp(now->ip, plan->ip, 4) == 0 && memcmp(now->mask, plan->mask, 4) == 0 &&
+           memcmp(now->gateway, plan->gateway, 4) == 0 && memcmp(now->dns1, plan->dns1, 4) == 0 &&
+           memcmp(now->dns2, plan->dns2, 4) == 0;
+}
+
+static void ip_str(char *out, size_t len, const uint8_t b[4])
+{
+    snprintf(out, len, "%u.%u.%u.%u", b[0], b[1], b[2], b[3]);
+}
+
+int spike_format_slot_compare(const net_ip_settings_t *now, const net_ip_settings_t *plan,
+                              char lines[][SPIKE_COMPARE_COLS], int max)
+{
+    static const char *const labels[] = { "IP", "Mask", "Gate", "DNS 1", "DNS 2" };
+    const uint8_t *now_v[] = { now->ip, now->mask, now->gateway, now->dns1, now->dns2 };
+    const uint8_t *new_v[] = { plan->ip, plan->mask, plan->gateway, plan->dns1, plan->dns2 };
+    int n = 0;
+    if (n < max) {
+        snprintf(lines[n++], SPIKE_COMPARE_COLS, "%-5s %-15s %s", "", "NOW", "NEW");
+    }
+    for (int i = 0; i < 5 && n < max; i++) {
+        char a[16], b[16];
+        bool now_auto = i < 3 ? now->dhcp : now->auto_dns;
+        bool new_auto = i < 3 ? plan->dhcp : plan->auto_dns;
+        if (now_auto) {
+            snprintf(a, sizeof a, "auto");
+        } else {
+            ip_str(a, sizeof a, now_v[i]);
+        }
+        if (new_auto) {
+            snprintf(b, sizeof b, "auto");
+        } else {
+            ip_str(b, sizeof b, new_v[i]);
+        }
+        snprintf(lines[n++], SPIKE_COMPARE_COLS, "%-5s %-15s %s", labels[i], a, b);
+    }
+    return n;
 }

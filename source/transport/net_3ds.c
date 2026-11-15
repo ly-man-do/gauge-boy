@@ -260,55 +260,144 @@ static void ip_text(char *out, size_t len, const u8 b[4])
     snprintf(out, len, "%u.%u.%u.%u", b[0], b[1], b[2], b[3]);
 }
 
+bool net_slot_read(int slot, net_ip_settings_t *out, char *err, size_t err_len)
+{
+    memset(out, 0, sizeof *out);
+    if (err_len > 0) {
+        err[0] = '\0';
+    }
+    if (slot < 1 || slot > 3 || !ac_open()) {
+        snprintf(err, err_len, "Wi-Fi service unavailable");
+        return false;
+    }
+    Result r = ACI_LoadNetworkSetting((u32)(slot - 1));
+    if (R_FAILED(r)) {
+        snprintf(err, err_len, "can't load slot %d (0x%08lX)", slot, (unsigned long)r);
+        return false;
+    }
+    u32 dhcp = 0, auto_dns = 0;
+    Result failed = 0;
+#define GET(call) do { Result rr = (call); if (R_FAILED(rr) && failed == 0) failed = rr; } while (0)
+    GET(aci_get_word(ACI_GET_DHCP, &dhcp));
+    GET(aci_get_word(ACI_GET_AUTO_DNS, &auto_dns));
+    GET(aci_get_buffer(ACI_GET_IP, out->ip, 4));
+    GET(aci_get_buffer(ACI_GET_NETMASK, out->mask, 4));
+    GET(aci_get_buffer(ACI_GET_GATEWAY, out->gateway, 4));
+    GET(aci_get_buffer(ACI_GET_DNS1, out->dns1, 4));
+    GET(aci_get_buffer(ACI_GET_DNS2, out->dns2, 4));
+#undef GET
+    /* Flags are the low byte of the reply word; the rest is left over
+     * (seen on hardware: 0x00080000 = manual, 0x00010501 = auto). */
+    out->dhcp = (dhcp & 0xFF) != 0;
+    out->auto_dns = (auto_dns & 0xFF) != 0;
+    if (failed != 0) {
+        snprintf(err, err_len, "reading slot %d failed (0x%08lX)", slot, (unsigned long)failed);
+        return false;
+    }
+    return true;
+}
+
 bool net_slot_ip_settings(int slot, char *out, size_t len)
 {
     if (len == 0) {
         return false;
     }
-    snprintf(out, len, "can't read");
-    if (slot < 1 || slot > 3 || !ac_open()) {
+    net_ip_settings_t st;
+    char err[64];
+    if (!net_slot_read(slot, &st, err, sizeof err)) {
+        snprintf(out, len, "%s", err);
         return false;
     }
-    Result r = ACI_LoadNetworkSetting((u32)(slot - 1));
-    u32 dhcp = 0, auto_dns = 0, mtu = 0;
-    u8 ip[4] = {0}, mask[4] = {0}, gw[4] = {0}, dns1[4] = {0}, dns2[4] = {0};
-    Result failed = 0;
-#define GET(call) do { Result rr = (call); if (R_FAILED(rr) && failed == 0) failed = rr; } while (0)
-    if (R_FAILED(r)) {
-        snprintf(out, len, "can't load slot (0x%08lX)", (unsigned long)r);
-        return false;
-    }
-    GET(aci_get_word(ACI_GET_DHCP, &dhcp));
-    GET(aci_get_word(ACI_GET_AUTO_DNS, &auto_dns));
-    GET(aci_get_buffer(ACI_GET_IP, ip, sizeof ip));
-    GET(aci_get_buffer(ACI_GET_NETMASK, mask, sizeof mask));
-    GET(aci_get_buffer(ACI_GET_GATEWAY, gw, sizeof gw));
-    GET(aci_get_buffer(ACI_GET_DNS1, dns1, sizeof dns1));
-    GET(aci_get_buffer(ACI_GET_DNS2, dns2, sizeof dns2));
-    GET(aci_get_word(ACI_GET_MTU, &mtu));
-#undef GET
-    /* Only the low byte (flags) / low 16 bits (MTU) are set; the rest of
-     * the reply word is left over (seen on hardware: 0x00080000 for
-     * "manual", 0x00010501 for "auto", 0x00010578 for MTU 1400). */
-    dhcp &= 0xFF;
-    auto_dns &= 0xFF;
-    mtu &= 0xFFFF;
+    u32 mtu = 0;
+    (void)aci_get_word(ACI_GET_MTU, &mtu); /* still loaded by net_slot_read */
     char a[16], m[16], g[16], d1[16], d2[16];
-    ip_text(a, sizeof a, ip);
-    ip_text(m, sizeof m, mask);
-    ip_text(g, sizeof g, gw);
-    ip_text(d1, sizeof d1, dns1);
-    ip_text(d2, sizeof d2, dns2);
-    snprintf(out, len, "IP %s %s mask %s gw %s, DNS %s %s / %s, MTU %lu (raw IP %02x%02x%02x%02x)%s",
-             dhcp ? "auto" : "manual", a, m, g,
-             auto_dns ? "auto" : "manual", d1, d2,
-             (unsigned long)mtu, ip[0], ip[1], ip[2], ip[3],
-             failed != 0 ? " [some reads failed]" : "");
-    if (failed != 0) {
-        size_t used = strlen(out);
-        snprintf(out + used, len - used, " 0x%08lX", (unsigned long)failed);
+    ip_text(a, sizeof a, st.ip);
+    ip_text(m, sizeof m, st.mask);
+    ip_text(g, sizeof g, st.gateway);
+    ip_text(d1, sizeof d1, st.dns1);
+    ip_text(d2, sizeof d2, st.dns2);
+    snprintf(out, len, "IP %s %s mask %s gw %s, DNS %s %s / %s, MTU %lu",
+             st.dhcp ? "auto" : "manual", a, m, g, st.auto_dns ? "auto" : "manual", d1, d2,
+             (unsigned long)(mtu & 0xFFFF));
+    return true;
+}
+
+/* ac:i setters for the loaded slot, as 3dsDS (MIT) uses them for the SSID
+ * and password: a word, or a static buffer. */
+static Result aci_set_word(u16 cmd, u32 value)
+{
+    u32 *cmdbuf = getThreadCommandBuffer();
+    cmdbuf[0] = IPC_MakeHeader(cmd, 1, 0);
+    cmdbuf[1] = value;
+    Result ret = svcSendSyncRequest(*acGetSessionHandle());
+    return R_FAILED(ret) ? ret : (Result)cmdbuf[1];
+}
+
+static Result aci_set_buffer(u16 cmd, const void *buf, size_t size)
+{
+    u32 *cmdbuf = getThreadCommandBuffer();
+    cmdbuf[0] = IPC_MakeHeader(cmd, 0, 2);
+    cmdbuf[1] = IPC_Desc_StaticBuffer(size, 0);
+    cmdbuf[2] = (u32)buf;
+    Result ret = svcSendSyncRequest(*acGetSessionHandle());
+    return R_FAILED(ret) ? ret : (Result)cmdbuf[1];
+}
+
+static Result aci_empty(u16 cmd)
+{
+    u32 *cmdbuf = getThreadCommandBuffer();
+    cmdbuf[0] = IPC_MakeHeader(cmd, 0, 0);
+    Result ret = svcSendSyncRequest(*acGetSessionHandle());
+    return R_FAILED(ret) ? ret : (Result)cmdbuf[1];
+}
+
+#define ACI_UPDATE_SETTING  0x402
+#define ACI_FLUSH_SETTING   0x404
+#define ACI_SET_DHCP        0x448
+#define ACI_SET_AUTO_DNS    0x44A
+#define ACI_SET_IP          0x44C
+#define ACI_SET_GATEWAY     0x44E
+#define ACI_SET_NETMASK     0x450
+#define ACI_SET_DNS1        0x452
+#define ACI_SET_DNS2        0x454
+
+bool net_slot_write(int slot, const net_ip_settings_t *in, char *err, size_t err_len)
+{
+    if (err_len > 0) {
+        err[0] = '\0';
     }
-    return failed == 0;
+    if (slot < 1 || slot > 3 || !ac_open()) {
+        snprintf(err, err_len, "Wi-Fi service unavailable");
+        return false;
+    }
+    /* Static buffers must stay valid during the request: copy the inputs. */
+    static u8 ip[4], mask[4], gw[4], dns1[4], dns2[4];
+    memcpy(ip, in->ip, 4);
+    memcpy(mask, in->mask, 4);
+    memcpy(gw, in->gateway, 4);
+    memcpy(dns1, in->dns1, 4);
+    memcpy(dns2, in->dns2, 4);
+
+    const char *step = "load";
+    Result r = ACI_LoadNetworkSetting((u32)(slot - 1));
+#define STEP(name, call) do { if (R_SUCCEEDED(r)) { step = (name); r = (call); } } while (0)
+    STEP("IP auto-obtain", aci_set_word(ACI_SET_DHCP, in->dhcp ? 1 : 0));
+    STEP("DNS auto-obtain", aci_set_word(ACI_SET_AUTO_DNS, in->auto_dns ? 1 : 0));
+    STEP("IP address", aci_set_buffer(ACI_SET_IP, ip, 4));
+    STEP("subnet mask", aci_set_buffer(ACI_SET_NETMASK, mask, 4));
+    STEP("gateway", aci_set_buffer(ACI_SET_GATEWAY, gw, 4));
+    STEP("primary DNS", aci_set_buffer(ACI_SET_DNS1, dns1, 4));
+    STEP("secondary DNS", aci_set_buffer(ACI_SET_DNS2, dns2, 4));
+    STEP("update slot", aci_set_word(ACI_UPDATE_SETTING, (u32)(slot - 1)));
+    STEP("save settings", aci_empty(ACI_FLUSH_SETTING));
+#undef STEP
+    if (R_FAILED(r)) {
+        /* Drop the half-edited copy so nothing else picks it up. */
+        (void)ACI_LoadNetworkSetting((u32)(slot - 1));
+        snprintf(err, err_len, "%s failed (0x%08lX); nothing saved", step, (unsigned long)r);
+        return false;
+    }
+    return true;
 }
 
 static void join_failed(char *msg, size_t len, const char *what, Result r)
