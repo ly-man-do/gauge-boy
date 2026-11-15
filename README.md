@@ -68,7 +68,7 @@ The adapter's network has no internet, so the 3DS fails its connection test ther
    - **DNS:** Auto-Obtain **No**; Primary DNS `192.168.000.011` (the 3DS's own address), Secondary DNS `000.000.000.000`
 3. In GaugeBoy, tap **SLOT** until it shows that slot, then **SETUP SLOT** to check the settings, then **CONNECT** and **ATZ**.
 
-This assumes the adapter is at `192.168.0.10`, as most are. [Testing on a real New 3DS](docs/testing-on-3ds.md) has the details, the test steps and how to report results; **SAVE LOG** saves a session log to `sdmc:/3ds/gaugeboy/logs/` to attach.
+GaugeBoy has the same steps built in: **SETUP > WI-FI GUIDE**, with a **CHECK** button that tells you which part isn't right yet. This assumes the adapter is at `192.168.0.10`, as most are. [Testing on a real New 3DS](docs/testing-on-3ds.md) has the details, the test steps and how to report results; **SAVE LOG** saves a session log to `sdmc:/3ds/gaugeboy/logs/` to attach.
 
 ## Building
 

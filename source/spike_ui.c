@@ -20,6 +20,7 @@
 #include "data/code_history.h"
 #include "data/config.h"
 #include "data/diag_view.h"
+#include "data/wifi_guide.h"
 #include "data/textlog.h"
 #include "spike_actions.h"
 #include "transport/conntest_server.h"
@@ -48,6 +49,8 @@
 #define BTN_SETUP_OK     (-3)  /* UI: close the setup screen */
 #define BTN_DIAG_SCAN    104   /* worker: full DIAG scan */
 #define BTN_CLEAR_CODES  105   /* worker: clear codes (only from the dialog), then rescan */
+#define BTN_GUIDE_CHECK  106   /* worker: Wi-Fi guide check */
+#define BTN_GUIDE        (-8)  /* UI: SETUP -> Wi-Fi guide */
 #define BTN_CLEAR_ASK    (-5)  /* UI: open the clear-codes dialog */
 #define BTN_CLEAR_CANCEL (-6)
 #define BTN_CLEAR_YES    (-7)
@@ -134,10 +137,21 @@ static const button_t setup_buttons[] = {
     { "Save this session's log",       BTN_SAVE_LOG,    0, 14, 39, 5 },
     { "Adapter test screen",           BTN_TEST_SCREEN, 0, 20, 39, 5 },
     { "BACK",                          BTN_BACK,        0, 25, 11, 5 },
+    { "WI-FI GUIDE",                   BTN_GUIDE,       26, 25, 13, 5 },
 };
 #define SETUP_BUTTON_COUNT ((int)(sizeof setup_buttons / sizeof setup_buttons[0]))
 
-typedef enum { SCREEN_HOME, SCREEN_DIAG, SCREEN_SETUP, SCREEN_TEST } screen_t;
+typedef enum { SCREEN_HOME, SCREEN_DIAG, SCREEN_SETUP, SCREEN_TEST, SCREEN_GUIDE } screen_t;
+
+/* Wi-Fi guide: BACK < step > CHECK. */
+static const button_t guide_buttons[] = {
+    { "BACK",  BTN_BACK,        0,  25, 8, 5 },
+    { "<",     BTN_PAGE_PREV,   9,  25, 5, 5 },
+    { ">",     BTN_PAGE_NEXT,   17, 25, 5, 5 },
+    { "CHECK", BTN_GUIDE_CHECK, 27, 25, 12, 5 },
+};
+#define GUIDE_BUTTON_COUNT ((int)(sizeof guide_buttons / sizeof guide_buttons[0]))
+#define GUIDE_CHECK_LINES 6
 
 /* Clear-codes dialog (safety rule: clearing only from here). */
 static const button_t clear_buttons[] = {
@@ -175,6 +189,8 @@ static struct {
     bool scanning;
     obd_diag_step_t scan_step;
     char diag_msg[40];         /* last DIAG result line (clear codes), or "" */
+    char guide_check[GUIDE_CHECK_LINES][40]; /* last Wi-Fi guide CHECK result */
+    bool guide_checking;
 
     volatile bool quit;
 } shared;
@@ -468,6 +484,71 @@ static void clear_codes(spike_t *s)
     LightLock_Unlock(&shared.lock);
 }
 
+/* Wi-Fi guide CHECK (worker): slot chosen and named, its IP / DNS as the
+ * guide says, on Wi-Fi, adapter answering. */
+static void guide_check(spike_t *s)
+{
+    char out[GUIDE_CHECK_LINES][40];
+    memset(out, 0, sizeof out);
+    int n = 0;
+    LightLock_Lock(&shared.lock);
+    int slot = shared.wifi_slot;
+    char host[sizeof app_cfg->adapter_host];
+    strcpy(host, app_cfg->adapter_host);
+    shared.guide_checking = true;
+    shared.diag_version++;
+    LightLock_Unlock(&shared.lock);
+
+    if (slot == 0) {
+        snprintf(out[n++], 40, "! Slot: Any (pick it in SETUP)");
+    } else {
+        char name[40];
+        if (!net_slot_name(slot, name, sizeof name)) {
+            snprintf(out[n++], 40, "! Slot %d is empty (step 2)", slot);
+        } else {
+            snprintf(out[n++], 40, "OK Slot %d: %.28s", slot, name);
+            net_ip_settings_t now, plan;
+            char err[80];
+            if (!net_slot_read(slot, &now, err, sizeof err) || !spike_plan_slot(host, &plan)) {
+                snprintf(out[n++], 40, "! Can't read the slot's settings");
+            } else if (spike_slot_matches(&now, &plan)) {
+                snprintf(out[n++], 40, "OK IP and DNS as in steps 3-4");
+            } else {
+                snprintf(out[n++], 40, "! IP / DNS differ from steps 3-4");
+                snprintf(out[n++], 40, "  (SETUP > Check the slot's IP...)");
+            }
+        }
+    }
+    char info[160];
+    net_describe(info, sizeof info);
+    bool on = strstr(info, "Wi-Fi on") != NULL;
+    snprintf(out[n++], 40, "%s %s", on ? "OK" : "!", on ? "On Wi-Fi" : "Not on Wi-Fi yet");
+
+    bool answered = false;
+    char id[ELM_LINE_MAX] = "";
+    if (spike_connect_if_needed(s)) {
+        static elm_response_t r;
+        if (elm_command(s->elm, "ATI", ELM_TIMEOUT_DEFAULT_MS, &r) == ELM_OK && r.line_count > 0) {
+            answered = true;
+            snprintf(id, sizeof id, "%s", r.lines[r.line_count - 1]);
+        }
+    }
+    if (answered) {
+        snprintf(out[n++], 40, "OK Adapter: %.27s", id);
+    } else {
+        snprintf(out[n++], 40, "! Adapter not answering");
+    }
+    for (int i = 0; i < n; i++) {
+        spike_logf(s, "Guide check: %s", out[i]);
+    }
+
+    LightLock_Lock(&shared.lock);
+    memcpy(shared.guide_check, out, sizeof out);
+    shared.guide_checking = false;
+    shared.diag_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
 static void worker_main(void *arg)
 {
     spike_t *spike = arg;
@@ -498,6 +579,8 @@ static void worker_main(void *arg)
                 diag_scan(spike);
             } else if (action == BTN_CLEAR_CODES) {
                 clear_codes(spike);
+            } else if (action == BTN_GUIDE_CHECK) {
+                guide_check(spike);
             } else {
                 spike_run(spike, (spike_action_t)action);
             }
@@ -768,6 +851,27 @@ static int page_count(int n)
     return n == 0 ? 1 : (n + LIST_PAGE_ROWS - 1) / LIST_PAGE_ROWS;
 }
 
+/* Wi-Fi guide top screen: step title and text. */
+static void draw_guide_top(int step, const char *host, int busy, bool connected)
+{
+    char header[TOP_COLS + 1];
+    char title[TOP_COLS + 1];
+    static char lines[TOP_ROWS][DIAG_VIEW_COLS + 1];
+    int n = wifi_guide_lines(step, host, TOP_COLS, lines, TOP_ROWS - 4);
+    spike_format_header(header, sizeof header, connected, busy);
+    snprintf(title, sizeof title, "Wi-Fi setup %d/%d: %s", step + 1, WIFI_GUIDE_STEPS,
+             wifi_guide_title(step));
+    consoleSelect(&top_console);
+    printf("\x1b[0m");
+    print_row(0, TOP_COLS, header);
+    print_row(1, TOP_COLS, "-------------------------------------------------");
+    print_row(2, TOP_COLS, title);
+    print_row(3, TOP_COLS, "");
+    for (int i = 0; i < TOP_ROWS - 4; i++) {
+        print_row(4 + i, TOP_COLS, i < n ? lines[i] : "");
+    }
+}
+
 /* The clear-codes question. Red CLEAR CODES, plain CANCEL. */
 static void draw_clear_dialog(void)
 {
@@ -856,11 +960,34 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         print_row(29, BOTTOM_COLS, "START: exit");
         return;
     }
+    if (ui->screen == SCREEN_GUIDE) {
+        print_row(1, BOTTOM_COLS, "Wi-Fi setup guide");
+        for (int i = 0; i < WIFI_GUIDE_STEPS; i++) {
+            char t[BOTTOM_COLS + 1];
+            snprintf(t, sizeof t, "%s %d. %s", i == ui->page ? ">" : " ", i + 1,
+                     wifi_guide_title(i));
+            print_row(3 + i, BOTTOM_COLS, t);
+        }
+        char check[GUIDE_CHECK_LINES][40];
+        LightLock_Lock(&shared.lock);
+        memcpy(check, shared.guide_check, sizeof check);
+        bool checking = shared.guide_checking;
+        LightLock_Unlock(&shared.lock);
+        print_row(10, BOTTOM_COLS, checking ? "Checking..." : check[0][0] ? "Last CHECK:"
+                                                        : "Tap CHECK after step 5.");
+        for (int i = 0; i < GUIDE_CHECK_LINES; i++) {
+            print_row(12 + i, BOTTOM_COLS, checking ? "" : check[i]);
+        }
+        draw_list(guide_buttons, GUIDE_BUTTON_COUNT, now, busy, 0, false);
+        snprintf(line, sizeof line, "%d/%d", ui->page + 1, WIFI_GUIDE_STEPS);
+        printf("\x1b[%d;15H%-3.3s", 27 + 1, line);
+        return;
+    }
     if (ui->screen == SCREEN_SETUP) {
         print_row(1, BOTTOM_COLS, "");
         for (int i = 0; i < SETUP_BUTTON_COUNT; i++) {
             const button_t *b = &setup_buttons[i];
-            if (b->action == BTN_BACK) {
+            if (b->action == BTN_BACK || b->action == BTN_GUIDE) {
                 draw_button(b, flashing(b->action, now), false);
                 continue;
             }
@@ -888,7 +1015,7 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
             printf("\x1b[0m");
         }
         /* Right of BACK (cells 0-10), on its middle row. */
-        printf("\x1b[28;14H%-26.26s", "Up/Down L/R: scroll log");
+        printf("\x1b[28;13H%-12.12s", "L/R: log");
         return;
     }
 
@@ -1128,6 +1255,7 @@ void spike_ui_run(void)
             case SCREEN_HOME:  list = home_buttons;  count = HOME_BUTTON_COUNT;  break;
             case SCREEN_DIAG:  list = diag_buttons;  count = DIAG_BUTTON_COUNT;  break;
             case SCREEN_SETUP: list = setup_buttons; count = SETUP_BUTTON_COUNT; break;
+            case SCREEN_GUIDE: list = guide_buttons; count = GUIDE_BUTTON_COUNT; break;
             case SCREEN_TEST:  break;
             }
             int i = button_at(list, count, tp.px, tp.py);
@@ -1154,8 +1282,8 @@ void spike_ui_run(void)
         } else if (!confirming && !tapped && !ui.clear_dialog) {
             if ((down & KEY_B) && ui.screen != SCREEN_HOME) { action = BTN_BACK; tapped = true; }
             else if ((down & KEY_X) && ui.screen == SCREEN_DIAG) { action = BTN_DIAG_SCAN; tapped = true; }
-            else if ((down & KEY_L) && ui.screen == SCREEN_DIAG) { action = BTN_PAGE_PREV; tapped = true; }
-            else if ((down & KEY_R) && ui.screen == SCREEN_DIAG) { action = BTN_PAGE_NEXT; tapped = true; }
+            else if ((down & KEY_L) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE)) { action = BTN_PAGE_PREV; tapped = true; }
+            else if ((down & KEY_R) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE)) { action = BTN_PAGE_NEXT; tapped = true; }
         }
 
         if (tapped) {
@@ -1199,15 +1327,26 @@ void spike_ui_run(void)
             case BTN_PAGE_PREV:
                 if (ui.page > 0) { ui.page--; ui.selected = -1; top_dirty = true; }
                 break;
-            case BTN_PAGE_NEXT:
-                if (ui.page + 1 < page_count(n)) { ui.page++; ui.selected = -1; top_dirty = true; }
+            case BTN_PAGE_NEXT: {
+                int pages = ui.screen == SCREEN_GUIDE ? WIFI_GUIDE_STEPS : page_count(n);
+                if (ui.page + 1 < pages) { ui.page++; ui.selected = -1; top_dirty = true; }
+                break;
+            }
+            case BTN_GUIDE:
+                ui.screen = SCREEN_GUIDE;
+                ui.page = 0;
+                bottom_full = top_dirty = true;
                 break;
             case BTN_TEST_SCREEN:
                 ui.screen = SCREEN_TEST;
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
-                ui.screen = ui.screen == SCREEN_TEST ? SCREEN_SETUP : SCREEN_HOME;
+                if (ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_DIAG) {
+                    ui.page = 0;
+                }
+                ui.screen = (ui.screen == SCREEN_TEST || ui.screen == SCREEN_GUIDE) ? SCREEN_SETUP
+                                                                                  : SCREEN_HOME;
                 bottom_full = top_dirty = true;
                 break;
             case BTN_CLEAR_ASK: {
@@ -1276,7 +1415,9 @@ void spike_ui_run(void)
         if (top_dirty || busy != drawn_busy || connected != drawn_connected ||
             (shows_log ? (version != drawn_version || scroll != drawn_scroll)
                        : diag_version != drawn_diag_version)) {
-            if (shows_log) {
+            if (ui.screen == SCREEN_GUIDE) {
+                draw_guide_top(ui.page, cfg.adapter_host, busy, connected);
+            } else if (shows_log) {
                 draw_top(scroll, busy, connected);
             } else {
                 draw_diag_top(ui.screen == SCREEN_HOME, ui.tab, ui.selected, busy, connected);

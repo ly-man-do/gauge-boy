@@ -6,6 +6,7 @@
 #include "fake_io.h"
 #include "data/code_history.h"
 #include "data/diag_view.h"
+#include "data/wifi_guide.h"
 #include "obd/obd_diag.h"
 
 static fake_io_t f;
@@ -292,6 +293,32 @@ static void test_code_history(void)
     CHECK_EQ_STR(csv, "");
 }
 
+static void test_wifi_guide(void)
+{
+    char ip[24];
+    CHECK_EQ_STR(wifi_guide_3digit("192.168.0.11", ip, sizeof ip), "192.168.000.011");
+    CHECK_EQ_STR(wifi_guide_3digit("10.0.4.1", ip, sizeof ip), "010.000.004.001");
+    CHECK_EQ_STR(wifi_guide_3digit("obd.local", ip, sizeof ip), "obd.local");
+
+    for (int step = 0; step < WIFI_GUIDE_STEPS; step++) {
+        CHECK(strlen(wifi_guide_title(step)) > 0);
+        int n = wifi_guide_lines(step, "192.168.0.10", DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+        CHECK(n > 0 && n <= 24);   /* fits the top screen below the title */
+        for (int i = 0; i < n; i++) {
+            CHECK((int)strlen(lines[i]) <= DIAG_VIEW_COLS);
+        }
+    }
+    int n = wifi_guide_lines(2, "192.168.0.10", DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "192.168.000.011");
+    CHECK_VIEW(n, "192.168.000.010");
+    n = wifi_guide_lines(3, "192.168.0.10", DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Primary DNS:   192.168.000.011");
+    /* An adapter at .11: the 3DS takes .12. */
+    n = wifi_guide_lines(2, "10.0.0.11", DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "010.000.000.012");
+    CHECK_EQ_STR(wifi_guide_title(9), "");
+}
+
 void suite_diag(void)
 {
     gb_suite("diag");
@@ -302,4 +329,5 @@ void suite_diag(void)
     RUN_TEST(test_paged_pieces);
     RUN_TEST(test_clear_codes);
     RUN_TEST(test_code_history);
+    RUN_TEST(test_wifi_guide);
 }
