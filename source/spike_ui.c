@@ -35,9 +35,8 @@
 #define BTN_SCROLL_NEWER (-2)
 #define BTN_SAVE_LOG     100   /* runs on the worker like a spike action */
 #define BTN_WIFI_SLOT    101   /* worker: next Wi-Fi slot, saved to config.ini */
-#define BTN_SETUP_SLOT   102   /* worker: read the slot, show the confirmation */
-#define BTN_SETUP_SAVE   103   /* worker: write the confirmed slot settings */
-#define BTN_SETUP_CANCEL (-3)  /* UI: close the confirmation */
+#define BTN_SETUP_SLOT   102   /* worker: read the slot, show what to enter */
+#define BTN_SETUP_OK     (-3)  /* UI: close the setup screen */
 
 /* Bottom-screen buttons in 8x8 console cells: 12-13x6 cells = 96-104x48 px.
  * The third row has the Wi-Fi slot buttons, the last one the log ones. */
@@ -62,10 +61,9 @@ static const button_t buttons[] = {
 };
 #define BUTTON_COUNT ((int)(sizeof buttons / sizeof buttons[0]))
 
-/* Shown instead of the buttons above while a slot change waits for OK. */
+/* Shown instead of the buttons above while the setup screen is open. */
 static const button_t confirm_buttons[] = {
-    { "SAVE",   BTN_SETUP_SAVE,   0,  22, 19, 6 },
-    { "CANCEL", BTN_SETUP_CANCEL, 20, 22, 19, 6 },
+    { "OK", BTN_SETUP_OK, 10, 23, 19, 6 },
 };
 #define CONFIRM_BUTTON_COUNT ((int)(sizeof confirm_buttons / sizeof confirm_buttons[0]))
 #define CONFIRM_LINES 6
@@ -81,12 +79,12 @@ static struct {
     int busy;          /* action running, or -1 */
     bool connected;
     int wifi_slot;     /* copy of app_cfg->wifi_slot for the SLOT label */
-    bool confirm;      /* SETUP SLOT confirmation showing */
+    bool confirm;      /* SETUP SLOT screen showing */
     int confirm_slot;
     char confirm_title[SPIKE_COMPARE_COLS];
     char confirm_lines[CONFIRM_LINES][SPIKE_COMPARE_COLS];
     int confirm_count;
-    net_ip_settings_t confirm_plan;
+
     volatile bool quit;
 } shared;
 
@@ -200,7 +198,9 @@ static void next_wifi_slot(spike_t *s)
 }
 
 /* SETUP SLOT (worker): read the chosen slot and, if it differs from what
- * GaugeBoy needs, show NOW / NEW for the user to SAVE or CANCEL. */
+ * GaugeBoy needs, show NOW / NEW so the user can enter NEW in System
+ * Settings. Read-only: writing slot settings from the app crashed the
+ * 3DS (gauge-boy-7v5.31). */
 static void setup_slot_preview(spike_t *s)
 {
     LightLock_Lock(&shared.lock);
@@ -229,43 +229,17 @@ static void setup_slot_preview(spike_t *s)
         return;
     }
     if (spike_slot_matches(&now, &plan)) {
-        spike_logf(s, "= Slot %d \"%s\" is already set up for GaugeBoy", slot, name);
+        spike_logf(s, "= Slot %d \"%s\" is set up for GaugeBoy", slot, name);
         return;
     }
 
     LightLock_Lock(&shared.lock);
     shared.confirm_slot = slot;
-    shared.confirm_plan = plan;
-    snprintf(shared.confirm_title, sizeof shared.confirm_title, "Set up slot %d \"%.20s\"?", slot, name);
+    snprintf(shared.confirm_title, sizeof shared.confirm_title, "Slot %d \"%.20s\" needs:", slot, name);
     shared.confirm_count = spike_format_slot_compare(&now, &plan, shared.confirm_lines, CONFIRM_LINES);
     shared.confirm = true;
     LightLock_Unlock(&shared.lock);
-    spike_logf(s, "SETUP SLOT: check the new settings on the bottom screen, then SAVE or CANCEL");
-}
-
-/* SAVE on the confirmation (worker): write the slot, read it back. */
-static void setup_slot_save(spike_t *s)
-{
-    LightLock_Lock(&shared.lock);
-    bool pending = shared.confirm;
-    int slot = shared.confirm_slot;
-    net_ip_settings_t plan = shared.confirm_plan;
-    shared.confirm = false;
-    LightLock_Unlock(&shared.lock);
-    if (!pending) {
-        return;
-    }
-
-    char err[240];
-    if (!net_slot_write(slot, &plan, err, sizeof err)) {
-        spike_logf(s, "! Slot %d not changed: %s", slot, err);
-        return;
-    }
-    char now[200];
-    net_slot_ip_settings(slot, now, sizeof now);
-    spike_logf(s, "= Slot %d saved: %s", slot, now);
-    spike_logf(s, "  (%s)", err);
-    spike_logf(s, "Tap CONNECT to use it (the 3DS may rejoin the network).");
+    spike_logf(s, "SETUP SLOT: slot %d needs changes; enter the NEW values in System Settings", slot);
 }
 
 static void worker_main(void *arg)
@@ -294,8 +268,6 @@ static void worker_main(void *arg)
                 next_wifi_slot(spike);
             } else if (action == BTN_SETUP_SLOT) {
                 setup_slot_preview(spike);
-            } else if (action == BTN_SETUP_SAVE) {
-                setup_slot_save(spike);
             } else {
                 spike_run(spike, (spike_action_t)action);
             }
@@ -394,14 +366,18 @@ static void draw_confirm(void)
         print_row(r, BOTTOM_COLS, "");
     }
     print_row(0, BOTTOM_COLS, title);
-    print_row(1, BOTTOM_COLS, "IP settings for GaugeBoy:");
     for (int i = 0; i < n; i++) {
-        print_row(3 + i, BOTTOM_COLS, lines[i]);
+        print_row(2 + i, BOTTOM_COLS, lines[i]);
     }
-    print_row(11, BOTTOM_COLS, "Name and password stay the same.");
-    print_row(13, BOTTOM_COLS, "This changes System Settings > Internet");
-    print_row(14, BOTTOM_COLS, "Settings for this slot. You can change");
-    print_row(15, BOTTOM_COLS, "it back there at any time.");
+    print_row(9, BOTTOM_COLS, "Enter NEW in System Settings >");
+    print_row(10, BOTTOM_COLS, "Internet Settings > Connection");
+    print_row(11, BOTTOM_COLS, "Settings > this slot > Change Settings:");
+    print_row(12, BOTTOM_COLS, " IP Address: Auto-Obtain No, then IP,");
+    print_row(13, BOTTOM_COLS, "  Subnet Mask (Mask), Gateway (Gate)");
+    print_row(14, BOTTOM_COLS, " DNS: Auto-Obtain No, then DNS 1, 2");
+    print_row(16, BOTTOM_COLS, "The 3DS shows 3 digits per part:");
+    print_row(17, BOTTOM_COLS, "192.168.0.11 = 192.168.000.011");
+    print_row(19, BOTTOM_COLS, "Then tap SETUP SLOT again to check.");
     for (int i = 0; i < CONFIRM_BUTTON_COUNT; i++) {
         draw_button(&confirm_buttons[i], false, false);
     }
@@ -600,13 +576,10 @@ void spike_ui_run(void)
             touchPosition tp;
             hidTouchRead(&tp);
             int i = button_at(confirm_buttons, CONFIRM_BUTTON_COUNT, tp.px, tp.py);
-            if (i >= 0 && confirm_buttons[i].action == BTN_SETUP_SAVE && worker != NULL) {
-                enqueue(BTN_SETUP_SAVE);
-            } else if (i >= 0 && confirm_buttons[i].action == BTN_SETUP_CANCEL) {
+            if (i >= 0 && confirm_buttons[i].action == BTN_SETUP_OK) {
                 LightLock_Lock(&shared.lock);
                 shared.confirm = false;
                 LightLock_Unlock(&shared.lock);
-                spike_logf(&spike, "SETUP SLOT cancelled; nothing changed");
             }
         } else if (down & KEY_TOUCH) {
             touchPosition tp;

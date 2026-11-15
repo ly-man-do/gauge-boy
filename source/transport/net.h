@@ -58,11 +58,6 @@ typedef struct {
 /* Read slot 1-3's saved IP settings. On failure err gets a reason. */
 bool net_slot_read(int slot, net_ip_settings_t *out, char *err, size_t err_len);
 
-/* Write slot 1-3's IP settings (only the fields above; the network name,
- * password, MTU and proxy are kept) and save them to the system
- * settings. Changes the 3DS's System Settings: only after the user has
- * confirmed. On failure err gets a reason and nothing is saved; on
- * success it gets a short note for the log. */
-bool net_slot_write(int slot, const net_ip_settings_t *in, char *err, size_t err_len);
+
 
 #endif
