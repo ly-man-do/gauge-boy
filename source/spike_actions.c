@@ -14,6 +14,7 @@ void spike_init(spike_t *s, tcp_transport_t *transport, elm_t *elm,
     s->log = log;
     s->log_ctx = log_ctx;
     s->start_ms = tp_now_ms();
+    s->net_info = NULL;
 
     elm_io_t io = tcp_transport_io(transport);
     elm_bind(elm, &io);
@@ -72,9 +73,20 @@ static void log_connect_failure(spike_t *s, tp_status_t st)
     }
 }
 
+static void log_net_info(spike_t *s)
+{
+    if (s->net_info != NULL) {
+        char info[160];
+        info[0] = '\0';
+        s->net_info(info, sizeof info);
+        spike_logf(s, "Network: %s", info);
+    }
+}
+
 static void do_connect(spike_t *s)
 {
     tcp_transport_t *t = s->transport;
+    log_net_info(s);
     spike_logf(s, "Connecting to %s:%u ...", t->host, (unsigned)t->port);
     uint64_t t0 = tp_now_ms();
     tp_status_t st = tcp_transport_connect(t, TP_CONNECT_TIMEOUT_MS);
@@ -101,6 +113,7 @@ static int ensure_connected(spike_t *s)
         return 0;
     }
 
+    log_net_info(s);
     spike_logf(s, "Not connected; connecting to %s:%u ...", t->host, (unsigned)t->port);
     uint64_t t0 = tp_now_ms();
     tp_status_t st = tcp_transport_ensure_connected(t, TP_CONNECT_TIMEOUT_MS);

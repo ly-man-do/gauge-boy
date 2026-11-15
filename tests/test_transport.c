@@ -4,6 +4,7 @@
 #define _DARWIN_C_SOURCE
 #endif
 
+#include <errno.h>
 #include <signal.h>
 
 #include "harness.h"
@@ -24,6 +25,13 @@ static void test_init_validates_address(void)
     CHECK_EQ_INT(tcp_transport_init(&t, "192.168.0.10", 0), TP_ERR_INVALID_ARG);
     CHECK_EQ_INT(tcp_transport_init(&t, NULL, 35000), TP_ERR_INVALID_ARG);
     CHECK_EQ_INT(tcp_transport_init(&t, "192.168.000.010.1", 35000), TP_ERR_INVALID_ARG);
+}
+
+static void test_normalize_errno(void)
+{
+    CHECK_EQ_INT(tp_normalize_errno(0), 0);
+    CHECK_EQ_INT(tp_normalize_errno(ECONNREFUSED), ECONNREFUSED);
+    CHECK_EQ_INT(tp_normalize_errno(-ENETDOWN), ENETDOWN); /* libctru socket() */
 }
 
 static void test_io_when_disconnected_fails(void)
@@ -234,6 +242,7 @@ void suite_transport(void)
 
     gb_suite("transport");
     RUN_TEST(test_init_validates_address);
+    RUN_TEST(test_normalize_errno);
     RUN_TEST(test_io_when_disconnected_fails);
     RUN_TEST(test_connect_and_run_elm_command);
     RUN_TEST(test_read_times_out);

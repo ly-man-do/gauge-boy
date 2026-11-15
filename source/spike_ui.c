@@ -284,6 +284,12 @@ void spike_ui_run(void)
     if (!net_ok) {
         spike_logf(&spike, "! Network service did not start (is Wi-Fi on?)");
     }
+    spike.net_info = net_describe;
+    {
+        char info[160];
+        net_describe(info, sizeof info);
+        spike_logf(&spike, "Network: %s", info);
+    }
     spike_logf(&spike, "Adapter %s:%u. Join its Wi-Fi in System Settings,",
                cfg.adapter_host, (unsigned)cfg.adapter_port);
     spike_logf(&spike, "then tap CONNECT and ATZ.");

@@ -4,6 +4,14 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- The adapter test app logs a `Network:` line at start-up and before every connect attempt: whether the 3DS is on Wi-Fi, the network name and saved-connection slot, and the 3DS's own IP address (or "no IP address").
+
+### Fixed
+
+- Connection errors showed a negative errno with no description (for example `errno -115` when the 3DS had no network). They now show the positive value and its meaning (`errno 115: Network interface is not configured`).
+
 ## [0.0.1] - 2026-11-14
 
 First test release of the M0 spike: an adapter test app for checking whether a New 3DS can talk to a Wi-Fi ELM327 adapter. It is not a finished diagnostics app yet.

@@ -26,12 +26,18 @@ typedef enum {
 
 typedef void (*spike_log_fn)(void *ctx, const char *line);
 
+/* Writes a one-line description of the console's network link (Wi-Fi
+ * state, network name, own IP) into out. */
+typedef void (*spike_net_info_fn)(char *out, size_t len);
+
 typedef struct {
     tcp_transport_t *transport;
     elm_t *elm;
     spike_log_fn log;
     void *log_ctx;
     uint64_t start_ms;   /* timestamps are relative to this */
+    spike_net_info_fn net_info; /* optional, NULL after spike_init; logged
+                                   as "Network: ..." before each connect */
 } spike_t;
 
 void spike_init(spike_t *s, tcp_transport_t *transport, elm_t *elm,

@@ -45,7 +45,7 @@ typedef struct {
     char host[TP_HOST_MAX];
     uint16_t port;
     int fd;                     /* -1 when not connected */
-    int last_errno;             /* errno of the last failure, 0 if none / peer closed */
+    int last_errno;             /* errno of the last failure (positive), 0 if none / peer closed */
     unsigned backoff_min_ms;
     unsigned backoff_max_ms;
     unsigned backoff_ms;        /* delay after the last failed attempt, 0 after success */
@@ -77,5 +77,9 @@ elm_io_t tcp_transport_io(tcp_transport_t *t);
 uint64_t tp_now_ms(void);
 
 const char *tp_status_str(tp_status_t status);
+
+/* errno as a positive value. libctru stores some socket errors negated
+ * (socket() on a 3DS with no network sets errno to -ENETDOWN). */
+int tp_normalize_errno(int err);
 
 #endif

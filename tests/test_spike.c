@@ -143,6 +143,35 @@ static void test_spike_unreachable_adapter_backs_off(void)
     CHECK_LOGGED(&cap, "Connecting to 127.0.0.1:");
 }
 
+static void fake_net_info(char *out, size_t len)
+{
+    snprintf(out, len, "Wi-Fi on, \"V-LINK\", 3DS IP 192.168.0.11");
+}
+
+static void test_spike_logs_network_before_connect(void)
+{
+    static capture_t cap;
+    static tcp_transport_t tp;
+    static elm_t elm;
+    spike_t s;
+    memset(&cap, 0, sizeof cap);
+    tcp_transport_init(&tp, "127.0.0.1", closed_port());
+    spike_init(&s, &tp, &elm, capture, &cap);
+
+    /* No hook (host default): no Network line. */
+    spike_run(&s, SPIKE_CONNECT);
+    CHECK(strstr(cap.text, "Network:") == NULL);
+
+    s.net_info = fake_net_info;
+    spike_run(&s, SPIKE_CONNECT);
+    CHECK_LOGGED(&cap, "] Network: Wi-Fi on, \"V-LINK\", 3DS IP 192.168.0.11\n");
+    /* The Network line comes before the connect attempt. */
+    const char *net = strstr(cap.text, "Network:");
+    CHECK(net != NULL && strstr(net, "Connecting to") != NULL);
+    /* errno is shown as a positive number. */
+    CHECK(strstr(cap.text, "(errno -") == NULL);
+}
+
 static void test_spike_labels(void)
 {
     for (int a = 0; a < SPIKE_ACTION_COUNT; a++) {
@@ -193,6 +222,7 @@ void suite_spike(void)
     RUN_TEST(test_spike_all_buttons_against_adapter);
     RUN_TEST(test_spike_auto_connects_and_reports_errors);
     RUN_TEST(test_spike_unreachable_adapter_backs_off);
+    RUN_TEST(test_spike_logs_network_before_connect);
     RUN_TEST(test_spike_labels);
     RUN_TEST(test_spike_header_fits_every_state);
     RUN_TEST(test_spike_header_text);

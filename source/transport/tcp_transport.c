@@ -82,16 +82,21 @@ void tcp_transport_close(tcp_transport_t *t)
     }
 }
 
+int tp_normalize_errno(int err)
+{
+    return err < 0 ? -err : err;
+}
+
 /* Drop the connection after an error; errno_value 0 means peer closed. */
 static void drop(tcp_transport_t *t, int errno_value)
 {
-    t->last_errno = errno_value;
+    t->last_errno = tp_normalize_errno(errno_value);
     tcp_transport_close(t);
 }
 
 static tp_status_t fail_socket(tcp_transport_t *t, int fd, tp_status_t status, int err)
 {
-    t->last_errno = err;
+    t->last_errno = tp_normalize_errno(err);
     if (fd >= 0) {
         close(fd);
     }
