@@ -195,7 +195,7 @@ static void do_vin(spike_t *s)
     static const int protocols[] = { 3, 6 };
     bool found = false;
     for (unsigned i = 0; i < sizeof protocols / sizeof protocols[0] && !found; i++) {
-        if (obd_assemble(r.lines, r.line_count, protocols[i], false, &reply) == OBD_OK) {
+        if (obd_assemble(&r, protocols[i], false, &reply) == OBD_OK) {
             found = obd_decode_vin(&reply, protocols[i], vin);
         }
     }

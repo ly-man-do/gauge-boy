@@ -10,23 +10,23 @@
 #include "obd/obd_reply.h"
 
 static obd_reply_t reply; /* large: keep off the stack */
-static char lines[ELM_MAX_LINES][ELM_LINE_MAX];
+static elm_response_t resp;
 
-/* Copies up to ELM_MAX_LINES lines (NULL-terminated list) into lines. */
-static int set_lines(const char *const *src)
+/* Copies up to ELM_MAX_LINES lines (NULL-terminated list) into resp. */
+static void set_lines(const char *const *src)
 {
     int n = 0;
-    memset(lines, 0, sizeof lines);
+    memset(&resp, 0, sizeof resp);
     for (; src[n] != NULL && n < ELM_MAX_LINES; n++) {
-        snprintf(lines[n], ELM_LINE_MAX, "%s", src[n]);
+        snprintf(resp.lines[n], ELM_LINE_MAX, "%s", src[n]);
     }
-    return n;
+    resp.line_count = n;
 }
 
 static obd_status_t run(const char *const *src, int protocol, bool headers)
 {
-    int n = set_lines(src);
-    return obd_assemble(lines, n, protocol, headers, &reply);
+    set_lines(src);
+    return obd_assemble(&resp, protocol, headers, &reply);
 }
 
 static void check_msg(int e, int m, const uint8_t *want, int n, int line)
@@ -253,9 +253,11 @@ static void test_bad_and_partial(void)
     CHECK_EQ_INT(run(shortsf, 6, true), OBD_ERR_NO_DATA);
 
     /* Unknown protocol and bad arguments. */
-    CHECK_EQ_INT(obd_assemble(lines, 0, 0, false, &reply), OBD_ERR_INVALID_ARG);
-    CHECK_EQ_INT(obd_assemble(lines, 1, 6, false, NULL), OBD_ERR_INVALID_ARG);
-    CHECK_EQ_INT(obd_assemble(lines, 0, 6, false, &reply), OBD_ERR_NO_DATA);
+    resp.line_count = 0;
+    CHECK_EQ_INT(obd_assemble(&resp, 0, false, &reply), OBD_ERR_INVALID_ARG);
+    CHECK_EQ_INT(obd_assemble(&resp, 6, false, NULL), OBD_ERR_INVALID_ARG);
+    CHECK_EQ_INT(obd_assemble(NULL, 6, false, &reply), OBD_ERR_INVALID_ARG);
+    CHECK_EQ_INT(obd_assemble(&resp, 6, false, &reply), OBD_ERR_NO_DATA);
 }
 
 static void test_limits(void)

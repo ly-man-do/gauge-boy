@@ -362,12 +362,13 @@ static void legacy_headers_on(builder_t *bld, const line_t *L, int protocol, int
     add_whole(bld, e, L->b + hdr, L->n - hdr - 1, bad);
 }
 
-obd_status_t obd_assemble(const char lines[][ELM_LINE_MAX], int line_count, int protocol,
-                          bool headers, obd_reply_t *out)
+obd_status_t obd_assemble(const elm_response_t *resp, int protocol, bool headers,
+                          obd_reply_t *out)
 {
-    if (out == NULL || (lines == NULL && line_count > 0) || line_count < 0) {
+    if (out == NULL || resp == NULL || resp->line_count < 0 || resp->line_count > ELM_MAX_LINES) {
         return OBD_ERR_INVALID_ARG;
     }
+    int line_count = resp->line_count;
     memset(out, 0, sizeof *out);
     obd_family_t family = obd_family(protocol);
     if (family == OBD_FAMILY_UNKNOWN) {
@@ -384,7 +385,7 @@ obd_status_t obd_assemble(const char lines[][ELM_LINE_MAX], int line_count, int 
 
     for (int i = 0; i < line_count; i++) {
         line_t L;
-        if (!parse_line(lines[i], family, can29, headers, &L)) {
+        if (!parse_line(resp->lines[i], family, can29, headers, &L)) {
             bad++;
             continue;
         }

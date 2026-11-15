@@ -11,7 +11,7 @@ static bool read_range(const elm_response_t *r, int protocol, uint8_t range_pid,
                        uint8_t bits[4], int *ecus)
 {
     static obd_reply_t reply;
-    if (obd_assemble(r->lines, r->line_count, protocol, false, &reply) != OBD_OK) {
+    if (obd_assemble(r, protocol, false, &reply) != OBD_OK) {
         return false;
     }
     bool any = false;

@@ -44,7 +44,7 @@ static elm_status_t read_codes(scan_t *sc, const char *cmd, uint8_t service, int
     if (st != ELM_OK) {
         return st;
     }
-    obd_status_t as = obd_assemble(r.lines, r.line_count, protocol, false, &reply);
+    obd_status_t as = obd_assemble(&r, protocol, false, &reply);
     *have = obd_decode_codes(as == OBD_OK ? &reply : NULL, protocol, service, list);
     return st;
 }
@@ -82,7 +82,7 @@ obd_link_result_t obd_diag_scan(elm_t *elm, bool reset, int current_year, obd_di
         if (lost(st)) {
             goto lost_link;
         }
-        if (st == ELM_OK && obd_assemble(r.lines, r.line_count, protocol, false, &reply) == OBD_OK) {
+        if (st == ELM_OK && obd_assemble(&r, protocol, false, &reply) == OBD_OK) {
             out->have_readiness = obd_decode_readiness(&reply, &out->readiness);
         }
     }
@@ -121,7 +121,7 @@ obd_link_result_t obd_diag_scan(elm_t *elm, bool reset, int current_year, obd_di
         out->stopped_at = OBD_DIAG_STEP_VIN;
         goto lost_link;
     }
-    if (st == ELM_OK && obd_assemble(r.lines, r.line_count, protocol, false, &reply) == OBD_OK &&
+    if (st == ELM_OK && obd_assemble(&r, protocol, false, &reply) == OBD_OK &&
         obd_decode_vin(&reply, protocol, out->vin)) {
         out->have_vin = true;
         out->model_year = obd_vin_model_year(out->vin, current_year);

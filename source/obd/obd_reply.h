@@ -76,13 +76,14 @@ typedef enum {
 obd_family_t obd_family(int protocol);
 
 /*
- * Assemble lines (as in elm_response_t) for the given ELM protocol
- * number (1-12) and header setting. Malformed or partial lines are
- * counted in out->bad_lines and skipped. Returns OBD_OK if at least one
- * message was found.
+ * Assemble the cleaned lines of an adapter reply for the given ELM
+ * protocol number (1-12) and header setting. Malformed or partial lines
+ * are counted in out->bad_lines and skipped. Returns OBD_OK if at least
+ * one message was found. (Takes the whole response: before C23, a
+ * char[][N] doesn't convert to const char[][N] without a cast.)
  */
-obd_status_t obd_assemble(const char lines[][ELM_LINE_MAX], int line_count, int protocol,
-                          bool headers, obd_reply_t *out);
+obd_status_t obd_assemble(const elm_response_t *resp, int protocol, bool headers,
+                          obd_reply_t *out);
 
 const char *obd_status_str(obd_status_t status);
 
