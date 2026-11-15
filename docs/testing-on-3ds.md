@@ -160,6 +160,7 @@ File a [compatibility report](https://github.com/ly-man-do/gauge-boy/issues/new?
 | "Unsupported device" | It's an Old 3DS / 2DS. GaugeBoy needs a New 3DS model. |
 | Adapter network not listed | Ignition on? Adapter LED lit? The 3DS can't see ad-hoc or 5 GHz networks. |
 | `Network error (errno 115 at socket(): ...)` | The 3DS isn't on the adapter's Wi-Fi. Tap CONNECT again and read the Wi-Fi join line above it. As a manual fallback, open the Rosalina menu (**L + Down + Select**) > **System configuration** > **Control wireless connection**, force the adapter's slot, then return to GaugeBoy. |
+| Adapter joined, but **Test Connection** fails with `003-2002` and CONNECT gives errno 115 | The 3DS rejects networks without internet. Answer its connection test with `tools/fake_conntest.py` on a computer on the adapter's network (see `tools/README.md`, "Fake 3DS connection test"). |
 | `Network:` shows your home network | The 3DS picked your home Wi-Fi. Move out of its range (or switch the router's Wi-Fi off) and relaunch. |
 | Joined, but every command says "did not answer" or "unreachable" | Set the manual IP (step 3.5) and check `host`/`port` in `config.ini` against the adapter's manual. |
 | Garbled or odd replies | Keep the log: clone adapters misbehave, and the raw lines are what's needed to handle them. |

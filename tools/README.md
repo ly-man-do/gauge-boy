@@ -56,6 +56,64 @@ The emulator is not a car or a real adapter: replies are instant or fixed-delay,
 quirks, and the `car` scenario has no bank 2 fuel trims (the Ridgeline V6 has two banks). Real
 adapter and vehicle behavior is checked on hardware (see the M0 hardware test issues).
 
+## Fake 3DS connection test
+
+The 3DS joins a Wi-Fi OBD-II adapter's network (e.g. V-LINK) but fails its internet connection
+test (error `003-2002`), and then won't let apps use the network. `fake_conntest.py` answers that
+test from a computer on the same network, so the 3DS stays on it. It is the proof for a small
+helper device on the adapter's network (Beads `gauge-boy-7v5.22`). Python 3 standard library only.
+
+It runs:
+
+- a DNS server on UDP 53: the test names (`conntest.nintendowifi.net`, `ctest.cdn.nintendo.net`,
+  `nncs1/nncs2.app.nintendowifi.net`) resolve to this computer, every other name gets "not found"
+  (there is no internet to forward to; `--answer-all` answers every name with this computer);
+- a web server on TCP 80: any page gets `200 OK` with `X-Organization: Nintendo`.
+
+Every DNS lookup and page request is logged, so you can see the 3DS use it.
+
+### Before you start (Mac)
+
+- **Quit VPN apps** (e.g. Mullvad) and Docker Desktop for the test. They can hold DNS port 53 and
+  block other devices from reaching this computer. The script says so if port 53 is taken.
+- If macOS asks whether Python may accept incoming connections, choose **Allow**.
+
+### Test 1: at home (proves the fake answer works)
+
+1. Mac on your home Wi-Fi. From the repo root: `python3 tools/fake_conntest.py`. It prints the IP
+   address to use.
+2. 3DS: **System Settings** > **Internet Settings** > **Connection Settings** > your home slot >
+   **Change Settings** > **DNS**: Auto-Obtain **No**, Primary DNS = that IP. Save.
+3. Run **Test Connection** on that slot.
+4. **Pass:** the test succeeds and the Mac log shows `DNS <3DS IP>: conntest.nintendowifi.net A`
+   and `HTTP <3DS IP>: GET ... 200 test page`. Other names get "not found", so the 3DS can only
+   have passed through this script.
+5. Set the home slot's DNS back to Auto-Obtain **Yes** afterwards.
+
+### Test 2: in the truck with the V-LINK (the real target)
+
+Needs a Mac laptop in the truck.
+
+1. Adapter plugged in, ignition on. Disconnect your phone from `V-LINK` (adapters may allow only a
+   few clients). Join the Mac to `V-LINK`.
+2. Run `python3 tools/fake_conntest.py` and note the IP it prints (a `192.168.0.x` address).
+3. 3DS V-LINK slot > **Change Settings**: IP Address Auto-Obtain **Yes**; DNS Auto-Obtain **No**,
+   Primary DNS = the Mac's IP. Save, then **Test Connection**: it should now pass.
+4. Open GaugeBoy (adapter `192.168.0.10:35000`) and tap **CONNECT**, then **ATZ**.
+
+If step 4 connects, the 3DS can use the V-LINK directly once something on its network answers the
+test. The long-term helper would be a tiny device (e.g. an ESP32) joined to `V-LINK` at a fixed IP
+doing the same job, pending the owner's go / no-go decision (`gauge-boy-7v5.13`).
+
+### Options
+
+| Option | Default | Notes |
+|---|---|---|
+| `--dns-port` / `--http-port` | `53` / `80` | The 3DS always uses 53 and 80; other ports are for local checks with `dig -p` and `curl`. |
+| `--ip` | auto | Address handed out for the test names (default: this computer's address on the asking device's network). |
+| `--answer-all` | off | Answer every name, not just the test names. |
+| `--bind` | `0.0.0.0` | macOS only lets ordinary users use ports below 1024 on all addresses; a specific address needs `sudo`. |
+
 ## .cia packaging
 
 - `get-cia-tools.sh` downloads pinned makerom (v0.18.4) and bannertool (v1.2.2) into
