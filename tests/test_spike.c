@@ -84,6 +84,7 @@ static void test_spike_all_buttons_against_adapter(void)
     CHECK_LOGGED(&cap, "= 12.60 V");
     CHECK_LOGGED(&cap, "] < 0: 49 02 01 35 46 50\n");
     CHECK_LOGGED(&cap, "] < 2: 31 32 33 34 35 36 37\n");
+    CHECK_LOGGED(&cap, "= VIN 5FPYK1658B1234567: Honda, model year 2011");
     CHECK(strstr(cap.text, "] !") == NULL);
 }
 

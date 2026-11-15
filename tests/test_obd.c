@@ -5,6 +5,8 @@
 #include "harness.h"
 #include "obd/obd_codes.h"
 #include "obd/obd_readiness.h"
+#include "obd/obd_vin.h"
+#include "obd/dtc.h"
 #include "obd/obd_reply.h"
 
 static obd_reply_t reply; /* large: keep off the stack */
@@ -499,6 +501,106 @@ static void test_readiness_from_reply(void)
     CHECK(!obd_decode_readiness(NULL, &rd));
 }
 
+/* ---------- VIN (Mode 09 PID 02) ---------- */
+
+/* Made-up VINs with valid check digits. */
+#define HONDA_VIN "2HJYK16618H000123"
+
+static void test_vin_decode(void)
+{
+    char vin[OBD_VIN_LEN + 1];
+
+    /* ISO 9141-2 (the Ridgeline's layout), headers off; frames in any order. */
+    static const char *const legacy[] = {
+        "49 02 01 00 00 00 32", "49 02 02 48 4A 59 4B", "49 02 04 38 48 30 30",
+        "49 02 03 31 36 36 31", "49 02 05 30 31 32 33", NULL,
+    };
+    run(legacy, 3, false);
+    CHECK(obd_decode_vin(&reply, 3, vin));
+    CHECK_EQ_STR(vin, HONDA_VIN);
+
+    /* A missing frame: no VIN rather than a wrong one. */
+    static const char *const gap[] = {
+        "49 02 01 00 00 00 32", "49 02 02 48 4A 59 4B", "49 02 03 31 36 36 31",
+        "49 02 05 30 31 32 33", NULL,
+    };
+    run(gap, 3, false);
+    CHECK(!obd_decode_vin(&reply, 3, vin));
+    CHECK_EQ_STR(vin, "");
+
+    /* CAN headers off, multi-frame (ELM327 datasheet layout). */
+    static const char *const can[] = {
+        "014", "0: 49 02 01 32 48 4A", "1: 59 4B 31 36 36 31 38", "2: 48 30 30 30 31 32 33", NULL,
+    };
+    run(can, 6, false);
+    CHECK(obd_decode_vin(&reply, 6, vin));
+    CHECK_EQ_STR(vin, HONDA_VIN);
+
+    /* CAN headers on, 29-bit, transmission ECU refuses first. */
+    static const char *const can29[] = {
+        "18 DA F1 18 03 7F 09 12", "18 DA F1 10 10 14 49 02 01 32 48 4A",
+        "18 DA F1 10 21 59 4B 31 36 36 31 38", "18 DA F1 10 22 48 30 30 30 31 32 33", NULL,
+    };
+    run(can29, 7, true);
+    CHECK(obd_decode_vin(&reply, 7, vin));
+    CHECK_EQ_STR(vin, HONDA_VIN);
+
+    /* Not a VIN reply. */
+    static const char *const other[] = { "41 00 BE 3E B8 11", NULL };
+    run(other, 6, false);
+    CHECK(!obd_decode_vin(&reply, 6, vin));
+    CHECK(!obd_decode_vin(NULL, 6, vin));
+}
+
+static void test_vin_facts(void)
+{
+    CHECK(obd_vin_chars_ok(HONDA_VIN));
+    CHECK(obd_vin_check_digit_ok(HONDA_VIN));
+    CHECK(obd_vin_check_digit_ok("1M8GDM9AXKP042788"));   /* check digit X */
+    CHECK(!obd_vin_check_digit_ok("2HJYK16628H000123"));  /* wrong check digit */
+    CHECK(!obd_vin_chars_ok("2HJYK1661OH000123"));        /* letter O not allowed */
+    CHECK(!obd_vin_chars_ok("2HJYK16618H00012"));         /* 16 characters */
+
+    /* Model year: 8 = 2008 or 2038; A = 1980 or 2010; K = 1989 or 2019. */
+    CHECK_EQ_INT(obd_vin_model_year(HONDA_VIN, 2026), 2008);
+    CHECK_EQ_INT(obd_vin_model_year(HONDA_VIN, 0), 2008);
+    CHECK_EQ_INT(obd_vin_model_year("5FNYF4H59AB000042", 2026), 2010);
+    CHECK_EQ_INT(obd_vin_model_year("5FNYF4H59AB000042", 0), 2010);  /* position 7 is a letter */
+    CHECK_EQ_INT(obd_vin_model_year("1M8GDM9AXKP042788", 0), 1989);  /* position 7 is a digit */
+    CHECK_EQ_INT(obd_vin_model_year("1M8GDM9AXKP042788", 2026), 2019);
+    CHECK_EQ_INT(obd_vin_model_year("bad", 2026), 0);
+
+    /* Maker from the WMI, and the make for manufacturer-specific codes. */
+    obd_vin_maker_t mk;
+    CHECK(obd_vin_maker(HONDA_VIN, &mk));
+    CHECK_EQ_STR(mk.maker, "Honda");
+    int honda = obd_dtc_make_find(mk.dtc_make);
+    CHECK(honda >= 0);
+    CHECK_EQ_STR(obd_dtc_text_for("P1456", honda),
+                 "Evaporative Emission Control System Leak Detected Fuel Tank System");
+    CHECK(obd_vin_maker("1C4RJFAG0FC000001", &mk));
+    CHECK(strstr(mk.maker, "Jeep") != NULL);
+    CHECK(obd_dtc_make_find(mk.dtc_make) >= 0);
+    CHECK(!obd_vin_maker("ZZZ00000000000000", &mk));
+    CHECK(mk.maker == NULL);
+
+    /* Every listed maker's DTC make is known to the description tables. */
+    static const char *const sample_wmis[] = {
+        "1HG", "19U", "4T1", "JTH", "1FA", "1LN", "1ME", "1G1", "1GT", "1G4", "1G6", "1G2",
+        "1G3", "1G8", "1C3", "1B3", "1J4", "1P3", "1N4", "JNK", "JM1", "JA3", "JF1", "KNA",
+        "JS2", "WVW", "WAU", "WBA", "WDB", "SAJ", NULL,
+    };
+    for (int i = 0; sample_wmis[i] != NULL; i++) {
+        char v[OBD_VIN_LEN + 1];
+        snprintf(v, sizeof v, "%s00000000000000", sample_wmis[i]);
+        CHECK(obd_vin_maker(v, &mk));
+        if (mk.dtc_make != NULL && obd_dtc_make_find(mk.dtc_make) < 0) {
+            gb_check_failf(__FILE__, __LINE__, "%s: make %s unknown to the DTC tables",
+                           sample_wmis[i], mk.dtc_make);
+        }
+    }
+}
+
 void suite_obd(void)
 {
     gb_suite("obd");
@@ -516,4 +618,6 @@ void suite_obd(void)
     RUN_TEST(test_readiness_spark);
     RUN_TEST(test_readiness_diesel);
     RUN_TEST(test_readiness_from_reply);
+    RUN_TEST(test_vin_decode);
+    RUN_TEST(test_vin_facts);
 }

@@ -3,8 +3,11 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "data/config.h"
+#include "obd/obd_reply.h"
+#include "obd/obd_vin.h"
 #include "version.h"
 
 void spike_init(spike_t *s, tcp_transport_t *transport, elm_t *elm,
@@ -168,6 +171,42 @@ static elm_status_t send_logged(spike_t *s, const char *cmd, unsigned timeout_ms
     return r.status;
 }
 
+/* 0902: log the reply, then decode the VIN. The spike doesn't keep the
+ * protocol, so try the legacy layout (J1850 / ISO 9141-2 / KWP) and then
+ * CAN, with headers off as the adapter runs here. */
+static void do_vin(spike_t *s)
+{
+    static elm_response_t r;
+    static obd_reply_t reply;
+    spike_logf(s, "> 0902");
+    uint64_t t0 = tp_now_ms();
+    elm_command(s->elm, "0902", ELM_TIMEOUT_SEARCH_MS, &r);
+    log_reply(s, &r, t0);
+    if (r.status != ELM_OK) {
+        return;
+    }
+
+    char vin[OBD_VIN_LEN + 1] = "";
+    static const int protocols[] = { 3, 6 };
+    bool found = false;
+    for (unsigned i = 0; i < sizeof protocols / sizeof protocols[0] && !found; i++) {
+        if (obd_assemble(r.lines, r.line_count, protocols[i], false, &reply) == OBD_OK) {
+            found = obd_decode_vin(&reply, protocols[i], vin);
+        }
+    }
+    if (!found) {
+        spike_logf(s, "! No VIN in the reply");
+        return;
+    }
+    time_t now = time(NULL);
+    struct tm *tm = gmtime(&now);
+    int year = obd_vin_model_year(vin, tm != NULL ? tm->tm_year + 1900 : 0);
+    obd_vin_maker_t mk;
+    bool known = obd_vin_maker(vin, &mk);
+    spike_logf(s, "= VIN %s: %s, model year %d%s", vin, known ? mk.maker : "maker not listed", year,
+               obd_vin_check_digit_ok(vin) ? "" : " (check digit doesn't match)");
+}
+
 static void do_protocol(spike_t *s)
 {
     elm_response_t r;
@@ -224,7 +263,7 @@ void spike_run(spike_t *s, spike_action_t action)
         do_voltage(s);
         break;
     case SPIKE_VIN:
-        send_logged(s, "0902", ELM_TIMEOUT_SEARCH_MS);
+        do_vin(s);
         break;
     case SPIKE_CONNECT:
     case SPIKE_ACTION_COUNT:
