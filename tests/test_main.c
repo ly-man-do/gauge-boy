@@ -7,6 +7,7 @@ void suite_transport(void);
 void suite_data(void);
 void suite_spike(void);
 void suite_conntest(void);
+void suite_obd(void);
 
 int main(void)
 {
@@ -16,5 +17,6 @@ int main(void)
     suite_data();
     suite_spike();
     suite_conntest();
+    suite_obd();
     return gb_test_summary();
 }
