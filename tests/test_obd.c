@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "obd/obd_codes.h"
 #include "obd/obd_reply.h"
 
 static obd_reply_t reply; /* large: keep off the stack */
@@ -270,6 +271,137 @@ static void test_limits(void)
     CHECK_EQ_INT(run(huge, 6, true), OBD_ERR_NO_DATA);
 }
 
+/* ---------- trouble codes (Mode 03 / 07 / 0A) ---------- */
+
+static obd_code_list_t codes;
+
+static void decode(const char *const *src, int protocol, bool headers, uint8_t service)
+{
+    run(src, protocol, headers);
+    CHECK(obd_decode_codes(&reply, protocol, service, &codes));
+}
+
+#define CHECK_CODES(...)                                                         \
+    do {                                                                         \
+        static const char *const want_[] = { __VA_ARGS__ };                      \
+        int n_ = (int)(sizeof want_ / sizeof want_[0]);                          \
+        CHECK_EQ_INT(codes.count, n_);                                           \
+        for (int i_ = 0; i_ < n_ && i_ < codes.count; i_++) {                    \
+            CHECK_EQ_STR(codes.code[i_].code, want_[i_]);                        \
+        }                                                                        \
+    } while (0)
+
+static void test_code_from_bytes(void)
+{
+    char c[6];
+    obd_code_from_bytes(0x01, 0x71, c);
+    CHECK_EQ_STR(c, "P0171");
+    obd_code_from_bytes(0x20, 0x96, c);
+    CHECK_EQ_STR(c, "P2096");
+    obd_code_from_bytes(0x14, 0x56, c);
+    CHECK_EQ_STR(c, "P1456");
+    obd_code_from_bytes(0x41, 0x23, c);
+    CHECK_EQ_STR(c, "C0123");
+    obd_code_from_bytes(0x81, 0x00, c);
+    CHECK_EQ_STR(c, "B0100");
+    obd_code_from_bytes(0xC1, 0x00, c);
+    CHECK_EQ_STR(c, "U0100");
+    obd_code_from_bytes(0xFF, 0xFF, c);
+    CHECK_EQ_STR(c, "U3FFF");
+}
+
+static void test_codes_can(void)
+{
+    /* Headers off: count byte then codes. */
+    static const char *const two[] = { "43 02 01 33 01 34", NULL };
+    decode(two, 6, false, OBD_SERVICE_STORED);
+    CHECK_CODES("P0133", "P0134");
+    CHECK_EQ_INT(codes.ecus_answered, 1);
+    CHECK_EQ_INT(codes.bad_messages, 0);
+
+    /* No codes. */
+    static const char *const none[] = { "43 00", NULL };
+    decode(none, 6, false, OBD_SERVICE_STORED);
+    CHECK_EQ_INT(codes.count, 0);
+    CHECK_EQ_INT(codes.ecus_answered, 1);
+
+    /* Many codes: multi-frame (5 codes = 12 bytes). */
+    static const char *const many[] = {
+        "00C", "0: 43 05 01 71 01 72 03", "1: 00 04 20 C1 00 41 23", NULL,
+    };
+    decode(many, 6, false, OBD_SERVICE_STORED);
+    CHECK_CODES("P0171", "P0172", "P0300", "P0420", "U0100");
+
+    /* Headers on: engine and transmission, the same code listed once. */
+    static const char *const ecus[] = {
+        "7E8 06 47 02 01 71 04 20", "7E9 04 47 01 07 00", "7EA 04 47 01 01 71", NULL,
+    };
+    decode(ecus, 6, true, OBD_SERVICE_PENDING);
+    CHECK_CODES("P0171", "P0420", "P0700");
+    CHECK_EQ_INT(codes.ecus_answered, 3);
+    CHECK(codes.code[2].has_ecu && codes.code[2].ecu == 0x7E9);
+
+    /* Permanent codes refused (a 2008 car): 7F 0A 11. */
+    static const char *const refused[] = { "7E8 03 7F 0A 11", NULL };
+    decode(refused, 6, true, OBD_SERVICE_PERMANENT);
+    CHECK_EQ_INT(codes.count, 0);
+    CHECK_EQ_INT(codes.ecus_answered, 0);
+    CHECK_EQ_INT(codes.ecus_refused, 1);
+
+    /* A count larger than the bytes present: keep what arrived. */
+    static const char *const cut[] = { "43 03 01 71 01", NULL };
+    decode(cut, 6, false, OBD_SERVICE_STORED);
+    CHECK_CODES("P0171");
+    CHECK_EQ_INT(codes.bad_messages, 1);
+}
+
+static void test_codes_legacy(void)
+{
+    /* ISO 9141-2, headers off: three codes per frame, 00 00 padding. */
+    static const char *const one[] = { "43 01 33 00 00 00 00", NULL };
+    decode(one, 3, false, OBD_SERVICE_STORED);
+    CHECK_CODES("P0133");
+    CHECK_EQ_INT(codes.ecus_answered, 1);
+
+    static const char *const four[] = { "43 01 71 01 72 03 00", "43 04 20 00 00 00 00", NULL };
+    decode(four, 3, false, OBD_SERVICE_STORED);
+    CHECK_CODES("P0171", "P0172", "P0300", "P0420");
+
+    /* A Honda code on the Ridgeline's protocol. */
+    static const char *const honda[] = { "47 14 56 00 00 00 00", NULL };
+    decode(honda, 3, false, OBD_SERVICE_PENDING);
+    CHECK_CODES("P1456");
+
+    /* All padding: no codes. */
+    static const char *const empty[] = { "43 00 00 00 00 00 00", NULL };
+    decode(empty, 3, false, OBD_SERVICE_STORED);
+    CHECK_EQ_INT(codes.count, 0);
+    CHECK_EQ_INT(codes.ecus_answered, 1);
+
+    /* Headers on (J1850 VPW), ECU 0x10. */
+    static const char *const vpw[] = { "48 6B 10 43 01 33 00 00 00 00 9A", NULL };
+    decode(vpw, 2, true, OBD_SERVICE_STORED);
+    CHECK_CODES("P0133");
+    CHECK(codes.code[0].has_ecu && codes.code[0].ecu == 0x10);
+}
+
+static void test_codes_bad(void)
+{
+    /* NO DATA from the adapter: nothing assembled, empty list. */
+    CHECK(obd_decode_codes(NULL, 6, OBD_SERVICE_STORED, &codes));
+    CHECK_EQ_INT(codes.count, 0);
+    CHECK_EQ_INT(codes.ecus_answered, 0);
+
+    /* Wrong service in the reply (a 41 reply to a 03 request). */
+    static const char *const wrong[] = { "41 00 BE 3E B8 11", NULL };
+    decode(wrong, 6, false, OBD_SERVICE_STORED);
+    CHECK_EQ_INT(codes.count, 0);
+    CHECK_EQ_INT(codes.bad_messages, 1);
+
+    /* Bad service number. */
+    CHECK(!obd_decode_codes(&reply, 6, 0x01, &codes));
+}
+
 void suite_obd(void)
 {
     gb_suite("obd");
@@ -280,4 +412,8 @@ void suite_obd(void)
     RUN_TEST(test_can_headers_on);
     RUN_TEST(test_bad_and_partial);
     RUN_TEST(test_limits);
+    RUN_TEST(test_code_from_bytes);
+    RUN_TEST(test_codes_can);
+    RUN_TEST(test_codes_legacy);
+    RUN_TEST(test_codes_bad);
 }
