@@ -83,39 +83,54 @@ static const button_t buttons[] = {
 };
 #define BUTTON_COUNT ((int)(sizeof buttons / sizeof buttons[0]))
 
-/* Main menu, on the DIAG and SETUP screens: 5-row (40 px) buttons. */
-static const button_t menu_buttons[] = {
-    { "METER", BTN_MENU_METER, 0,  1, 12, 5 },
-    { "DIAG",  BTN_MENU_DIAG,  13, 1, 13, 5 },
-    { "TRIM",  BTN_MENU_TRIM,  27, 1, 12, 5 },
-    { "FUN",   BTN_MENU_FUN,   0,  7, 12, 5 },
-    { "LOG",   BTN_MENU_LOG,   13, 7, 13, 5 },
-    { "SETUP", BTN_MENU_SETUP, 27, 7, 12, 5 },
+/* Layout (bottom screen, 8x8 cells, 40x30): big buttons, at least 40 px
+ * (5 cells) each way; BACK bottom-left, the screen's action bottom-right
+ * (gauge-boy-82l.8 / bxf.14). */
+
+/* HOME: 3x2 grid of big buttons. */
+static const button_t home_buttons[] = {
+    { "METER", BTN_MENU_METER, 0,  3, 12, 9 },
+    { "DIAG",  BTN_MENU_DIAG,  13, 3, 13, 9 },
+    { "TRIM",  BTN_MENU_TRIM,  27, 3, 12, 9 },
+    { "FUN",   BTN_MENU_FUN,   0, 14, 12, 9 },
+    { "LOG",   BTN_MENU_LOG,   13, 14, 13, 9 },
+    { "SETUP", BTN_MENU_SETUP, 27, 14, 12, 9 },
 };
-#define MENU_BUTTON_COUNT ((int)(sizeof menu_buttons / sizeof menu_buttons[0]))
+#define HOME_BUTTON_COUNT ((int)(sizeof home_buttons / sizeof home_buttons[0]))
+
+/* DIAG: tabs across the top, a paged list (3 rows of 5 cells), then
+ * BACK < page > SCAN. */
+#define BTN_PAGE_PREV  (-40)
+#define BTN_PAGE_NEXT  (-41)
+#define BTN_LIST_ROW   (-50)   /* -50 - row on the page */
+#define LIST_FIRST_ROW 7
+#define LIST_ROW_H     5
+#define LIST_ROW_PITCH 6
+#define LIST_PAGE_ROWS 3
 
 static const button_t diag_buttons[] = {
-    { "SCAN",      BTN_DIAG_SCAN,    0,  13, 12, 5 },
-    { "STORED",    BTN_TAB_STORED,   13, 13, 13, 5 },
-    { "PENDING",   BTN_TAB_PENDING,  27, 13, 12, 5 },
-    { "PERMANENT", BTN_TAB_PERM,     0,  19, 12, 5 },  /* hidden if unsupported */
-    { "READINESS", BTN_TAB_READY,    13, 19, 13, 5 },
-    { "OLDER ^",   BTN_SCROLL_OLDER, 0,  24, 12, 5 },
-    { "NEWER v",   BTN_SCROLL_NEWER, 27, 24, 12, 5 },
+    { "STORED",  BTN_TAB_STORED,  0,  1, 9, 5 },
+    { "PENDING", BTN_TAB_PENDING, 10, 1, 9, 5 },
+    { "PERM",    BTN_TAB_PERM,    20, 1, 9, 5 },  /* hidden if unsupported */
+    { "READY",   BTN_TAB_READY,   30, 1, 9, 5 },
+    { "BACK",    BTN_BACK,        0,  25, 11, 5 },
+    { "<",       BTN_PAGE_PREV,   12, 25, 6, 5 },
+    { ">",       BTN_PAGE_NEXT,   22, 25, 6, 5 },
+    { "SCAN",    BTN_DIAG_SCAN,   29, 25, 10, 5 },
 };
 #define DIAG_BUTTON_COUNT ((int)(sizeof diag_buttons / sizeof diag_buttons[0]))
 
+/* SETUP: 2x2 grid, BACK. */
 static const button_t setup_buttons[] = {
-    { NULL,           BTN_WIFI_SLOT,    0,  13, 12, 5 },
-    { "SETUP SLOT",   BTN_SETUP_SLOT,   13, 13, 13, 5 },
-    { "SAVE LOG",     BTN_SAVE_LOG,     27, 13, 12, 5 },
-    { "ADAPTER TEST", BTN_TEST_SCREEN,  0,  19, 12, 5 },
-    { "OLDER ^",      BTN_SCROLL_OLDER, 0,  24, 12, 5 },
-    { "NEWER v",      BTN_SCROLL_NEWER, 27, 24, 12, 5 },
+    { NULL,           BTN_WIFI_SLOT,   0,  2, 19, 9 },
+    { "SETUP SLOT",   BTN_SETUP_SLOT,  20, 2, 19, 9 },
+    { "SAVE LOG",     BTN_SAVE_LOG,    0, 13, 19, 9 },
+    { "ADAPTER TEST", BTN_TEST_SCREEN, 20, 13, 19, 9 },
+    { "BACK",         BTN_BACK,        0, 25, 11, 5 },
 };
 #define SETUP_BUTTON_COUNT ((int)(sizeof setup_buttons / sizeof setup_buttons[0]))
 
-typedef enum { SCREEN_DIAG, SCREEN_SETUP, SCREEN_TEST } screen_t;
+typedef enum { SCREEN_HOME, SCREEN_DIAG, SCREEN_SETUP, SCREEN_TEST } screen_t;
 
 /* Shown instead of the buttons above while the setup screen is open. */
 static const button_t confirm_buttons[] = {
@@ -479,43 +494,68 @@ static void clear_rows(int first, int last)
     }
 }
 
-/* DIAG top screen: header, scan progress, then the panel (scrollable). */
-static char diag_lines[DIAG_VIEW_MAX][DIAG_VIEW_COLS + 1];
+/* DIAG / HOME top screen: header, title or scan progress, fact rows,
+ * then the selected row's full text (DIAG). */
+static diag_item_t items[DIAG_ITEMS_MAX];
+static char top_lines[DIAG_VIEW_MAX][DIAG_VIEW_COLS + 1];
 
-static int diag_line_count(diag_tab_t tab)
+/* Rows of the current tab (from the last scan). */
+static int diag_item_count(diag_tab_t tab)
 {
     LightLock_Lock(&shared.lock);
-    int n = diag_view_lines(&shared.diag, tab, DIAG_VIEW_COLS, diag_lines, DIAG_VIEW_MAX);
+    int n = diag_items(&shared.diag, tab, items, DIAG_ITEMS_MAX);
     LightLock_Unlock(&shared.lock);
     return n;
 }
 
-static void draw_diag_top(int scroll, diag_tab_t tab, int busy, bool connected)
+static void draw_diag_top(bool home, diag_tab_t tab, int selected, int busy, bool connected)
 {
     char header[TOP_COLS + 1];
-    char status[TOP_COLS + 1];
-    int n = diag_line_count(tab);
+    char title[TOP_COLS + 1];
+    char empty[TOP_COLS + 1];
 
     LightLock_Lock(&shared.lock);
     bool scanning = shared.scanning;
     obd_diag_step_t step = shared.scan_step;
+    int nf = diag_facts(&shared.diag, TOP_COLS, top_lines, 10);
+    int n = diag_items(&shared.diag, tab, items, DIAG_ITEMS_MAX);
+    snprintf(empty, sizeof empty, "%s", diag_empty_text(&shared.diag, tab));
     LightLock_Unlock(&shared.lock);
 
     spike_format_header(header, sizeof header, connected, busy);
     if (scanning) {
-        snprintf(status, sizeof status, "-- Scanning: %s... --", obd_diag_step_str(step));
+        snprintf(title, sizeof title, ">> Scanning: %s...", obd_diag_step_str(step));
+    } else if (home) {
+        snprintf(title, sizeof title, "GaugeBoy: OBD-II Deluxe");
     } else {
-        snprintf(status, sizeof status, "-- DIAG: %s%s --", diag_tab_name(tab),
-                 scroll > 0 ? " (scrolled: tap NEWER)" : "");
+        snprintf(title, sizeof title, "DIAG: %s (%d)", diag_tab_name(tab), n);
     }
 
     consoleSelect(&top_console);
     printf("\x1b[0m");
     print_row(0, TOP_COLS, header);
-    print_row(1, TOP_COLS, status);
-    for (int i = 0; i < LOG_ROWS; i++) {
-        int k = scroll + i;
-        print_row(LOG_FIRST_ROW + i, TOP_COLS, k < n ? diag_lines[k] : "");
+    print_row(1, TOP_COLS, "-------------------------------------------------");
+    print_row(2, TOP_COLS, title);
+    int row = 4;
+    for (int i = 0; i < nf && row < TOP_ROWS; i++) {
+        print_row(row++, TOP_COLS, top_lines[i]);
+    }
+    print_row(row++, TOP_COLS, "");
+    if (home) {
+        print_row(row++, TOP_COLS, "Tap DIAG, then SCAN with the engine running.");
+    } else if (n == 0) {
+        print_row(row++, TOP_COLS, empty);
+    } else if (selected >= 0 && selected < n) {
+        static char wrapped[8][DIAG_VIEW_COLS + 1];
+        int w = diag_wrap(items[selected].detail, TOP_COLS, 2, wrapped, 8);
+        for (int i = 0; i < w && row < TOP_ROWS; i++) {
+            print_row(row++, TOP_COLS, wrapped[i]);
+        }
+    } else {
+        print_row(row++, TOP_COLS, "Tap a row for its full description.");
+    }
+    while (row < TOP_ROWS) {
+        print_row(row++, TOP_COLS, "");
     }
 }
 
@@ -556,7 +596,9 @@ static void draw_confirm(void)
 typedef struct {
     screen_t screen;
     diag_tab_t tab;
-    const char *notice;        /* one-line message under the menu, or NULL */
+    int selected;              /* DIAG list row selected, -1 = none */
+    int page;
+    const char *notice;        /* one-line message, or NULL */
     bool permanent_hidden;
 } ui_state_t;
 
@@ -611,6 +653,22 @@ static void draw_list(const button_t *list, int count, uint64_t now, int busy, i
     }
 }
 
+/* One DIAG list row: a 5-cell-high bar with the text in its middle line. */
+static void draw_list_row(int slot, const char *text, bool selected)
+{
+    int top = LIST_FIRST_ROW + slot * LIST_ROW_PITCH;
+    printf("%s", selected ? "\x1b[42;30m" : "\x1b[47;30m");
+    for (int r = 0; r < LIST_ROW_H; r++) {
+        printf("\x1b[%d;1H %-37.37s ", top + r + 1, r == LIST_ROW_H / 2 ? text : "");
+    }
+    printf("\x1b[0m");
+}
+
+static int page_count(int n)
+{
+    return n == 0 ? 1 : (n + LIST_PAGE_ROWS - 1) / LIST_PAGE_ROWS;
+}
+
 static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t now, int busy,
                         bool full)
 {
@@ -619,6 +677,7 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
     LightLock_Lock(&shared.lock);
     bool confirm = shared.confirm;
     bool cel_on = shared.diag.have_readiness && shared.diag.readiness.mil_on;
+    bool scanning = shared.scanning;
     LightLock_Unlock(&shared.lock);
     static bool cleared_after_confirm = true;
     if (confirm) {
@@ -652,27 +711,47 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
     snprintf(line, sizeof line, " %s:%u", cfg->adapter_host, (unsigned)cfg->adapter_port);
     printf("%-30.30s", line);
 
-    draw_list(menu_buttons, MENU_BUTTON_COUNT, now, busy,
-              ui->screen == SCREEN_DIAG ? BTN_MENU_DIAG : BTN_MENU_SETUP, false);
-    if (ui->notice != NULL) {
-        print_row(12, BOTTOM_COLS, ui->notice);
-    } else {
-        print_row(12, BOTTOM_COLS, ui->screen == SCREEN_DIAG ? "-- DIAG: check engine light & codes --"
-                                                             : "-- SETUP --");
+    if (ui->screen == SCREEN_HOME) {
+        draw_list(home_buttons, HOME_BUTTON_COUNT, now, busy, 0, false);
+        print_row(25, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        print_row(29, BOTTOM_COLS, "START: exit");
+        return;
     }
-    if (ui->screen == SCREEN_DIAG) {
-        if (ui->permanent_hidden) {
-            for (int r = 19; r < 24; r++) {
-                printf("\x1b[%d;1H%-12s", r + 1, "");
+    if (ui->screen == SCREEN_SETUP) {
+        draw_list(setup_buttons, SETUP_BUTTON_COUNT, now, busy, 0, false);
+        /* Right of BACK (cells 0-10), on its middle row. */
+        printf("\x1b[28;14H%-26.26s", "Up/Down L/R: scroll log");
+        return;
+    }
+
+    /* DIAG */
+    if (ui->permanent_hidden) {
+        for (int r = 1; r < 6; r++) {
+            printf("\x1b[%d;21H%-9s", r + 1, "");
+        }
+    }
+    draw_list(diag_buttons, DIAG_BUTTON_COUNT, now, busy, BTN_TAB_STORED - (int)ui->tab,
+              ui->permanent_hidden);
+    int n = diag_item_count(ui->tab);
+    for (int slot = 0; slot < LIST_PAGE_ROWS; slot++) {
+        int k = ui->page * LIST_PAGE_ROWS + slot;
+        if (k < n) {
+            draw_list_row(slot, items[k].row, k == ui->selected);
+        } else {
+            int top = LIST_FIRST_ROW + slot * LIST_ROW_PITCH;
+            for (int r = 0; r < LIST_ROW_H; r++) {
+                print_row(top + r, BOTTOM_COLS, "");
+            }
+            if (k == 0) {
+                LightLock_Lock(&shared.lock);
+                const char *e = diag_empty_text(&shared.diag, ui->tab);
+                LightLock_Unlock(&shared.lock);
+                print_row(top + LIST_ROW_H / 2, BOTTOM_COLS, scanning ? "  Please wait..." : e);
             }
         }
-        draw_list(diag_buttons, DIAG_BUTTON_COUNT, now, busy, BTN_TAB_STORED - (int)ui->tab,
-                  ui->permanent_hidden);
-        print_row(29, BOTTOM_COLS, "SCAN with the engine running.");
-    } else {
-        draw_list(setup_buttons, SETUP_BUTTON_COUNT, now, busy, 0, false);
-        print_row(29, BOTTOM_COLS, "START: exit  Up/Down L/R: scroll log");
     }
+    snprintf(line, sizeof line, "%d/%d", ui->page + 1, page_count(n));
+    printf("\x1b[%d;19H%-3.3s", 27 + 1, line);
 }
 
 static int button_at(const button_t *list, int count, int px, int py)
@@ -801,7 +880,7 @@ void spike_ui_run(void)
     }
     spike_logf(&spike, "Adapter %s:%u. Join its Wi-Fi in System Settings,",
                cfg.adapter_host, (unsigned)cfg.adapter_port);
-    spike_logf(&spike, "then tap SCAN on DIAG (or SETUP > ADAPTER TEST).");
+    spike_logf(&spike, "then DIAG > SCAN (or SETUP > ADAPTER TEST).");
     shared.diag.make = -1;
 
     s32 prio = 0x30;
@@ -812,10 +891,9 @@ void spike_ui_run(void)
         spike_logf(&spike, "! Could not start the worker thread; buttons will not work");
     }
 
-    ui_state_t ui = { SCREEN_DIAG, DIAG_TAB_STORED, NULL, false };
+    ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false };
     uint64_t notice_until = 0;
     int scroll = 0;                /* log (SETUP, TEST) */
-    int diag_scroll = 0;           /* DIAG panel */
     unsigned drawn_version = ~0u;
     unsigned drawn_diag_version = ~0u;
     int drawn_scroll = -1;
@@ -860,40 +938,49 @@ void spike_ui_run(void)
         } else if (down & KEY_TOUCH) {
             touchPosition tp;
             hidTouchRead(&tp);
-            int i;
-            if (ui.screen == SCREEN_TEST) {
-                i = button_at(buttons, BUTTON_COUNT, tp.px, tp.py);
-                if (i >= 0) { action = buttons[i].action; tapped = true; }
-            } else {
-                i = button_at(menu_buttons, MENU_BUTTON_COUNT, tp.px, tp.py);
-                if (i >= 0) {
-                    action = menu_buttons[i].action;
-                    tapped = true;
-                } else if (ui.screen == SCREEN_DIAG) {
-                    i = button_at(diag_buttons, DIAG_BUTTON_COUNT, tp.px, tp.py);
-                    if (i >= 0 && !(ui.permanent_hidden && diag_buttons[i].action == BTN_TAB_PERM)) {
-                        action = diag_buttons[i].action;
+            const button_t *list = buttons;
+            int count = BUTTON_COUNT;
+            switch (ui.screen) {
+            case SCREEN_HOME:  list = home_buttons;  count = HOME_BUTTON_COUNT;  break;
+            case SCREEN_DIAG:  list = diag_buttons;  count = DIAG_BUTTON_COUNT;  break;
+            case SCREEN_SETUP: list = setup_buttons; count = SETUP_BUTTON_COUNT; break;
+            case SCREEN_TEST:  break;
+            }
+            int i = button_at(list, count, tp.px, tp.py);
+            if (i >= 0 && !(ui.permanent_hidden && list[i].action == BTN_TAB_PERM)) {
+                action = list[i].action;
+                tapped = true;
+            } else if (ui.screen == SCREEN_DIAG) {
+                /* A list row? */
+                int row = tp.py / 8;
+                for (int slot = 0; slot < LIST_PAGE_ROWS; slot++) {
+                    int top = LIST_FIRST_ROW + slot * LIST_ROW_PITCH;
+                    if (row >= top && row < top + LIST_ROW_H) {
+                        action = BTN_LIST_ROW - slot;
                         tapped = true;
                     }
-                } else {
-                    i = button_at(setup_buttons, SETUP_BUTTON_COUNT, tp.px, tp.py);
-                    if (i >= 0) { action = setup_buttons[i].action; tapped = true; }
                 }
             }
+        }
+
+        /* Optional physical shortcuts: B back, X scan, D-pad / L R. */
+        if (!confirming && !tapped) {
+            if ((down & KEY_B) && ui.screen != SCREEN_HOME) { action = BTN_BACK; tapped = true; }
+            else if ((down & KEY_X) && ui.screen == SCREEN_DIAG) { action = BTN_DIAG_SCAN; tapped = true; }
+            else if ((down & KEY_L) && ui.screen == SCREEN_DIAG) { action = BTN_PAGE_PREV; tapped = true; }
+            else if ((down & KEY_R) && ui.screen == SCREEN_DIAG) { action = BTN_PAGE_NEXT; tapped = true; }
         }
 
         if (tapped) {
             flash(action, now);
             bottom_dirty = true;
-            bool on_diag = ui.screen == SCREEN_DIAG;
+            int n = ui.screen == SCREEN_DIAG ? diag_item_count(ui.tab) : 0;
             switch (action) {
             case BTN_SCROLL_OLDER:
-                if (on_diag) diag_scroll += LOG_ROWS / 2;
-                else scroll = clamp_scroll(scroll + LOG_ROWS / 2);
+                scroll = clamp_scroll(scroll + LOG_ROWS / 2);
                 break;
             case BTN_SCROLL_NEWER:
-                if (on_diag) diag_scroll -= LOG_ROWS / 2;
-                else scroll = clamp_scroll(scroll - LOG_ROWS / 2);
+                scroll = clamp_scroll(scroll - LOG_ROWS / 2);
                 break;
             case BTN_MENU_DIAG:
                 ui.screen = SCREEN_DIAG;
@@ -922,19 +1009,39 @@ void spike_ui_run(void)
             case BTN_TAB_PERM:
             case BTN_TAB_READY:
                 ui.tab = (diag_tab_t)(BTN_TAB_STORED - action);
-                diag_scroll = 0;
+                ui.page = 0;
+                ui.selected = -1;
                 top_dirty = true;
+                break;
+            case BTN_PAGE_PREV:
+                if (ui.page > 0) { ui.page--; ui.selected = -1; top_dirty = true; }
+                break;
+            case BTN_PAGE_NEXT:
+                if (ui.page + 1 < page_count(n)) { ui.page++; ui.selected = -1; top_dirty = true; }
                 break;
             case BTN_TEST_SCREEN:
                 ui.screen = SCREEN_TEST;
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
-                ui.screen = SCREEN_SETUP;
+                ui.screen = ui.screen == SCREEN_TEST ? SCREEN_SETUP : SCREEN_HOME;
                 bottom_full = top_dirty = true;
                 break;
+            case BTN_DIAG_SCAN:
+                ui.page = 0;
+                ui.selected = -1;
+                if (worker != NULL) {
+                    enqueue(action);
+                }
+                break;
             default:
-                if (action >= 0 && worker != NULL) {
+                if (action <= BTN_LIST_ROW && action > BTN_LIST_ROW - LIST_PAGE_ROWS) {
+                    int k = ui.page * LIST_PAGE_ROWS + (BTN_LIST_ROW - action);
+                    if (k < n) {
+                        ui.selected = k;
+                        top_dirty = true;
+                    }
+                } else if (action >= 0 && worker != NULL) {
                     enqueue(action);
                 }
                 break;
@@ -945,20 +1052,16 @@ void spike_ui_run(void)
             bottom_dirty = true;
         }
 
-        /* Optional physical shortcuts. */
-        int step = 0;
-        if (down & KEY_DUP)   step = 1;
-        if (down & KEY_DDOWN) step = -1;
-        if (down & KEY_L)     step = LOG_ROWS;
-        if (down & KEY_R)     step = -LOG_ROWS;
-        if (step != 0) {
-            if (ui.screen == SCREEN_DIAG) diag_scroll += step;
-            else scroll = clamp_scroll(scroll + step);
-        }
-        if (ui.screen == SCREEN_DIAG) {
-            int max = diag_line_count(ui.tab) - LOG_ROWS;
-            if (diag_scroll > max) diag_scroll = max;
-            if (diag_scroll < 0) diag_scroll = 0;
+        /* Log scrolling on SETUP / TEST. */
+        if (ui.screen == SCREEN_SETUP || ui.screen == SCREEN_TEST) {
+            int step = 0;
+            if (down & KEY_DUP)   step = 1;
+            if (down & KEY_DDOWN) step = -1;
+            if (down & KEY_L)     step = LOG_ROWS;
+            if (down & KEY_R)     step = -LOG_ROWS;
+            if (step != 0) {
+                scroll = clamp_scroll(scroll + step);
+            }
         }
 
         LightLock_Lock(&shared.lock);
@@ -973,20 +1076,19 @@ void spike_ui_run(void)
             bottom_dirty = true;
         }
 
-        bool on_diag = ui.screen == SCREEN_DIAG;
-        int shown_scroll = on_diag ? diag_scroll : scroll;
-        if (top_dirty || shown_scroll != drawn_scroll || busy != drawn_busy ||
-            connected != drawn_connected ||
-            (on_diag ? diag_version != drawn_diag_version : version != drawn_version)) {
-            if (on_diag) {
-                draw_diag_top(diag_scroll, ui.tab, busy, connected);
-            } else {
+        bool shows_log = ui.screen == SCREEN_SETUP || ui.screen == SCREEN_TEST;
+        if (top_dirty || busy != drawn_busy || connected != drawn_connected ||
+            (shows_log ? (version != drawn_version || scroll != drawn_scroll)
+                       : diag_version != drawn_diag_version)) {
+            if (shows_log) {
                 draw_top(scroll, busy, connected);
+            } else {
+                draw_diag_top(ui.screen == SCREEN_HOME, ui.tab, ui.selected, busy, connected);
             }
+            bottom_dirty |= busy != drawn_busy || diag_version != drawn_diag_version;
             drawn_version = version;
             drawn_diag_version = diag_version;
-            drawn_scroll = shown_scroll;
-            bottom_dirty |= busy != drawn_busy || diag_version != drawn_diag_version;
+            drawn_scroll = scroll;
             drawn_busy = busy;
             drawn_connected = connected;
             top_dirty = false;

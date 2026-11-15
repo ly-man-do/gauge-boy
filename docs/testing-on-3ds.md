@@ -135,7 +135,7 @@ If your adapter uses a different address, edit the file (card reader or FTP) and
 
 ## 5. Smoke test (at home, no adapter)
 
-1. GaugeBoy opens on the **DIAG** screen: the main menu (METER, DIAG, TRIM, FUN, LOG, SETUP; METER, TRIM, FUN and LOG say which version brings them), then SCAN, STORED, PENDING, PERMANENT, READINESS and OLDER / NEWER. **SETUP** has SLOT, SETUP SLOT, SAVE LOG and **ADAPTER TEST**, which opens the adapter test screen: CONNECT, ATZ, ATSP0+0100 / ATDPN, ATRV, 0902 VIN / SLOT, SETUP SLOT, BACK / OLDER, SAVE LOG, NEWER. A tap flashes the button yellow; while an action runs it turns red and the top header shows `BUSY`.
+1. GaugeBoy opens on **HOME**: six big buttons, METER, DIAG, TRIM / FUN, LOG, SETUP (METER, TRIM, FUN and LOG say which version brings them). **DIAG** has tabs STORED / PENDING / PERM / READY across the top, a list of up to three rows per page, then **BACK**, **<** page **>** and **SCAN** along the bottom. **SETUP** has SLOT, SETUP SLOT, SAVE LOG and **ADAPTER TEST** (the adapter test screen: CONNECT, ATZ, ATSP0+0100 / ATDPN, ATRV, 0902 VIN / SLOT, SETUP SLOT, BACK / OLDER, SAVE LOG, NEWER). Shortcuts: B = BACK, X = SCAN, L / R = page. A tap flashes the button yellow; while an action runs it turns red and the top header shows `BUSY`.
 2. Tap **ATZ**. About 3 seconds later the log shows "Adapter did not answer" (or "refused or unreachable"). The buttons keep responding meanwhile.
 3. OLDER / NEWER scroll the log. SAVE LOG writes this session's log to its own file (see step 7).
 4. Exit with **START**. On the SD card, `sdmc:/3ds/gaugeboy/spike-log.txt` has the same lines as the screen.
@@ -146,7 +146,7 @@ Report anything garbled (colors, layout, text running off the screen).
 
 1. Plug in the adapter, ignition on (engine running is fine).
 2. Make sure the 3DS's wireless switch is on and it has joined the adapter's slot.
-3. Launch GaugeBoy (engine running) and tap **SCAN** on DIAG. It connects, finds the protocol (about 5 s on ISO 9141-2) and reads the check engine light, readiness, stored / pending / permanent codes and the VIN. The top screen shows the car (maker, model year, VIN), protocol, check engine light and the chosen tab; STORED / PENDING / PERMANENT / READINESS switch the list (PERMANENT disappears if the car doesn't support it), OLDER / NEWER scroll it.
+3. Launch GaugeBoy (engine running), tap **DIAG**, then **SCAN**. It connects, finds the protocol (about 5 s on ISO 9141-2) and reads the check engine light, readiness, stored / pending / permanent codes and the VIN. The top screen shows the facts (Car, VIN, Protocol, CEL, Readiness, Codes); the bottom screen lists the chosen tab's codes or monitors. Tap a row to see its full description on the top screen; **<** / **>** page through longer lists. PERM disappears if the car doesn't support permanent codes.
 4. Then **SETUP > ADAPTER TEST** and tap, in order:
    - **CONNECT**: expect `= Connected (... ms)`.
    - **ATZ** 10 or more times: expect `ELM327 v...` each time.

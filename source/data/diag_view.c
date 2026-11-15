@@ -180,3 +180,162 @@ const char *diag_tab_name(diag_tab_t tab)
     }
     return "?";
 }
+
+/* ---------- pieces for the paged DIAG screen ---------- */
+
+int diag_wrap(const char *text, int cols, int indent, char lines[][DIAG_VIEW_COLS + 1], int max)
+{
+    view_t v = { lines, max, 0, cols > DIAG_VIEW_COLS ? DIAG_VIEW_COLS : cols };
+    add_wrapped(&v, text, indent);
+    return v.count;
+}
+
+static void fit_row(char *out, const char *text)
+{
+    size_t n = strlen(text);
+    if (n <= DIAG_ROW_COLS) {
+        memcpy(out, text, n + 1);
+        return;
+    }
+    memcpy(out, text, DIAG_ROW_COLS - 3);
+    memcpy(out + DIAG_ROW_COLS - 3, "...", 4);
+}
+
+static const obd_code_list_t *tab_codes(const obd_diag_t *d, diag_tab_t tab, bool *have,
+                                        const char **kind)
+{
+    switch (tab) {
+    case DIAG_TAB_STORED:    *have = d->have_stored;    *kind = "stored";    return &d->stored;
+    case DIAG_TAB_PENDING:   *have = d->have_pending;   *kind = "pending";   return &d->pending;
+    case DIAG_TAB_PERMANENT: *have = d->have_permanent; *kind = "permanent"; return &d->permanent;
+    default: break;
+    }
+    *have = false;
+    *kind = "";
+    return NULL;
+}
+
+int diag_items(const obd_diag_t *d, diag_tab_t tab, diag_item_t *items, int max)
+{
+    int n = 0;
+    if (tab == DIAG_TAB_READINESS) {
+        if (!d->have_readiness) {
+            return 0;
+        }
+        for (int i = 0; i < OBD_MONITOR_COUNT && n < max; i++) {
+            const obd_monitor_t *m = &d->readiness.monitor[i];
+            if (m->name == NULL || m->state == OBD_MONITOR_NOT_SUPPORTED) {
+                continue;
+            }
+            char row[64];
+            snprintf(row, sizeof row, "%-26.26s %s", m->name, obd_monitor_state_str(m->state));
+            fit_row(items[n].row, row);
+            snprintf(items[n].detail, sizeof items[n].detail, "%s: %s. %s", m->name,
+                     obd_monitor_state_str(m->state),
+                     m->state == OBD_MONITOR_COMPLETE
+                         ? "The car has finished this self-test."
+                         : "The car hasn't finished this self-test since the codes were "
+                           "cleared or the battery was disconnected; it needs more driving.");
+            n++;
+        }
+        return n;
+    }
+    bool have;
+    const char *kind;
+    const obd_code_list_t *list = tab_codes(d, tab, &have, &kind);
+    if (list == NULL || !have) {
+        return 0;
+    }
+    for (int i = 0; i < list->count && n < max; i++) {
+        const obd_code_t *c = &list->code[i];
+        const char *text = obd_dtc_text_for(c->code, d->make);
+        char row[256];
+        snprintf(row, sizeof row, "%s %s", c->code, text);
+        fit_row(items[n].row, row);
+        if (c->has_ecu) {
+            snprintf(items[n].detail, sizeof items[n].detail, "%s (%s, ECU %X): %s", c->code, kind,
+                     (unsigned)c->ecu, text);
+        } else {
+            snprintf(items[n].detail, sizeof items[n].detail, "%s (%s): %s", c->code, kind, text);
+        }
+        n++;
+    }
+    return n;
+}
+
+const char *diag_empty_text(const obd_diag_t *d, diag_tab_t tab)
+{
+    if (d->link.protocol == 0) {
+        return "Not scanned yet: tap SCAN.";
+    }
+    switch (tab) {
+    case DIAG_TAB_STORED:
+        return d->have_stored ? "No stored codes." : "Stored codes not read.";
+    case DIAG_TAB_PENDING:
+        return d->have_pending ? "No pending codes." : "Pending codes not read.";
+    case DIAG_TAB_PERMANENT:
+        if (d->permanent_unsupported) {
+            return "Not supported by this car (normal before 2010).";
+        }
+        return d->have_permanent ? "No permanent codes." : "Permanent codes not read.";
+    case DIAG_TAB_READINESS:
+    case DIAG_TAB_COUNT:
+        break;
+    }
+    return d->have_readiness ? "No readiness monitors supported." : "Readiness not read.";
+}
+
+static void fact(view_t *v, const char *label, const char *value)
+{
+    char line[160];   /* add_line cuts it to the panel width */
+    snprintf(line, sizeof line, "%-9s %s", label, value);
+    add_line(v, line);
+}
+
+int diag_facts(const obd_diag_t *d, int cols, char lines[][DIAG_VIEW_COLS + 1], int max)
+{
+    view_t v = { lines, max, 0, cols > DIAG_VIEW_COLS ? DIAG_VIEW_COLS : cols };
+    char buf[96];
+    if (d->link.protocol == 0) {
+        fact(&v, "Car", "Not scanned yet");
+        if (d->result != OBD_LINK_OK) {
+            fact(&v, "Last scan", obd_link_result_str(d->result));
+        }
+        return v.count;
+    }
+    if (d->have_vin) {
+        if (d->maker != NULL) {
+            snprintf(buf, sizeof buf, "%d %s", d->model_year, d->maker);
+        } else {
+            snprintf(buf, sizeof buf, "Model year %d", d->model_year);
+        }
+        fact(&v, "Car", buf);
+        fact(&v, "VIN", d->vin);
+    } else {
+        fact(&v, "Car", "VIN not read");
+    }
+    fact(&v, "Protocol", elm_protocol_name(d->link.protocol));
+    if (d->have_readiness) {
+        snprintf(buf, sizeof buf, "%s (%d stored code%s)", d->readiness.mil_on ? "ON" : "off",
+                 d->readiness.dtc_count, d->readiness.dtc_count == 1 ? "" : "s");
+        fact(&v, "CEL", buf);
+        snprintf(buf, sizeof buf, "%d ready, %d not ready",
+                 obd_readiness_ready_count(&d->readiness),
+                 obd_readiness_not_ready_count(&d->readiness));
+        fact(&v, "Readiness", buf);
+    } else {
+        fact(&v, "CEL", "not read");
+    }
+    snprintf(buf, sizeof buf, "%d stored, %d pending%s", d->stored.count, d->pending.count,
+             d->permanent_unsupported ? "" : "");
+    if (d->have_permanent) {
+        size_t n = strlen(buf);
+        snprintf(buf + n, sizeof buf - n, ", %d permanent", d->permanent.count);
+    }
+    fact(&v, "Codes", buf);
+    if (d->result != OBD_LINK_OK || d->stopped_at != OBD_DIAG_STEP_DONE) {
+        snprintf(buf, sizeof buf, "stopped: %s", obd_diag_step_str(d->stopped_at));
+        fact(&v, "Scan", buf);
+    }
+    return v.count;
+}

@@ -153,6 +153,56 @@ static void test_scan_lost_midway(void)
     CHECK_VIEW(n, "Scan stopped");
 }
 
+static void test_paged_pieces(void)
+{
+    /* The scan from test_scan_ridgeline is gone (later tests replaced it):
+     * scan again. */
+    setup();
+    script_ridgeline();
+    CHECK_EQ_INT(obd_diag_scan(&elm, true, 2026, &diag, NULL, NULL, NULL), OBD_LINK_OK);
+
+    static diag_item_t items[DIAG_ITEMS_MAX];
+    int n = diag_items(&diag, DIAG_TAB_STORED, items, DIAG_ITEMS_MAX);
+    CHECK_EQ_INT(n, 2);
+    CHECK_EQ_STR(items[0].row, "P0171 System Too Lean Bank 1");
+    CHECK_EQ_STR(items[1].row, "P1456 Evaporative Emission Control...");
+    CHECK_EQ_INT((int)strlen(items[1].row), DIAG_ROW_COLS);
+    CHECK_EQ_STR(items[1].detail,
+                 "P1456 (stored): Evaporative Emission Control System Leak Detected Fuel Tank System");
+
+    CHECK_EQ_INT(diag_items(&diag, DIAG_TAB_PENDING, items, DIAG_ITEMS_MAX), 0);
+    CHECK_EQ_STR(diag_empty_text(&diag, DIAG_TAB_PENDING), "No pending codes.");
+    CHECK_EQ_INT(diag_items(&diag, DIAG_TAB_PERMANENT, items, DIAG_ITEMS_MAX), 0);
+    CHECK(strstr(diag_empty_text(&diag, DIAG_TAB_PERMANENT), "Not supported") != NULL);
+
+    n = diag_items(&diag, DIAG_TAB_READINESS, items, DIAG_ITEMS_MAX);
+    CHECK_EQ_INT(n, 7);   /* supported monitors only */
+    CHECK(strncmp(items[0].row, "Misfire", 7) == 0 && strstr(items[0].row, "Ready") != NULL);
+    for (int i = 0; i < n; i++) {
+        CHECK((int)strlen(items[i].row) <= DIAG_ROW_COLS);
+    }
+
+    n = diag_facts(&diag, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Car       2008 Honda");
+    CHECK_VIEW(n, "VIN       2HJYK16618H000123");
+    CHECK_VIEW(n, "CEL       ON (2 stored codes)");
+    CHECK_VIEW(n, "Readiness 6 ready, 1 not ready");
+    CHECK_VIEW(n, "Codes     2 stored, 0 pending");
+
+    static obd_diag_t empty;
+    memset(&empty, 0, sizeof empty);
+    CHECK_EQ_STR(diag_empty_text(&empty, DIAG_TAB_STORED), "Not scanned yet: tap SCAN.");
+    n = diag_facts(&empty, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Not scanned yet");
+
+    n = diag_wrap("P1456 (stored): Evaporative Emission Control System Leak Detected Fuel Tank System",
+                  30, 2, lines, 8);
+    CHECK(n >= 3);
+    for (int i = 0; i < n; i++) {
+        CHECK((int)strlen(lines[i]) <= 30);
+    }
+}
+
 void suite_diag(void)
 {
     gb_suite("diag");
@@ -160,4 +210,5 @@ void suite_diag(void)
     RUN_TEST(test_panel);
     RUN_TEST(test_scan_engine_off);
     RUN_TEST(test_scan_lost_midway);
+    RUN_TEST(test_paged_pieces);
 }
