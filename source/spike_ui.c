@@ -120,13 +120,14 @@ static const button_t diag_buttons[] = {
 };
 #define DIAG_BUTTON_COUNT ((int)(sizeof diag_buttons / sizeof diag_buttons[0]))
 
-/* SETUP: 2x2 grid, BACK. */
+/* SETUP: full-width list rows like DIAG's list, then BACK. The rows
+ * (w 39) are drawn as list bars; BACK as a button. */
 static const button_t setup_buttons[] = {
-    { NULL,           BTN_WIFI_SLOT,   0,  2, 19, 9 },
-    { "SETUP SLOT",   BTN_SETUP_SLOT,  20, 2, 19, 9 },
-    { "SAVE LOG",     BTN_SAVE_LOG,    0, 13, 19, 9 },
-    { "ADAPTER TEST", BTN_TEST_SCREEN, 20, 13, 19, 9 },
-    { "BACK",         BTN_BACK,        0, 25, 11, 5 },
+    { "Wi-Fi slot",                    BTN_WIFI_SLOT,   0,  2, 39, 5 },
+    { "Check the slot's IP and DNS",   BTN_SETUP_SLOT,  0,  8, 39, 5 },
+    { "Save this session's log",       BTN_SAVE_LOG,    0, 14, 39, 5 },
+    { "Adapter test screen",           BTN_TEST_SCREEN, 0, 20, 39, 5 },
+    { "BACK",                          BTN_BACK,        0, 25, 11, 5 },
 };
 #define SETUP_BUTTON_COUNT ((int)(sizeof setup_buttons / sizeof setup_buttons[0]))
 
@@ -718,7 +719,36 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         return;
     }
     if (ui->screen == SCREEN_SETUP) {
-        draw_list(setup_buttons, SETUP_BUTTON_COUNT, now, busy, 0, false);
+        print_row(1, BOTTOM_COLS, "");
+        for (int i = 0; i < SETUP_BUTTON_COUNT; i++) {
+            const button_t *b = &setup_buttons[i];
+            if (b->action == BTN_BACK) {
+                draw_button(b, flashing(b->action, now), false);
+                continue;
+            }
+            char text[64];
+            if (b->action == BTN_WIFI_SLOT) {
+                LightLock_Lock(&shared.lock);
+                int slot = shared.wifi_slot;
+                LightLock_Unlock(&shared.lock);
+                char value[12];
+                if (slot == 0) {
+                    snprintf(value, sizeof value, "Any");
+                } else {
+                    snprintf(value, sizeof value, "%d", slot);
+                }
+                snprintf(text, sizeof text, "%-29s%7s", b->label, value);
+            } else {
+                snprintf(text, sizeof text, "%-36s", b->label);
+            }
+            bool active = flashing(b->action, now) || (b->action >= 0 && b->action == busy);
+            const char *colors = active ? "\x1b[43;30m" : "\x1b[47;30m";
+            printf("%s", colors);
+            for (int r = 0; r < b->h; r++) {
+                printf("\x1b[%d;1H %-37.37s ", b->row + r + 1, r == b->h / 2 ? text : "");
+            }
+            printf("\x1b[0m");
+        }
         /* Right of BACK (cells 0-10), on its middle row. */
         printf("\x1b[28;14H%-26.26s", "Up/Down L/R: scroll log");
         return;
@@ -993,17 +1023,13 @@ void spike_ui_run(void)
             case BTN_MENU_METER:
             case BTN_MENU_TRIM:
             case BTN_MENU_FUN:
-            case BTN_MENU_LOG: {
-                static const char *const soon[] = {
-                    "METER: live gauges come in version 0.2",
-                    "TRIM: fuel trims come in version 0.2",
-                    "FUN: fun modes come in version 0.6",
-                    "LOG: logging comes in version 0.4",
-                };
-                ui.notice = soon[BTN_MENU_METER - action];
+            case BTN_MENU_LOG:
+                ui.notice = action == BTN_MENU_METER ? "METER: live gauges come in version 0.2"
+                          : action == BTN_MENU_TRIM  ? "TRIM: fuel trims come in version 0.2"
+                          : action == BTN_MENU_FUN   ? "FUN: fun modes come in version 0.6"
+                          :                            "LOG: logging comes in version 0.4";
                 notice_until = now + 3000;
                 break;
-            }
             case BTN_TAB_STORED:
             case BTN_TAB_PENDING:
             case BTN_TAB_PERM:
