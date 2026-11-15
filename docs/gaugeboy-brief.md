@@ -1,6 +1,6 @@
 # Project Brief: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.8.0
+**Version:** 1.9.0
 **Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
 **Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -294,7 +294,11 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
   - Battery voltage comes from the adapter (`ATRV`), since PID 0x42 may not be supported.
   - Run `0100`/`0120`/`0140` supported-PID scans in M1 and record the results in the compatibility list.
   - Honda-specific data (e.g. VTEC status, transmission temperature) needs enhanced PIDs and stays out of v1.
-- Second test vehicle: to be decided, ideally a different make with a turbo, to test the boost gauge and a second protocol
+- **Second test vehicle: 1996 Geo Tracker** (owner's, Suzuki-built twin of the Sidekick; naturally aspirated). Notes:
+  - First OBD-II model year: tests the oldest cars GaugeBoy supports (fewer supported PIDs and readiness monitors, slower ECUs).
+  - Expected protocol: ISO 9141-2 (Suzuki engine computer) or possibly J1850; confirm with `ATDPN` after auto-detect.
+  - The VIN is probably not readable over OBD (Mode 09 was optional then), so the make must come from elsewhere (a make choice in SETUP) for manufacturer-specific codes to get descriptions.
+  - Still no turbo: a turbo car for the boost gauge remains open.
 - Optional: an OBD-II simulator or ELM327 emulator on a PC for bench testing without a car
 - Contingency only (do not buy unless M0 fails): ESP32 dev board plus CAN transceiver (SN65HVD230 or similar) for Option B
 
@@ -352,6 +356,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.9.0 | 2026-11-15 | Second test vehicle: the owner's 1996 Geo Tracker (first OBD-II year, likely ISO 9141-2, VIN probably not readable over OBD) (section 7); `CLAUDE.md` updated to 1.12.0 |
 | 1.8.0 | 2026-11-15 | DTC descriptions: generic plus manufacturer-specific codes for 32 makes from Wal33D/dtc-database (MIT), by owner decision (sections 5a, 5d); `CLAUDE.md` updated to 1.11.0 |
 | 1.7.0 | 2026-11-15 | Protocol support covers all OBD-II protocols the ELM327 and the tested Vgate iCar Pro handle (section 4), J1939 detected but not read in v1; M1 auto-detect across all of them; the Ridgeline uses ISO 9141-2, not CAN (section 7); `CLAUDE.md` updated to 1.9.0 |
 | 1.6.0 | 2026-11-14 | Mascot car fender flares and bumpers are body-colored (was black), as in the owner's Sidekick photo; `CLAUDE.md` updated to 1.6.0 |

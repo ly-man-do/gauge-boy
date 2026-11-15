@@ -1,7 +1,7 @@
 # CLAUDE.md: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.11.0
-**Matches project brief:** 1.8.0 (`docs/gaugeboy-brief.md`)
+**Version:** 1.12.0
+**Matches project brief:** 1.9.0 (`docs/gaugeboy-brief.md`)
 
 You are the developer on GaugeBoy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
 
@@ -34,7 +34,7 @@ Use Beads (`bd`) for all task tracking. Do not create markdown TODO lists, plan 
 
 **Labels:** `transport`, `elm327`, `obd`, `ui`, `3d`, `audio`, `fun-mode`, `ci`, `docs`, `needs-hardware`, `needs-owner`.
 
-**Hard rule:** Never close an issue labeled `needs-hardware` or `needs-owner`. These need a real New 3DS, the test car (2008 Honda Ridgeline) or an owner decision. When your part is done, add a comment with exact test steps for the owner and leave it open.
+**Hard rule:** Never close an issue labeled `needs-hardware` or `needs-owner`. These need a real New 3DS, a test car (2008 Honda Ridgeline, or the second test car, a 1996 Geo Tracker) or an owner decision. When your part is done, add a comment with exact test steps for the owner and leave it open.
 
 ---
 
@@ -141,6 +141,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.12.0 | 2026-11-15 | Matches brief 1.9.0: second test car, 1996 Geo Tracker (section 1) |
 | 1.11.0 | 2026-11-15 | Matches brief 1.8.0: manufacturer-specific DTC descriptions per make from the same source (section 7) |
 | 1.10.0 | 2026-11-15 | DTC descriptions come from Wal33D/dtc-database (MIT, generic rows only) by owner decision (section 7) |
 | 1.9.0 | 2026-11-15 | Matches brief 1.7.0: all OBD-II protocols the ELM327 handles (Ridgeline is ISO 9141-2, not CAN) |
