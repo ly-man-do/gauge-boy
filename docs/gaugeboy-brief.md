@@ -1,6 +1,6 @@
 # Project Brief: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.5.0
+**Version:** 1.6.0
 **Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
 **Date:** 2026-11-14
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -99,7 +99,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 - **Controls (bottom screen):** Big, rounded, colorful buttons that visibly press in, each with an icon, plus toggles and sliders in the same style.
 - **Lighting:** Consistent light source (top-left) across models and UI art.
 
-**Mascot car:** A teal toy version of a 1995 Suzuki Sidekick (a compact SUV with a boxy body, upright windshield, black fender flares and bumpers, and a spare tire on the tailgate), based on the shape of the real car: a chunky low-poly model with thin dark outlines and no maker names, badges or logos. It appears on the HOME menu icon and banner, spins in 3D on the top-screen title, drives through the attract mode and is the garage card picture until the user takes a photo.
+**Mascot car:** A teal toy version of a 1995 Suzuki Sidekick (a compact SUV with a boxy body, upright windshield, body-colored fender flares and bumpers with dark lower lips, and a spare tire on the tailgate), based on the shape of the real car: a chunky low-poly model with thin dark outlines and no maker names, badges or logos. It appears on the HOME menu icon and banner, spins in 3D on the top-screen title, drives through the attract mode and is the garage card picture until the user takes a photo.
 
 **Design language:**
 - **Colors:** Warm tan-orange backdrop (`#C58B4C`) with a darker tan (`#876B39`) for patterns and panel edges; near-black ink (`#1A1610`) for outlines and linework; lime green (`#8FD42A`, highlight `#C6F27A`, shadow `#5E9A1A`) as the main UI accent; teal (`#2BAE9F`, highlight `#7ADBCD`, shadow `#1A7A70`) for the mascot car; navy-to-blue glass (`#323868` to `#6C7AC8`); light neutrals for trim and panels. Signal colors stay for function only: amber for the CEL warning, red for redline, green for live values.
@@ -350,6 +350,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.6.0 | 2026-11-14 | Mascot car fender flares and bumpers are body-colored (was black), as in the owner's Sidekick photo; `CLAUDE.md` updated to 1.6.0 |
 | 1.5.0 | 2026-11-14 | Mascot car color changes from lime green to teal (`#2BAE9F`, from the owner's Sidekick photo); lime stays the main UI accent; goals, section 5b and open question 7 updated; `CLAUDE.md` updated to 1.5.0 |
 | 1.4.0 | 2026-11-14 | Owner's reference image removed from section 5b (mood, reference points, model outlines, mascot car); the mascot car is based on the real 1995 Sidekick; palette values unchanged, the ring pattern color is now a darker tan for patterns and panel edges; `CLAUDE.md` updated to 1.4.0 |
 | 1.3.0 | 2026-11-14 | Mascot car set to a 1995 Suzuki Sidekick (closes open question 7); music and sound effects move to a 3DS-game style (section 5f, goals); `CLAUDE.md` updated to 1.3.0 |

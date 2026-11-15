@@ -1,7 +1,7 @@
 # CLAUDE.md: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.5.0
-**Matches project brief:** 1.5.0 (`docs/gaugeboy-brief.md`)
+**Version:** 1.6.0
+**Matches project brief:** 1.6.0 (`docs/gaugeboy-brief.md`)
 
 You are the developer on GaugeBoy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
 
@@ -139,6 +139,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.6.0 | 2026-11-14 | Matches brief 1.6.0: the mascot car's fender flares and bumpers are body-colored |
 | 1.5.0 | 2026-11-14 | Matches brief 1.5.0: the mascot car is teal; lime stays the UI accent |
 | 1.4.0 | 2026-11-14 | Matches brief 1.4.0: the owner's reference image is dropped; the style comes from the brief's palette and the real 1995 Sidekick |
 | 1.3.0 | 2026-11-14 | Matches brief 1.3.0: mascot car is a 1995 Suzuki Sidekick; 3DS-game style music and sound effects |
