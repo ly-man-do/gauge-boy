@@ -287,15 +287,21 @@ bool net_slot_ip_settings(int slot, char *out, size_t len)
     GET(aci_get_buffer(ACI_GET_DNS2, dns2, sizeof dns2));
     GET(aci_get_word(ACI_GET_MTU, &mtu));
 #undef GET
+    /* Only the low byte (flags) / low 16 bits (MTU) are set; the rest of
+     * the reply word is left over (seen on hardware: 0x00080000 for
+     * "manual", 0x00010501 for "auto", 0x00010578 for MTU 1400). */
+    dhcp &= 0xFF;
+    auto_dns &= 0xFF;
+    mtu &= 0xFFFF;
     char a[16], m[16], g[16], d1[16], d2[16];
     ip_text(a, sizeof a, ip);
     ip_text(m, sizeof m, mask);
     ip_text(g, sizeof g, gw);
     ip_text(d1, sizeof d1, dns1);
     ip_text(d2, sizeof d2, dns2);
-    snprintf(out, len, "IP %s(%lu) %s mask %s gw %s, DNS %s(%lu) %s / %s, MTU %lu (raw IP %02x%02x%02x%02x)%s",
-             dhcp ? "auto" : "manual", (unsigned long)dhcp, a, m, g,
-             auto_dns ? "auto" : "manual", (unsigned long)auto_dns, d1, d2,
+    snprintf(out, len, "IP %s %s mask %s gw %s, DNS %s %s / %s, MTU %lu (raw IP %02x%02x%02x%02x)%s",
+             dhcp ? "auto" : "manual", a, m, g,
+             auto_dns ? "auto" : "manual", d1, d2,
              (unsigned long)mtu, ip[0], ip[1], ip[2], ip[3],
              failed != 0 ? " [some reads failed]" : "");
     if (failed != 0) {
