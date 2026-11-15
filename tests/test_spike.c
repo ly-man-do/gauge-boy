@@ -48,6 +48,8 @@ static void test_spike_all_buttons_against_adapter(void)
         { S_REPLY, "ATSP0\rOK\r\r>" },
         { S_REPLY, "0100\rSEARCHING...\r41 00 BE 3E B8 11\r\r>" },
         { S_REPLY, "ATDPN\rA6\r\r>" },
+        { S_REPLY, "0120\r41 20 80 00 00 00\r\r>" },
+        { S_REPLY, "ATDPN\rA6\r\r>" },
         { S_REPLY, "ATRV\r12.6V\r\r>" },
         { S_REPLY, "0902\r014\r0: 49 02 01 35 46 50\r1: 59 4B 31 36 35 38 42\r2: 31 32 33 34 35 36 37\r\r>" },
         { S_WAIT_CLOSE, NULL },
@@ -74,7 +76,9 @@ static void test_spike_all_buttons_against_adapter(void)
     tcp_transport_close(&tp);
     server_stop(&srv);
 
-    CHECK_EQ_STR(srv.received, "ATZ\rATSP0\r0100\rATDPN\rATRV\r0902\r");
+    CHECK_EQ_STR(srv.received, "ATZ\rATSP0\r0100\rATDPN\r0120\rATDPN\rATRV\r0902\r");
+    CHECK_LOGGED(&cap, "= Protocol 6: ISO 15765-4 CAN (11 bit, 500 kbaud) (auto), 1 ECU answered");
+    CHECK_LOGGED(&cap, "= Supported PIDs: 01 03 04 05 06 07 0B 0C 0D 0E 0F 11 13 14 15 1C 20 21\n");
     CHECK_LOGGED(&cap, "= Connected (");
     CHECK_LOGGED(&cap, "] > ATZ\n");
     CHECK_LOGGED(&cap, "] < ELM327 V1.5\n");

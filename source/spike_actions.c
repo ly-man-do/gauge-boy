@@ -6,6 +6,7 @@
 #include <time.h>
 
 #include "data/config.h"
+#include "obd/obd_link.h"
 #include "obd/obd_reply.h"
 #include "obd/obd_vin.h"
 #include "version.h"
@@ -140,7 +141,7 @@ static int ensure_connected(spike_t *s)
 }
 
 /* Log the reply lines, the escaped raw bytes and the result. */
-static void log_reply(spike_t *s, const elm_response_t *r, uint64_t t0)
+static void log_reply_ms(spike_t *s, const elm_response_t *r, unsigned ms)
 {
     char escaped[1100];
 
@@ -150,7 +151,6 @@ static void log_reply(spike_t *s, const elm_response_t *r, uint64_t t0)
     elm_escape_raw(r->raw, r->raw_len, escaped, sizeof escaped);
     spike_logf(s, "  raw: %s", escaped);
 
-    unsigned ms = (unsigned)(tp_now_ms() - t0);
     if (r->status == ELM_OK) {
         spike_logf(s, "= OK (%u ms)", ms);
     } else {
@@ -159,6 +159,11 @@ static void log_reply(spike_t *s, const elm_response_t *r, uint64_t t0)
     if (r->status == ELM_ERR_IO) {
         spike_logf(s, "! Connection lost; the next command reconnects");
     }
+}
+
+static void log_reply(spike_t *s, const elm_response_t *r, uint64_t t0)
+{
+    log_reply_ms(s, r, (unsigned)(tp_now_ms() - t0));
 }
 
 static elm_status_t send_logged(spike_t *s, const char *cmd, unsigned timeout_ms)
@@ -207,6 +212,32 @@ static void do_vin(spike_t *s)
                obd_vin_check_digit_ok(vin) ? "" : " (check digit doesn't match)");
 }
 
+static void link_trace(void *ctx, const char *cmd, const elm_response_t *resp, unsigned ms)
+{
+    spike_t *s = ctx;
+    spike_logf(s, "> %s", cmd);
+    log_reply_ms(s, resp, ms);
+}
+
+/* ATSP0+0100: protocol search plus the supported-PID scan (obd_link), with
+ * every command logged, then a summary for the compatibility list. */
+static void do_search(spike_t *s)
+{
+    static obd_link_t link;
+    if (send_logged(s, "ATSP0", ELM_TIMEOUT_DEFAULT_MS) != ELM_OK) {
+        return;
+    }
+    if (obd_link_open_traced(s->elm, false, &link, link_trace, s) != OBD_LINK_OK) {
+        spike_logf(s, "! %s", obd_link_result_str(link.result));
+        return;
+    }
+    char pids[600];
+    spike_logf(s, "= Protocol %d: %s%s, %d ECU%s answered", link.protocol,
+               elm_protocol_name(link.protocol), link.protocol_auto ? " (auto)" : "",
+               link.ecus, link.ecus == 1 ? "" : "s");
+    spike_logf(s, "= Supported PIDs: %s", obd_link_pid_list(&link, pids, sizeof pids));
+}
+
 static void do_protocol(spike_t *s)
 {
     elm_response_t r;
@@ -252,9 +283,7 @@ void spike_run(spike_t *s, spike_action_t action)
         send_logged(s, "ATZ", ELM_TIMEOUT_RESET_MS);
         break;
     case SPIKE_SEARCH:
-        if (send_logged(s, "ATSP0", ELM_TIMEOUT_DEFAULT_MS) == ELM_OK) {
-            send_logged(s, "0100", ELM_TIMEOUT_SEARCH_MS);
-        }
+        do_search(s);
         break;
     case SPIKE_PROTOCOL:
         do_protocol(s);

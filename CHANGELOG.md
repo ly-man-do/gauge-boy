@@ -6,6 +6,7 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ### Added
 
+- The adapter test app's ATSP0+0100 button runs the full protocol search: after `0100` it reads the protocol (`ATDPN`) and the further supported-PID ranges (`0120`, `0140`, ...), and logs the protocol, how many ECUs answered and the list of supported PIDs for the compatibility list.
 - The adapter test app's 0902 VIN button decodes the VIN for every protocol (multi-line ISO 9141-2 / J1850 / KWP replies and CAN) and logs it with the maker (from the first three characters) and model year, and warns if the check digit doesn't match.
 - Plain-English descriptions for 9,342 generic trouble codes (P0, P2, P34-P3F, B0, B3, C0, C3, U0, U3), plus manufacturer-specific codes (P1, B1, C1, U1 and so on) for 32 makes, shown when the car's make is known, and a lookup for the coming DIAG screen. Other manufacturer codes show "Manufacturer-specific code". Descriptions come from [Wal33D/dtc-database](https://github.com/Wal33D/dtc-database) (MIT); see `CREDITS.md`.
 - QR codes for installing with FBI (*Remote Install* > *Scan QR Code*): one at the top of the README that always installs the newest release, and one per release (`gaugeboy-qr.png`, also shown in the release notes) for that exact version. Made with `tools/make_qr.py`.
