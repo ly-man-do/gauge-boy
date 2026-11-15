@@ -4,6 +4,7 @@
 #include <3ds.h>
 #include <arpa/inet.h>
 #include <malloc.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +18,7 @@ static u32 *soc_buffer;
 static bool ac_ok;          /* ac session open; kept open so a join we asked for lasts */
 static Result ac_init_result;
 static Handle join_event;   /* pending ACU_ConnectAsync, 0 if none */
+static int wifi_slot;       /* 0 = any slot, 1-3 = only that one */
 
 static bool ac_open(void)
 {
@@ -107,7 +109,14 @@ void net_describe(char *out, size_t len)
     if (R_FAILED(r)) {
         /* 0xE0A09D2E: this app hasn't joined; the system may have. */
         if (sockets_up()) {
-            snprintf(wifi, sizeof wifi, "Wi-Fi on (joined by the system)");
+            char ssid[0x21];
+            memset(ssid, 0, sizeof ssid);
+            if (R_SUCCEEDED(ACU_GetSSID(ssid)) && ssid[0] != '\0') {
+                ssid[0x20] = '\0';
+                snprintf(wifi, sizeof wifi, "Wi-Fi on, \"%s\" (joined by the system)", ssid);
+            } else {
+                snprintf(wifi, sizeof wifi, "Wi-Fi on (joined by the system)");
+            }
         } else {
             snprintf(wifi, sizeof wifi, "Wi-Fi not connected (ac 0x%08lX)", (unsigned long)r);
         }
@@ -154,13 +163,105 @@ static Result acu_get_connect_result(void)
     return (Result)cmdbuf[1];
 }
 
+/* AC:u CloseAsync (0x8) / GetCloseResult (0x9): leave the network this
+ * app joined. No libctru wrappers. */
+static Result acu_close_async(Handle event)
+{
+    u32 *cmdbuf = getThreadCommandBuffer();
+    cmdbuf[0] = IPC_MakeHeader(0x8, 0, 4);
+    cmdbuf[1] = IPC_Desc_CurProcessId();
+    cmdbuf[2] = 0;
+    cmdbuf[3] = IPC_Desc_SharedHandles(1);
+    cmdbuf[4] = event;
+    Result ret = svcSendSyncRequest(*acGetSessionHandle());
+    if (R_FAILED(ret)) {
+        return ret;
+    }
+    return (Result)cmdbuf[1];
+}
+
+static Result acu_get_close_result(void)
+{
+    u32 *cmdbuf = getThreadCommandBuffer();
+    cmdbuf[0] = IPC_MakeHeader(0x9, 0, 2);
+    cmdbuf[1] = IPC_Desc_CurProcessId();
+    Result ret = svcSendSyncRequest(*acGetSessionHandle());
+    if (R_FAILED(ret)) {
+        return ret;
+    }
+    return (Result)cmdbuf[1];
+}
+
+void net_set_wifi_slot(int slot)
+{
+    wifi_slot = slot >= 1 && slot <= 3 ? slot : 0;
+}
+
+bool net_slot_name(int slot, char *out, size_t len)
+{
+    if (len == 0) {
+        return false;
+    }
+    snprintf(out, len, "(not set up)");
+    if (slot < 1 || slot > 3 || !ac_open()) {
+        return false;
+    }
+    char ssid[0x21];
+    memset(ssid, 0, sizeof ssid);
+    if (R_FAILED(ACI_LoadNetworkSetting((u32)(slot - 1))) ||
+        R_FAILED(ACI_GetNetworkWirelessEssidSecuritySsid(ssid)) || ssid[0] == '\0') {
+        return false;
+    }
+    ssid[0x20] = '\0';
+    snprintf(out, len, "%s", ssid);
+    return true;
+}
+
 static void join_failed(char *msg, size_t len, const char *what, Result r)
 {
     u32 code = 0, detail = 0;
     (void)ACU_GetLastErrorCode(&code);
     (void)ACU_GetLastDetailErrorCode(&detail);
-    snprintf(msg, len, "%s (0x%08lX, ac error %lu/%lu)", what, (unsigned long)r,
+    size_t used = strlen(msg);
+    snprintf(msg + used, len - used, "%s (0x%08lX, ac error %lu/%lu)", what, (unsigned long)r,
              (unsigned long)code, (unsigned long)detail);
+}
+
+static void append(char *msg, size_t len, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
+static void append(char *msg, size_t len, const char *fmt, ...)
+{
+    size_t used = strlen(msg);
+    if (used >= len) {
+        return;
+    }
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(msg + used, len - used, fmt, ap);
+    va_end(ap);
+}
+
+/* Leave the network this app joined (another slot). Waits up to 10 s. */
+static bool leave_network(char *msg, size_t len)
+{
+    Handle ev = 0;
+    Result r = svcCreateEvent(&ev, RESET_ONESHOT);
+    if (R_SUCCEEDED(r)) {
+        r = acu_close_async(ev);
+    }
+    if (R_SUCCEEDED(r)) {
+        Result w = svcWaitSynchronization(ev, 10000000000LL);
+        r = R_FAILED(w) ? w : acu_get_close_result();
+    }
+    if (ev != 0) {
+        svcCloseHandle(ev);
+    }
+    if (R_FAILED(r)) {
+        join_failed(msg, len, "could not leave it", r);
+        append(msg, len, "; ");
+        return false;
+    }
+    append(msg, len, "left it; ");
+    return true;
 }
 
 bool net_bring_up(char *msg, size_t len)
@@ -175,20 +276,50 @@ bool net_bring_up(char *msg, size_t len)
         return false;
     }
 
-    /* Already on a network (joined by us or by the system): asking again
-     * would make the system rejoin and drop open connections. */
-    u32 ap = 0;
-    if (join_event == 0 &&
-        ((R_SUCCEEDED(ACU_GetWifiStatus(&ap)) && ap != 0) || sockets_up())) {
-        return true;
-    }
-
     if (join_event == 0) {
+        u32 ap = 0;
+        bool ours = R_SUCCEEDED(ACU_GetWifiStatus(&ap)) && ap != 0; /* joined by this app */
+        bool up = ours || sockets_up();
+
+        if (wifi_slot == 0) {
+            /* Any slot: already on a network (ours or the system's) is
+             * fine; asking again would make the 3DS rejoin and drop open
+             * connections. */
+            if (up) {
+                return true;
+            }
+        } else {
+            char want[0x21];
+            net_slot_name(wifi_slot, want, sizeof want);
+            if (ours && slot_number(ap) == wifi_slot) {
+                return true;
+            }
+            if (ours) {
+                append(msg, len, "On slot %d, not slot %d \"%s\": ", slot_number(ap), wifi_slot, want);
+                leave_network(msg, len);
+            } else if (up) {
+                /* Joined by the system: check the network name if the 3DS
+                 * tells us; otherwise rejoin the chosen slot to be sure. */
+                char ssid[0x21];
+                memset(ssid, 0, sizeof ssid);
+                if (R_SUCCEEDED(ACU_GetSSID(ssid)) && ssid[0] != '\0') {
+                    ssid[0x20] = '\0';
+                    if (strcmp(ssid, want) == 0) {
+                        return true;
+                    }
+                    append(msg, len, "On \"%s\", not slot %d \"%s\": ", ssid, wifi_slot, want);
+                } else {
+                    append(msg, len, "On a network the system joined (name unknown); ");
+                }
+            }
+        }
+
         acuConfig cfg;
         memset(&cfg, 0, sizeof cfg);
+        u8 allow = wifi_slot == 0 ? 0xFF : (u8)(1u << (wifi_slot - 1)); /* bit 0 = slot 1 */
         Result r = ACU_CreateDefaultConfig(&cfg);
         if (R_SUCCEEDED(r)) r = ACU_SetNetworkArea(&cfg, 2);
-        if (R_SUCCEEDED(r)) r = ACU_SetAllowApType(&cfg, 0xFF); /* any saved slot */
+        if (R_SUCCEEDED(r)) r = ACU_SetAllowApType(&cfg, allow);
         if (R_SUCCEEDED(r)) r = ACU_SetRequestEulaVersion(&cfg);
         if (R_SUCCEEDED(r)) r = svcCreateEvent(&join_event, RESET_ONESHOT);
         if (R_FAILED(r)) {
@@ -208,8 +339,8 @@ bool net_bring_up(char *msg, size_t len)
     Result w = svcWaitSynchronization(join_event, (s64)NET_JOIN_TIMEOUT_MS * 1000000LL);
     if (R_DESCRIPTION(w) == RD_TIMEOUT) {
         /* Keep the request; the next CONNECT waits on it again. */
-        snprintf(msg, len, "3DS still joining Wi-Fi after %u s; tap CONNECT to keep waiting",
-                 NET_JOIN_TIMEOUT_MS / 1000u);
+        append(msg, len, "3DS still joining Wi-Fi after %u s; tap CONNECT to keep waiting",
+               NET_JOIN_TIMEOUT_MS / 1000u);
         return false;
     }
     svcCloseHandle(join_event);
@@ -224,6 +355,10 @@ bool net_bring_up(char *msg, size_t len)
         join_failed(msg, len, "3DS could not join Wi-Fi", cr);
         return false;
     }
-    snprintf(msg, len, "Asked the 3DS to join Wi-Fi: joined");
+    if (wifi_slot == 0) {
+        append(msg, len, "Asked the 3DS to join Wi-Fi: joined");
+    } else {
+        append(msg, len, "Asked the 3DS to join slot %d: joined", wifi_slot);
+    }
     return true;
 }

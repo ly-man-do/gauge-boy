@@ -34,9 +34,10 @@
 #define BTN_SCROLL_OLDER (-1)
 #define BTN_SCROLL_NEWER (-2)
 #define BTN_SAVE_LOG     100   /* runs on the worker like a spike action */
+#define BTN_WIFI_SLOT    101   /* worker: next Wi-Fi slot, saved to config.ini */
 
 /* Bottom-screen buttons in 8x8 console cells: 19x6 cells = 152x48 px;
- * the bottom row has three 12-13 cell (96-104 px) buttons. */
+ * the bottom row has four 9-cell (72x48 px) buttons. */
 typedef struct {
     const char *label;
     int action;          /* spike_action_t, or BTN_SCROLL_* */
@@ -50,9 +51,10 @@ static const button_t buttons[] = {
     { NULL,       SPIKE_PROTOCOL,   20, 9, 19, 6 },
     { NULL,       SPIKE_VOLTAGE,    0, 16, 19, 6 },
     { NULL,       SPIKE_VIN,        20, 16, 19, 6 },
-    { "OLDER ^",  BTN_SCROLL_OLDER, 0, 23, 12, 6 },
-    { "SAVE LOG", BTN_SAVE_LOG,     13, 23, 13, 6 },
-    { "NEWER v",  BTN_SCROLL_NEWER, 27, 23, 12, 6 },
+    { "OLDER ^",  BTN_SCROLL_OLDER, 0, 23, 9, 6 },
+    { "SAVE LOG", BTN_SAVE_LOG,     10, 23, 9, 6 },
+    { NULL,       BTN_WIFI_SLOT,    20, 23, 9, 6 },  /* "SLOT ANY" / "SLOT 2" */
+    { "NEWER v",  BTN_SCROLL_NEWER, 30, 23, 9, 6 },
 };
 #define BUTTON_COUNT ((int)(sizeof buttons / sizeof buttons[0]))
 
@@ -66,8 +68,11 @@ static struct {
     int queue_count;
     int busy;          /* action running, or -1 */
     bool connected;
+    int wifi_slot;     /* copy of app_cfg->wifi_slot for the SLOT label */
     volatile bool quit;
 } shared;
+
+static gb_config_t *app_cfg; /* main's settings; wifi_slot changes on the worker */
 
 static FILE *log_file;  /* written under shared.lock */
 static long session_start = -1; /* offset of this session in LOG_PATH */
@@ -153,6 +158,29 @@ static void save_log(spike_t *s)
     }
 }
 
+/* SLOT (worker thread): any -> 1 -> 2 -> 3 -> any, saved to config.ini. */
+static void next_wifi_slot(spike_t *s)
+{
+    LightLock_Lock(&shared.lock);
+    int slot = (shared.wifi_slot + 1) % (CONFIG_WIFI_SLOTS + 1);
+    shared.wifi_slot = slot;
+    app_cfg->wifi_slot = (uint8_t)slot;
+    gb_config_t copy = *app_cfg;
+    LightLock_Unlock(&shared.lock);
+
+    net_set_wifi_slot(slot);
+    bool saved = config_save(&copy, CONFIG_PATH);
+    if (slot == 0) {
+        spike_logf(s, "Wi-Fi slot: any saved connection in range%s",
+                   saved ? "" : " (! not saved to config.ini)");
+    } else {
+        char name[40];
+        net_slot_name(slot, name, sizeof name);
+        spike_logf(s, "Wi-Fi slot: %d \"%s\"; CONNECT joins only this slot%s", slot, name,
+                   saved ? "" : " (! not saved to config.ini)");
+    }
+}
+
 static void worker_main(void *arg)
 {
     spike_t *spike = arg;
@@ -175,6 +203,8 @@ static void worker_main(void *arg)
 
             if (action == BTN_SAVE_LOG) {
                 save_log(spike);
+            } else if (action == BTN_WIFI_SLOT) {
+                next_wifi_slot(spike);
             } else {
                 spike_run(spike, (spike_action_t)action);
             }
@@ -225,7 +255,21 @@ static void draw_top(int scroll, int busy, bool connected)
 
 static void draw_button(const button_t *b, bool flash, bool busy)
 {
-    const char *label = b->label ? b->label : spike_action_label((spike_action_t)b->action);
+    char slot_label[12];
+    const char *label = b->label;
+    if (b->action == BTN_WIFI_SLOT) {
+        LightLock_Lock(&shared.lock);
+        int slot = shared.wifi_slot;
+        LightLock_Unlock(&shared.lock);
+        if (slot == 0) {
+            snprintf(slot_label, sizeof slot_label, "SLOT ANY");
+        } else {
+            snprintf(slot_label, sizeof slot_label, "SLOT %d", slot);
+        }
+        label = slot_label;
+    } else if (label == NULL) {
+        label = spike_action_label((spike_action_t)b->action);
+    }
     const char *colors = busy ? "\x1b[41;37m" : flash ? "\x1b[43;30m" : "\x1b[44;37m";
     int label_len = (int)strlen(label);
     int pad = (b->w - label_len) / 2;
@@ -343,6 +387,9 @@ void spike_ui_run(void)
     }
 
     load_config(&spike, &cfg);
+    app_cfg = &cfg;
+    shared.wifi_slot = cfg.wifi_slot;
+    net_set_wifi_slot(cfg.wifi_slot);
     tcp_transport_init(&transport, cfg.adapter_host, cfg.adapter_port);
 
     bool net_ok = net_init();
@@ -358,6 +405,19 @@ void spike_ui_run(void)
         char info[160];
         net_describe(info, sizeof info);
         spike_logf(&spike, "Network: %s", info);
+
+        char names[CONFIG_WIFI_SLOTS][40];
+        for (int i = 0; i < CONFIG_WIFI_SLOTS; i++) {
+            net_slot_name(i + 1, names[i], sizeof names[i]);
+        }
+        char using[16];
+        if (cfg.wifi_slot == 0) {
+            snprintf(using, sizeof using, "any");
+        } else {
+            snprintf(using, sizeof using, "slot %u", (unsigned)cfg.wifi_slot);
+        }
+        spike_logf(&spike, "Wi-Fi slots: 1 \"%s\", 2 \"%s\", 3 \"%s\"; using %s (tap SLOT)",
+                   names[0], names[1], names[2], using);
     }
     spike_logf(&spike, "Adapter %s:%u. Join its Wi-Fi in System Settings,",
                cfg.adapter_host, (unsigned)cfg.adapter_port);

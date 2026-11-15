@@ -6,6 +6,7 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ### Added
 
+- SLOT button on the adapter test screen: choose which System Settings connection slot (any, 1, 2 or 3) CONNECT uses, so another saved network in range (such as home Wi-Fi) doesn't take over. Saved as `wifi_slot` in `config.ini`; the start-up log lists each slot's network name. Moving the 3DS off a network the system joined is not yet confirmed on a real 3DS.
 - SAVE LOG button on the adapter test screen (between OLDER and NEWER): saves this session's log to `sdmc:/3ds/gaugeboy/logs/gaugeboy-log-<date>-<time>.txt` for sharing.
 - GaugeBoy answers the 3DS's internet connection test itself: a background thread runs a tiny DNS server and the test page on the 3DS, so the 3DS keeps a Wi-Fi OBD-II adapter's network without a laptop or other device. The adapter's connection slot needs a manual IP with Primary DNS set to that same IP (see `docs/testing-on-3ds.md`). Not yet confirmed on a real 3DS.
 - `tools/fake_conntest.py`: a small DNS and web server that answers the 3DS's internet connection test, so a 3DS can stay on a Wi-Fi OBD-II adapter's network that has no internet. Dev tool for proving the fix; test steps in `tools/README.md`.

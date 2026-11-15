@@ -27,4 +27,13 @@ void net_describe(char *out, size_t len);
 #define NET_JOIN_TIMEOUT_MS 20000u
 bool net_bring_up(char *msg, size_t len);
 
+/* Which System Settings connection slot net_bring_up may join: 0 = any
+ * saved one in range, 1-3 = only that slot. With a slot set, CONNECT
+ * also moves the 3DS off another network it is on. */
+void net_set_wifi_slot(int slot);
+
+/* The network name saved in connection slot 1-3. Returns false (out gets
+ * "(not set up)") if the slot is empty or can't be read. */
+bool net_slot_name(int slot, char *out, size_t len);
+
 #endif

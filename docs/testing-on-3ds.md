@@ -111,7 +111,7 @@ This assumes the adapter is at `192.168.0.10`, as V-LINK and most Wi-Fi ELM327 a
 
 Why: the 3DS drops a network that fails its internet connection test and won't let apps use it. GaugeBoy answers that test itself (a tiny DNS server and test page on the 3DS), so no other device is needed. When you tap **CONNECT**, GaugeBoy asks the 3DS to join the adapter's network and answers the test while it does. The log shows `Conntest:` lines when the 3DS asks GaugeBoy for the test page, and the `Network:` line shows the network, slot and the 3DS's IP. If this ever fails, `tools/fake_conntest.py` on a laptop on the adapter's network does the same job (see `tools/README.md`).
 
-The 3DS uses whichever saved connection is in range, so your home Wi-Fi slot can stay.
+The 3DS uses whichever saved connection is in range, so your home Wi-Fi slot can stay. If another saved network (for example your home Wi-Fi in the driveway) takes over, tap **SLOT** in GaugeBoy until it shows the adapter's slot (`SLOT 2` if you saved it in slot 2). The start-up log lists each slot's network name. CONNECT then joins only that slot and, if the 3DS is on another network, asks it to switch. The choice is saved as `wifi_slot` in `config.ini`.
 
 ## 4. Launch GaugeBoy
 
@@ -125,13 +125,14 @@ On first launch the app creates `sdmc:/3ds/gaugeboy/config.ini`:
 [adapter]
 host = 192.168.0.10
 port = 35000
+wifi_slot = any
 ```
 
 If your adapter uses a different address, edit the file (card reader or FTP) and relaunch. The bottom screen header shows the address in use.
 
 ## 5. Smoke test (at home, no adapter)
 
-1. The bottom screen shows 9 buttons: CONNECT, ATZ, ATSP0+0100, ATDPN, ATRV, 0902 VIN, and OLDER, SAVE LOG, NEWER along the bottom. A tap flashes the button yellow; while an action runs it turns red and the top header shows `BUSY`.
+1. The bottom screen shows 10 buttons: CONNECT, ATZ, ATSP0+0100, ATDPN, ATRV, 0902 VIN, and OLDER, SAVE LOG, SLOT, NEWER along the bottom. A tap flashes the button yellow; while an action runs it turns red and the top header shows `BUSY`.
 2. Tap **ATZ**. About 3 seconds later the log shows "Adapter did not answer" (or "refused or unreachable"). The buttons keep responding meanwhile.
 3. OLDER / NEWER scroll the log. SAVE LOG writes this session's log to its own file (see step 7).
 4. Exit with **START**. On the SD card, `sdmc:/3ds/gaugeboy/spike-log.txt` has the same lines as the screen.

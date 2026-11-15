@@ -14,6 +14,22 @@ static void test_config_defaults(void)
     config_defaults(&c);
     CHECK_EQ_STR(c.adapter_host, "192.168.0.10");
     CHECK_EQ_INT(c.adapter_port, 35000);
+    CHECK_EQ_INT(c.wifi_slot, 0);
+}
+
+static void test_config_wifi_slot(void)
+{
+    gb_config_t c;
+    config_defaults(&c);
+    CHECK_EQ_INT(config_parse(&c, "[adapter]\nwifi_slot = 2\n"), 0);
+    CHECK_EQ_INT(c.wifi_slot, 2);
+    CHECK_EQ_INT(config_parse(&c, "[adapter]\nwifi_slot = ANY\n"), 0);
+    CHECK_EQ_INT(c.wifi_slot, 0);
+    CHECK_EQ_INT(config_parse(&c, "[adapter]\nwifi_slot = 3\n"), 0);
+    CHECK_EQ_INT(c.wifi_slot, 3);
+    /* Bad values keep the current slot and count as warnings. */
+    CHECK_EQ_INT(config_parse(&c, "[adapter]\nwifi_slot = 4\nwifi_slot = 12\nwifi_slot =\n"), 3);
+    CHECK_EQ_INT(c.wifi_slot, 3);
 }
 
 static void test_config_parse_adapter_section(void)
@@ -102,6 +118,16 @@ static void test_config_file_round_trip(void)
     CHECK(config_load(&c, path, NULL));
     CHECK_EQ_STR(c.adapter_host, "192.168.0.123");
     CHECK_EQ_INT(c.adapter_port, 35001);
+
+    /* Save and load back, including the slot. */
+    c.wifi_slot = 2;
+    CHECK(config_save(&c, path));
+    gb_config_t back;
+    CHECK(config_load(&back, path, &w));
+    CHECK_EQ_INT(w, 0);
+    CHECK_EQ_STR(back.adapter_host, "192.168.0.123");
+    CHECK_EQ_INT(back.adapter_port, 35001);
+    CHECK_EQ_INT(back.wifi_slot, 2);
     remove(path);
 }
 
@@ -247,6 +273,7 @@ void suite_data(void)
 {
     gb_suite("data");
     RUN_TEST(test_config_defaults);
+    RUN_TEST(test_config_wifi_slot);
     RUN_TEST(test_config_parse_adapter_section);
     RUN_TEST(test_config_ignores_other_sections_and_keys);
     RUN_TEST(test_config_bad_values_keep_defaults);

@@ -12,6 +12,7 @@ void config_defaults(gb_config_t *cfg)
 {
     strcpy(cfg->adapter_host, CONFIG_DEFAULT_HOST);
     cfg->adapter_port = CONFIG_DEFAULT_PORT;
+    cfg->wifi_slot = 0;
 }
 
 bool config_valid_ipv4(const char *s)
@@ -144,6 +145,15 @@ int config_parse(gb_config_t *cfg, const char *text)
             if (!parse_port(value, &cfg->adapter_port)) {
                 warnings++;
             }
+        } else if (strcmp(key, "wifi_slot") == 0) {
+            lower(value);
+            if (strcmp(value, "any") == 0 || strcmp(value, "0") == 0) {
+                cfg->wifi_slot = 0;
+            } else if (value[0] >= '1' && value[0] <= '0' + CONFIG_WIFI_SLOTS && value[1] == '\0') {
+                cfg->wifi_slot = (uint8_t)(value[0] - '0');
+            } else {
+                warnings++;
+            }
         }
     }
     return warnings;
@@ -177,25 +187,42 @@ bool config_load(gb_config_t *cfg, const char *path, int *warnings)
     return true;
 }
 
-bool config_write_default(const char *path)
+bool config_save(const gb_config_t *cfg, const char *path)
 {
     FILE *f = fopen(path, "wb");
     if (f == NULL) {
         return false;
+    }
+    char slot[8];
+    if (cfg->wifi_slot >= 1 && cfg->wifi_slot <= CONFIG_WIFI_SLOTS) {
+        snprintf(slot, sizeof slot, "%u", (unsigned)cfg->wifi_slot);
+    } else {
+        strcpy(slot, "any");
     }
     int rc = fprintf(f,
         "; GaugeBoy settings\n"
         ";\n"
         "; Wi-Fi ELM327 adapter address. Most adapters use 192.168.0.10\n"
         "; port 35000; check your adapter's manual if yours differs.\n"
+        ";\n"
+        "; wifi_slot: the System Settings connection slot (1, 2 or 3) that holds\n"
+        "; the adapter's network, or \"any\" to use whichever saved one is in range.\n"
         "\n"
         "[adapter]\n"
         "host = %s\n"
-        "port = %d\n",
-        CONFIG_DEFAULT_HOST, CONFIG_DEFAULT_PORT);
+        "port = %u\n"
+        "wifi_slot = %s\n",
+        cfg->adapter_host, (unsigned)cfg->adapter_port, slot);
     bool ok = rc > 0;
     if (fclose(f) != 0) {
         ok = false;
     }
     return ok;
+}
+
+bool config_write_default(const char *path)
+{
+    gb_config_t cfg;
+    config_defaults(&cfg);
+    return config_save(&cfg, path);
 }
