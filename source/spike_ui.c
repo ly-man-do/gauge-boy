@@ -46,6 +46,10 @@
 #define BTN_SETUP_SLOT   102   /* worker: read the slot, show what to enter */
 #define BTN_SETUP_OK     (-3)  /* UI: close the setup screen */
 #define BTN_DIAG_SCAN    104   /* worker: full DIAG scan */
+#define BTN_CLEAR_CODES  105   /* worker: clear codes (only from the dialog), then rescan */
+#define BTN_CLEAR_ASK    (-5)  /* UI: open the clear-codes dialog */
+#define BTN_CLEAR_CANCEL (-6)
+#define BTN_CLEAR_YES    (-7)
 #define BTN_BACK         (-4)  /* UI: TEST screen -> SETUP */
 #define BTN_MENU_METER   (-10) /* UI: main menu */
 #define BTN_MENU_DIAG    (-11)
@@ -113,10 +117,11 @@ static const button_t diag_buttons[] = {
     { "PENDING", BTN_TAB_PENDING, 10, 1, 9, 5 },
     { "PERM",    BTN_TAB_PERM,    20, 1, 9, 5 },  /* hidden if unsupported */
     { "READY",   BTN_TAB_READY,   30, 1, 9, 5 },
-    { "BACK",    BTN_BACK,        0,  25, 11, 5 },
-    { "<",       BTN_PAGE_PREV,   12, 25, 6, 5 },
-    { ">",       BTN_PAGE_NEXT,   22, 25, 6, 5 },
-    { "SCAN",    BTN_DIAG_SCAN,   29, 25, 10, 5 },
+    { "BACK",    BTN_BACK,        0,  25, 8, 5 },
+    { "<",       BTN_PAGE_PREV,   9,  25, 5, 5 },
+    { ">",       BTN_PAGE_NEXT,   17, 25, 5, 5 },
+    { "CLEAR",   BTN_CLEAR_ASK,   23, 25, 8, 5 },
+    { "SCAN",    BTN_DIAG_SCAN,   31, 25, 8, 5 },
 };
 #define DIAG_BUTTON_COUNT ((int)(sizeof diag_buttons / sizeof diag_buttons[0]))
 
@@ -132,6 +137,13 @@ static const button_t setup_buttons[] = {
 #define SETUP_BUTTON_COUNT ((int)(sizeof setup_buttons / sizeof setup_buttons[0]))
 
 typedef enum { SCREEN_HOME, SCREEN_DIAG, SCREEN_SETUP, SCREEN_TEST } screen_t;
+
+/* Clear-codes dialog (safety rule: clearing only from here). */
+static const button_t clear_buttons[] = {
+    { "CANCEL",      BTN_CLEAR_CANCEL, 0,  23, 15, 6 },
+    { "CLEAR CODES", BTN_CLEAR_YES,    17, 23, 22, 6 },
+};
+#define CLEAR_BUTTON_COUNT ((int)(sizeof clear_buttons / sizeof clear_buttons[0]))
 
 /* Shown instead of the buttons above while the setup screen is open. */
 static const button_t confirm_buttons[] = {
@@ -161,6 +173,7 @@ static struct {
     unsigned diag_version;     /* bumped when diag or scan_step changes */
     bool scanning;
     obd_diag_step_t scan_step;
+    char diag_msg[40];         /* last DIAG result line (clear codes), or "" */
 
     volatile bool quit;
 } shared;
@@ -338,6 +351,7 @@ static void diag_scan(spike_t *s)
     LightLock_Lock(&shared.lock);
     shared.scanning = true;
     shared.scan_step = OBD_DIAG_STEP_CONNECT;
+    shared.diag_msg[0] = '\0';
     shared.diag_version++;
     LightLock_Unlock(&shared.lock);
 
@@ -373,6 +387,35 @@ static void diag_scan(spike_t *s)
     LightLock_Unlock(&shared.lock);
 }
 
+/* CLEAR CODES (worker, only after the dialog): parked check, 04, then a
+ * new scan to show the result. */
+static void clear_codes(spike_t *s)
+{
+    static obd_link_t link;
+    LightLock_Lock(&shared.lock);
+    link = shared.diag.link;
+    LightLock_Unlock(&shared.lock);
+
+    obd_clear_result_t res = OBD_CLEAR_LOST;
+    uint8_t nrc = 0;
+    spike_logf(s, "CLEAR CODES (confirmed)");
+    if (link.protocol != 0 && spike_connect_if_needed(s)) {
+        res = obd_clear_codes(s->elm, &link, &nrc, spike_trace_command, s);
+    }
+    if (res == OBD_CLEAR_REFUSED) {
+        spike_logf(s, "! %s (code %02X)", obd_clear_result_str(res), nrc);
+    } else {
+        spike_logf(s, "%s %s", res == OBD_CLEAR_DONE ? "=" : "!", obd_clear_result_str(res));
+    }
+    if (res == OBD_CLEAR_DONE) {
+        diag_scan(s);
+    }
+    LightLock_Lock(&shared.lock);
+    snprintf(shared.diag_msg, sizeof shared.diag_msg, "%s", obd_clear_result_str(res));
+    shared.diag_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
 static void worker_main(void *arg)
 {
     spike_t *spike = arg;
@@ -401,6 +444,8 @@ static void worker_main(void *arg)
                 setup_slot_preview(spike);
             } else if (action == BTN_DIAG_SCAN) {
                 diag_scan(spike);
+            } else if (action == BTN_CLEAR_CODES) {
+                clear_codes(spike);
             } else {
                 spike_run(spike, (spike_action_t)action);
             }
@@ -601,6 +646,7 @@ typedef struct {
     int page;
     const char *notice;        /* one-line message, or NULL */
     bool permanent_hidden;
+    bool clear_dialog;         /* clear-codes question showing */
 } ui_state_t;
 
 /* Flashing, by button action (UI thread). */
@@ -670,6 +716,41 @@ static int page_count(int n)
     return n == 0 ? 1 : (n + LIST_PAGE_ROWS - 1) / LIST_PAGE_ROWS;
 }
 
+/* The clear-codes question. Red CLEAR CODES, plain CANCEL. */
+static void draw_clear_dialog(void)
+{
+    static const char *const text[] = {
+        "Clear the trouble codes?",
+        "",
+        "This turns OFF the check engine light",
+        "and RESETS the readiness monitors. The",
+        "car then needs more driving before an",
+        "emissions test will pass.",
+        "",
+        "If the fault is still there, the codes",
+        "and the light will come back.",
+        "",
+        "Park first. Ignition on, engine off",
+        "works on most cars.",
+    };
+    consoleSelect(&bottom_console);
+    printf("\x1b[0m");
+    clear_rows(0, 29);
+    for (size_t i = 0; i < sizeof text / sizeof text[0]; i++) {
+        print_row(2 + (int)i, BOTTOM_COLS, text[i]);
+    }
+    const button_t *cancel = &clear_buttons[0];
+    const button_t *yes = &clear_buttons[1];
+    draw_button_ex(cancel, false, false, false);
+    /* Red: destructive. */
+    printf("\x1b[41;37m");
+    for (int r = 0; r < yes->h; r++) {
+        printf("\x1b[%d;%dH%*s", yes->row + r + 1, yes->col + 1, yes->w, "");
+    }
+    printf("\x1b[%d;%dH%s", yes->row + yes->h / 2 + 1, yes->col + 6, yes->label);
+    printf("\x1b[0m");
+}
+
 static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t now, int busy,
                         bool full)
 {
@@ -683,6 +764,11 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
     static bool cleared_after_confirm = true;
     if (confirm) {
         draw_confirm();
+        cleared_after_confirm = false;
+        return;
+    }
+    if (ui->clear_dialog) {
+        draw_clear_dialog();
         cleared_after_confirm = false;
         return;
     }
@@ -781,7 +867,12 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         }
     }
     snprintf(line, sizeof line, "%d/%d", ui->page + 1, page_count(n));
-    printf("\x1b[%d;19H%-3.3s", 27 + 1, line);
+    printf("\x1b[%d;15H%-3.3s", 27 + 1, line);
+    char msg[sizeof shared.diag_msg];
+    LightLock_Lock(&shared.lock);
+    memcpy(msg, shared.diag_msg, sizeof msg);
+    LightLock_Unlock(&shared.lock);
+    print_row(6, BOTTOM_COLS, ui->notice != NULL ? ui->notice : msg);
 }
 
 static int button_at(const button_t *list, int count, int px, int py)
@@ -921,7 +1012,7 @@ void spike_ui_run(void)
         spike_logf(&spike, "! Could not start the worker thread; buttons will not work");
     }
 
-    ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false };
+    ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false };
     uint64_t notice_until = 0;
     int scroll = 0;                /* log (SETUP, TEST) */
     unsigned drawn_version = ~0u;
@@ -956,7 +1047,18 @@ void spike_ui_run(void)
 
         int action = 0;
         bool tapped = false;
-        if ((down & KEY_TOUCH) && confirming) {
+        if ((down & KEY_TOUCH) && ui.clear_dialog) {
+            touchPosition tp;
+            hidTouchRead(&tp);
+            int i = button_at(clear_buttons, CLEAR_BUTTON_COUNT, tp.px, tp.py);
+            if (i >= 0) {
+                if (clear_buttons[i].action == BTN_CLEAR_YES && worker != NULL) {
+                    enqueue(BTN_CLEAR_CODES);
+                }
+                ui.clear_dialog = false;
+                bottom_full = true;
+            }
+        } else if ((down & KEY_TOUCH) && confirming) {
             touchPosition tp;
             hidTouchRead(&tp);
             int i = button_at(confirm_buttons, CONFIRM_BUTTON_COUNT, tp.px, tp.py);
@@ -994,7 +1096,10 @@ void spike_ui_run(void)
         }
 
         /* Optional physical shortcuts: B back, X scan, D-pad / L R. */
-        if (!confirming && !tapped) {
+        if (ui.clear_dialog && (down & KEY_B)) {
+            ui.clear_dialog = false;   /* B cancels; there is no button shortcut to clear */
+            bottom_full = true;
+        } else if (!confirming && !tapped && !ui.clear_dialog) {
             if ((down & KEY_B) && ui.screen != SCREEN_HOME) { action = BTN_BACK; tapped = true; }
             else if ((down & KEY_X) && ui.screen == SCREEN_DIAG) { action = BTN_DIAG_SCAN; tapped = true; }
             else if ((down & KEY_L) && ui.screen == SCREEN_DIAG) { action = BTN_PAGE_PREV; tapped = true; }
@@ -1053,6 +1158,19 @@ void spike_ui_run(void)
                 ui.screen = ui.screen == SCREEN_TEST ? SCREEN_SETUP : SCREEN_HOME;
                 bottom_full = top_dirty = true;
                 break;
+            case BTN_CLEAR_ASK: {
+                LightLock_Lock(&shared.lock);
+                bool scanned = shared.diag.link.protocol != 0 && !shared.scanning;
+                LightLock_Unlock(&shared.lock);
+                if (scanned) {
+                    ui.clear_dialog = true;
+                    bottom_full = true;
+                } else {
+                    ui.notice = "CLEAR: tap SCAN first";
+                    notice_until = now + 3000;
+                }
+                break;
+            }
             case BTN_DIAG_SCAN:
                 ui.page = 0;
                 ui.selected = -1;

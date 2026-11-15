@@ -68,4 +68,28 @@ obd_link_result_t obd_diag_scan(elm_t *elm, bool reset, int current_year, obd_di
 
 const char *obd_diag_step_str(obd_diag_step_t step);
 
+/* ---------- clearing codes (Mode 04) ---------- */
+
+typedef enum {
+    OBD_CLEAR_DONE = 0,       /* an ECU confirmed (44) */
+    OBD_CLEAR_MOVING,         /* vehicle speed above 0: not sent */
+    OBD_CLEAR_REFUSED,        /* the car refused (7F 04 nn), e.g. engine running */
+    OBD_CLEAR_NO_REPLY,       /* NO DATA or no confirmation */
+    OBD_CLEAR_LOST,           /* connection lost */
+    OBD_CLEAR_RESULT_COUNT
+} obd_clear_result_t;
+
+/*
+ * Clears stored and pending codes and resets the readiness monitors
+ * (service 04). Only call after the user has confirmed (safety rule).
+ * First reads the vehicle speed (01 0D) when the car supports it and
+ * refuses unless it is 0. refusal_code gets the negative response code
+ * when refused (e.g. 0x22 "conditions not correct"), else 0. Clearing
+ * then needs a new scan to show the result.
+ */
+obd_clear_result_t obd_clear_codes(elm_t *elm, const obd_link_t *link, uint8_t *refusal_code,
+                                   obd_link_trace_fn trace, void *ctx);
+
+const char *obd_clear_result_str(obd_clear_result_t result);
+
 #endif

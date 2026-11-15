@@ -203,6 +203,59 @@ static void test_paged_pieces(void)
     }
 }
 
+static void link_with_speed(obd_link_t *link, int protocol)
+{
+    memset(link, 0, sizeof *link);
+    link->result = OBD_LINK_OK;
+    link->protocol = protocol;
+    link->ranges_read = 1;
+    link->supported[0][1] = 0x08;   /* PID 0x0D (vehicle speed) */
+}
+
+static void test_clear_codes(void)
+{
+    obd_link_t link;
+    uint8_t nrc = 0xFF;
+
+    /* Parked, the car confirms. */
+    setup();
+    link_with_speed(&link, 3);
+    fake_io_reply(&f, "010D", "41 0D 00\r\r>", 50, 0);
+    fake_io_reply(&f, "04", "44\r\r>", 200, 0);
+    CHECK_EQ_INT(obd_clear_codes(&elm, &link, &nrc, NULL, NULL), OBD_CLEAR_DONE);
+    CHECK_EQ_INT(nrc, 0);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* Moving: 04 is never sent. */
+    setup();
+    link_with_speed(&link, 3);
+    fake_io_reply(&f, "010D", "41 0D 1E\r\r>", 50, 0);
+    CHECK_EQ_INT(obd_clear_codes(&elm, &link, &nrc, NULL, NULL), OBD_CLEAR_MOVING);
+    CHECK_EQ_STR(f.written, "010D\r");   /* only the speed request went out */
+
+    /* Refused with "conditions not correct" (engine running). */
+    setup();
+    link_with_speed(&link, 6);
+    fake_io_reply(&f, "010D", "41 0D 00\r\r>", 50, 0);
+    fake_io_reply(&f, "04", "7F 04 22\r\r>", 200, 0);
+    CHECK_EQ_INT(obd_clear_codes(&elm, &link, &nrc, NULL, NULL), OBD_CLEAR_REFUSED);
+    CHECK_EQ_INT(nrc, 0x22);
+
+    /* No speed PID: straight to 04; NO DATA = not confirmed. */
+    setup();
+    memset(&link, 0, sizeof link);
+    link.protocol = 3;
+    fake_io_reply(&f, "04", "NO DATA\r\r>", 200, 0);
+    CHECK_EQ_INT(obd_clear_codes(&elm, &link, &nrc, NULL, NULL), OBD_CLEAR_NO_REPLY);
+
+    /* Adapter gone. */
+    setup();
+    memset(&link, 0, sizeof link);
+    link.protocol = 3;
+    CHECK_EQ_INT(obd_clear_codes(&elm, &link, &nrc, NULL, NULL), OBD_CLEAR_LOST);
+    CHECK(strstr(obd_clear_result_str(OBD_CLEAR_MOVING), "moving") != NULL);
+}
+
 void suite_diag(void)
 {
     gb_suite("diag");
@@ -211,4 +264,5 @@ void suite_diag(void)
     RUN_TEST(test_scan_engine_off);
     RUN_TEST(test_scan_lost_midway);
     RUN_TEST(test_paged_pieces);
+    RUN_TEST(test_clear_codes);
 }

@@ -157,3 +157,73 @@ const char *obd_diag_step_str(obd_diag_step_t step)
     }
     return "?";
 }
+
+/* ---------- clearing codes (Mode 04) ---------- */
+
+obd_clear_result_t obd_clear_codes(elm_t *elm, const obd_link_t *link, uint8_t *refusal_code,
+                                   obd_link_trace_fn trace, void *ctx)
+{
+    static elm_response_t r;
+    static obd_reply_t reply;
+    scan_t sc = { elm, trace, ctx };
+    int protocol = link->protocol;
+    if (refusal_code != NULL) {
+        *refusal_code = 0;
+    }
+
+    /* Parked check: vehicle speed (01 0D, km/h) must be 0. */
+    if (obd_link_pid_supported(link, 0x0D)) {
+        elm_status_t st = command(&sc, "010D", &r);
+        if (lost(st)) {
+            return OBD_CLEAR_LOST;
+        }
+        if (st == ELM_OK && obd_assemble(&r, protocol, false, &reply) == OBD_OK) {
+            for (int e = 0; e < reply.ecu_count; e++) {
+                for (int m = 0; m < reply.ecu[e].msg_count; m++) {
+                    const obd_msg_t *msg = &reply.ecu[e].msg[m];
+                    if (msg->len >= 3 && msg->data[0] == 0x41 && msg->data[1] == 0x0D &&
+                        msg->data[2] > 0) {
+                        return OBD_CLEAR_MOVING;
+                    }
+                }
+            }
+        }
+    }
+
+    elm_status_t st = command(&sc, "04", &r);
+    if (lost(st)) {
+        return OBD_CLEAR_LOST;
+    }
+    if (st != ELM_OK || obd_assemble(&r, protocol, false, &reply) != OBD_OK) {
+        return OBD_CLEAR_NO_REPLY;
+    }
+    bool refused = false;
+    for (int e = 0; e < reply.ecu_count; e++) {
+        for (int m = 0; m < reply.ecu[e].msg_count; m++) {
+            const obd_msg_t *msg = &reply.ecu[e].msg[m];
+            if (msg->len >= 1 && msg->data[0] == 0x44) {
+                return OBD_CLEAR_DONE;
+            }
+            if (msg->len >= 3 && msg->data[0] == 0x7F && msg->data[1] == 0x04) {
+                refused = true;
+                if (refusal_code != NULL) {
+                    *refusal_code = msg->data[2];
+                }
+            }
+        }
+    }
+    return refused ? OBD_CLEAR_REFUSED : OBD_CLEAR_NO_REPLY;
+}
+
+const char *obd_clear_result_str(obd_clear_result_t result)
+{
+    switch (result) {
+    case OBD_CLEAR_DONE:     return "Codes cleared";
+    case OBD_CLEAR_MOVING:   return "Not cleared: the car is moving. Stop and park first";
+    case OBD_CLEAR_REFUSED:  return "The car refused (try ignition on, engine off)";
+    case OBD_CLEAR_NO_REPLY: return "The car didn't confirm the clear";
+    case OBD_CLEAR_LOST:     return "Connection to the adapter lost";
+    case OBD_CLEAR_RESULT_COUNT: break;
+    }
+    return "?";
+}
