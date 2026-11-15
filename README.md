@@ -12,7 +12,7 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 
 ## Status
 
-**Early development: M0 spike done (0.0.2), M1 next.** The current release is a test build for checking adapters, not the finished gauges. M0 proved that a New 3DS can talk to a Wi-Fi ELM327 adapter directly: tested with a Vgate iCar Pro (`V-LINK`) in a 2008 Honda Ridgeline, where it reads the adapter version, protocol, battery voltage and VIN. Work now moves to M1 (check engine codes and readiness monitors).
+**Early development: M0 spike done (0.0.2), M1 next.** The current release is a test build for checking adapters, not the finished gauges. M0 proved that a New 3DS can talk to a Wi-Fi ELM327 adapter directly: tested with a Vgate iCar Pro Wi-Fi adapter (its network is called `V-LINK`) in a 2008 Honda Ridgeline, where it reads the adapter version, protocol, battery voltage and VIN. Work now moves to M1 (check engine codes and readiness monitors).
 
 | Milestone | Version | Scope |
 |---|---|---|
@@ -41,7 +41,7 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 
 ## Tested adapters
 
-| Adapter | Reports as | Network | Result |
+| Adapter | Reports as | Wi-Fi network | Result |
 |---|---|---|---|
 | Vgate iCar Pro Wi-Fi | ELM327 v2.3 | `V-LINK`, adapter at `192.168.0.10:35000` | Works (0.0.2), with the slot setup below |
 

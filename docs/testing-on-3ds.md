@@ -90,7 +90,7 @@ To remove it: FBI > **Titles** > GaugeBoy > **Delete Title**. Your `sdmc:/3ds/ga
 
 ## 3. Save the adapter's Wi-Fi on the 3DS
 
-Do this once per adapter, in the car with the adapter plugged in and the ignition on (most adapters only power up then). Tested with the Vgate iCar Pro (`V-LINK`, ELM327 v2.3) on 2026-11-15.
+Do this once per adapter, in the car with the adapter plugged in and the ignition on (most adapters only power up then). Tested with the Vgate iCar Pro Wi-Fi adapter (ELM327 v2.3), whose network is called `V-LINK`, on 2026-11-15.
 
 1. **System Settings** > **Internet Settings** > **Connection Settings**. Pick an empty slot (there are only 3; note which one you use).
 2. **New Connection** > **Manual Setup** > **Search for an Access Point**, and pick the adapter's network (`V-LINK` for the Vgate iCar Pro).
@@ -110,7 +110,7 @@ Do this once per adapter, in the car with the adapter plugged in and the ignitio
 
 **Check:** open GaugeBoy, tap **SLOT** until it shows the adapter's slot (e.g. `SLOT 1`) and tap **SETUP SLOT**. It reads the slot (read-only) and says it's set up, or shows the current (NOW) and needed (NEW) values to fix in System Settings.
 
-This assumes the adapter is at `192.168.0.10`, as V-LINK and most Wi-Fi ELM327 adapters are. If yours differs, use its address as the Gateway, pick a free address in the same subnet for the 3DS, and use that same address as Primary DNS.
+This assumes the adapter is at `192.168.0.10`, as the Vgate iCar Pro and most Wi-Fi ELM327 adapters are. If yours differs, use its address as the Gateway, pick a free address in the same subnet for the 3DS, and use that same address as Primary DNS.
 
 Why: the 3DS drops a network that fails its internet connection test and won't let apps use it. GaugeBoy answers that test itself (a tiny DNS server and test page on the 3DS), so no other device is needed. When you tap **CONNECT**, GaugeBoy asks the 3DS to join the adapter's network and answers the test while it does. The log shows `Conntest:` lines when the 3DS asks GaugeBoy for the test page, and the `Network:` line shows the network, slot and the 3DS's IP. If this ever fails, `tools/fake_conntest.py` on a laptop on the adapter's network does the same job (see `tools/README.md`).
 

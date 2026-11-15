@@ -2,7 +2,7 @@
 """Answer the Nintendo 3DS connection test on a network with no internet.
 
 The 3DS will not let apps use a Wi-Fi network that fails its connection
-test (error 003-2002 on a Wi-Fi OBD-II adapter such as V-LINK). The test
+test (error 003-2002 on a Wi-Fi OBD-II adapter, e.g. the Vgate iCar Pro's network V-LINK). The test
 looks up a few Nintendo host names and fetches a page over HTTP; it passes
 on an HTTP 200 reply with the header "X-Organization: Nintendo".
 
@@ -172,7 +172,7 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 def lan_addresses():
     """This computer's IPv4 address towards the adapter (192.168.0.10) and
-    towards the default route; on the V-LINK network both are the same."""
+    towards the default route; on the adapter's network both are the same."""
     addrs = set()
     for probe in ("192.168.0.10", "1.1.1.1"):
         try:

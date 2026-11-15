@@ -10,7 +10,7 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ## [0.0.2] - 2026-11-15
 
-Last M0 release: the 3DS now talks to a real Wi-Fi OBD-II adapter. Tested with a Vgate iCar Pro (`V-LINK`, ELM327 v2.3) in a 2008 Honda Ridgeline. The 3DS normally drops a Wi-Fi network that has no internet, so GaugeBoy answers the 3DS's connection test itself. The adapter's Wi-Fi slot needs a manual IP and DNS; see `docs/testing-on-3ds.md` section 3.
+Last M0 release: the 3DS now talks to a real Wi-Fi OBD-II adapter. Tested with a Vgate iCar Pro Wi-Fi adapter (ELM327 v2.3; its Wi-Fi network is called `V-LINK`) in a 2008 Honda Ridgeline. The 3DS normally drops a Wi-Fi network that has no internet, so GaugeBoy answers the 3DS's connection test itself. The adapter's Wi-Fi slot needs a manual IP and DNS; see `docs/testing-on-3ds.md` section 3.
 
 ### Added
 
@@ -18,7 +18,7 @@ Last M0 release: the 3DS now talks to a real Wi-Fi OBD-II adapter. Tested with a
 - The adapter test app's start-up log shows each saved Wi-Fi slot's IP settings (automatic or manual IP, mask, gateway, DNS, MTU), read-only.
 - SLOT button on the adapter test screen: choose which System Settings connection slot (any, 1, 2 or 3) CONNECT uses, so another saved network in range (such as home Wi-Fi) doesn't take over. Saved as `wifi_slot` in `config.ini`; the start-up log lists each slot's network name. Confirmed on a 3DS: it moves the 3DS from home Wi-Fi to the adapter's network in a few seconds.
 - SAVE LOG button on the adapter test screen (between OLDER and NEWER): saves this session's log to `sdmc:/3ds/gaugeboy/logs/gaugeboy-log-<date>-<time>.txt` for sharing.
-- GaugeBoy answers the 3DS's internet connection test itself: a background thread runs a tiny DNS server and the test page on the 3DS, so the 3DS keeps a Wi-Fi OBD-II adapter's network without a laptop or other device. The adapter's connection slot needs a manual IP with Primary DNS set to that same IP (see `docs/testing-on-3ds.md`). Confirmed on a 3DS with the V-LINK adapter.
+- GaugeBoy answers the 3DS's internet connection test itself: a background thread runs a tiny DNS server and the test page on the 3DS, so the 3DS keeps a Wi-Fi OBD-II adapter's network without a laptop or other device. The adapter's connection slot needs a manual IP with Primary DNS set to that same IP (see `docs/testing-on-3ds.md`). Confirmed on a 3DS with the Vgate iCar Pro adapter.
 - `tools/fake_conntest.py`: a small DNS and web server that answers the 3DS's internet connection test, so a 3DS can stay on a Wi-Fi OBD-II adapter's network that has no internet. Dev tool for proving the fix; test steps in `tools/README.md`.
 - CONNECT (and the automatic reconnect) first asks the 3DS to join a saved Wi-Fi connection if it isn't on one, the way Luma3DS's "Force wireless connection" does, to reach adapters that have no internet. The result, including the system's error codes on failure, is logged.
 - Connection errors name the call that failed, for example `errno 115 at socket()`.

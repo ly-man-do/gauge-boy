@@ -37,7 +37,7 @@ static void test_normalize_errno(void)
 static void test_3ds_soc_errno(void)
 {
     CHECK_EQ_INT(tp_3ds_soc_errno(0), 0);
-    CHECK_EQ_INT(tp_3ds_soc_errno(26), EINPROGRESS); /* seen on the V-LINK test */
+    CHECK_EQ_INT(tp_3ds_soc_errno(26), EINPROGRESS); /* seen on the Vgate iCar Pro (V-LINK) test */
     CHECK_EQ_INT(tp_3ds_soc_errno(-26), EINPROGRESS);
     CHECK_EQ_INT(tp_3ds_soc_errno(14), ECONNREFUSED);
     CHECK_EQ_INT(tp_3ds_soc_errno(23), EHOSTUNREACH);

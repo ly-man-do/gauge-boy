@@ -58,7 +58,7 @@ adapter and vehicle behavior is checked on hardware (see the M0 hardware test is
 
 ## Fake 3DS connection test
 
-The 3DS joins a Wi-Fi OBD-II adapter's network (e.g. V-LINK) but fails its internet connection
+The 3DS joins a Wi-Fi OBD-II adapter's network (e.g. `V-LINK`, the Vgate iCar Pro's network) but fails its internet connection
 test (error `003-2002`), and then won't let apps use the network. `fake_conntest.py` answers that
 test from a computer on the same network, so the 3DS stays on it. It is the proof for a small
 helper device on the adapter's network (Beads `gauge-boy-7v5.22`). Python 3 standard library only.
@@ -93,18 +93,18 @@ Every DNS lookup and page request is logged, so you can see the 3DS use it.
    have passed through this script.
 5. Set the home slot's DNS back to Auto-Obtain **Yes** afterwards.
 
-### Test 2: in the truck with the V-LINK (the real target)
+### Test 2: in the truck on the adapter's network (the real target)
 
 Needs a Mac laptop in the truck.
 
 1. Adapter plugged in, ignition on. Disconnect your phone from `V-LINK` (adapters may allow only a
    few clients). Join the Mac to `V-LINK`.
 2. Run `python3 tools/fake_conntest.py` and note the IP it prints (a `192.168.0.x` address).
-3. 3DS V-LINK slot > **Change Settings**: IP Address Auto-Obtain **Yes**; DNS Auto-Obtain **No**,
+3. The 3DS's `V-LINK` slot > **Change Settings**: IP Address Auto-Obtain **Yes**; DNS Auto-Obtain **No**,
    Primary DNS = the Mac's IP. Save, then **Test Connection**: it should now pass.
 4. Open GaugeBoy (adapter `192.168.0.10:35000`) and tap **CONNECT**, then **ATZ**.
 
-If step 4 connects, the 3DS can use the V-LINK directly once something on its network answers the
+If step 4 connects, the 3DS can use the adapter directly once something on its network answers the
 test. The long-term helper would be a tiny device (e.g. an ESP32) joined to `V-LINK` at a fixed IP
 doing the same job, pending the owner's go / no-go decision (`gauge-boy-7v5.13`).
 
