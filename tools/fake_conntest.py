@@ -193,21 +193,33 @@ def main():
                     help="answer every name with this computer's address, not just the test names")
     args = ap.parse_args()
 
-    hint = ("Another program is using the port: a VPN app (e.g. Mullvad) or Docker often holds "
-            "DNS port 53, so quit it for the test. Or run with sudo and --bind <this computer's "
-            "IP> (macOS only lets ordinary users listen on ports below 1024 on all addresses).")
-    try:
-        dns = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        dns.bind((args.bind, args.dns_port))
-    except OSError as e:
-        sys.exit(f"could not listen on UDP {args.bind}:{args.dns_port} (DNS): {e}\n{hint}")
+    hint = ("Another program is using the port: a VPN app (e.g. Mullvad, whose background service "
+            "keeps running after you quit the app) often holds DNS port 53. Run with sudo: "
+            "sudo python3 tools/fake_conntest.py (it then listens on this computer's own address).")
+    # VPN apps (e.g. Mullvad's daemon, which keeps running after its app is
+    # quit) can hold DNS port 53 on all addresses. With sudo, fall back to
+    # this computer's own address, which is all the 3DS needs.
+    dns, dns_bind, err = None, args.bind, None
+    candidates = [args.bind] + (lan_addresses() if args.bind == "0.0.0.0" else [])
+    for addr in candidates:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind((addr, args.dns_port))
+            dns, dns_bind = sock, addr
+            break
+        except OSError as e:
+            err = err or e
+            sock.close()
+    if dns is None:
+        sys.exit(f"could not listen on UDP {args.bind}:{args.dns_port} (DNS): {err}\n{hint}")
     try:
         httpd = ThreadingHTTPServer((args.bind, args.http_port), TestPageHandler)
     except OSError as e:
         sys.exit(f"could not listen on TCP {args.bind}:{args.http_port} (HTTP): {e}\n{hint}")
 
     print("GaugeBoy fake connection test")
-    print(f"  DNS  on UDP {args.bind}:{args.dns_port}, test names -> "
+    print(f"  DNS  on UDP {dns_bind}:{args.dns_port}, test names -> "
           f"{args.ip or 'this computer'}, other names -> "
           f"{'this computer' if args.answer_all else 'NXDOMAIN'}")
     print(f"  HTTP on TCP {args.bind}:{args.http_port}, any path -> 200 + X-Organization: Nintendo")

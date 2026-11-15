@@ -74,8 +74,11 @@ Every DNS lookup and page request is logged, so you can see the 3DS use it.
 
 ### Before you start (Mac)
 
-- **Quit VPN apps** (e.g. Mullvad) and Docker Desktop for the test. They can hold DNS port 53 and
-  block other devices from reaching this computer. The script says so if port 53 is taken.
+- **Disconnect VPN apps** (e.g. Mullvad) for the test, or turn on their "Local network sharing":
+  while connected they can block other devices from reaching this computer.
+- **If port 53 is taken** (the script says so), run it with `sudo`:
+  `sudo python3 tools/fake_conntest.py`. Mullvad's background service keeps DNS port 53 even after
+  you quit the app; with `sudo` the script listens on this computer's own address instead.
 - If macOS asks whether Python may accept incoming connections, choose **Allow**.
 
 ### Test 1: at home (proves the fake answer works)
