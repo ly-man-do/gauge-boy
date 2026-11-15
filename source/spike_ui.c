@@ -1,5 +1,11 @@
 /*
- * M0 spike app, 3DS side: consoles, touch buttons and the worker thread.
+ * GaugeBoy app, 3DS side: consoles, touch screens and the worker thread.
+ *
+ * Screens: DIAG (default: scan, codes, readiness), SETUP (Wi-Fi slot,
+ * SAVE LOG, the adapter test screen) and TEST (the M0 adapter test
+ * screen). The bottom screen of DIAG and SETUP has the main menu
+ * (METER / DIAG / TRIM / FUN / LOG / SETUP); M1 enables DIAG and SETUP.
+ *
  * The UI thread never does network or file I/O after startup; the worker
  * thread runs the button actions and writes the log file.
  */
@@ -12,11 +18,13 @@
 #include <time.h>
 
 #include "data/config.h"
+#include "data/diag_view.h"
 #include "data/textlog.h"
 #include "spike_actions.h"
 #include "transport/conntest_server.h"
 #include "transport/net.h"
 #include "transport/tcp_transport.h"
+#include "obd/obd_diag.h"
 #include "version.h"
 
 #define LOG_PATH      CONFIG_DIR "/spike-log.txt"
@@ -37,6 +45,19 @@
 #define BTN_WIFI_SLOT    101   /* worker: next Wi-Fi slot, saved to config.ini */
 #define BTN_SETUP_SLOT   102   /* worker: read the slot, show what to enter */
 #define BTN_SETUP_OK     (-3)  /* UI: close the setup screen */
+#define BTN_DIAG_SCAN    104   /* worker: full DIAG scan */
+#define BTN_BACK         (-4)  /* UI: TEST screen -> SETUP */
+#define BTN_MENU_METER   (-10) /* UI: main menu */
+#define BTN_MENU_DIAG    (-11)
+#define BTN_MENU_TRIM    (-12)
+#define BTN_MENU_FUN     (-13)
+#define BTN_MENU_LOG     (-14)
+#define BTN_MENU_SETUP   (-15)
+#define BTN_TAB_STORED   (-20) /* UI: DIAG tabs (-20 - tab) */
+#define BTN_TAB_PENDING  (-21)
+#define BTN_TAB_PERM     (-22)
+#define BTN_TAB_READY    (-23)
+#define BTN_TEST_SCREEN  (-30) /* UI: SETUP -> TEST */
 
 /* Bottom-screen buttons in 8x8 console cells: 12-13x6 cells = 96-104x48 px.
  * The third row has the Wi-Fi slot buttons, the last one the log ones. */
@@ -55,11 +76,46 @@ static const button_t buttons[] = {
     { NULL,         SPIKE_VIN,        27, 9, 12, 6 },
     { NULL,         BTN_WIFI_SLOT,    0, 16, 12, 6 },  /* "SLOT ANY" / "SLOT 2" */
     { "SETUP SLOT", BTN_SETUP_SLOT,   13, 16, 13, 6 },
+    { "BACK",       BTN_BACK,         27, 16, 12, 6 },
     { "OLDER ^",    BTN_SCROLL_OLDER, 0, 23, 12, 6 },
     { "SAVE LOG",   BTN_SAVE_LOG,     13, 23, 13, 6 },
     { "NEWER v",    BTN_SCROLL_NEWER, 27, 23, 12, 6 },
 };
 #define BUTTON_COUNT ((int)(sizeof buttons / sizeof buttons[0]))
+
+/* Main menu, on the DIAG and SETUP screens: 5-row (40 px) buttons. */
+static const button_t menu_buttons[] = {
+    { "METER", BTN_MENU_METER, 0,  1, 12, 5 },
+    { "DIAG",  BTN_MENU_DIAG,  13, 1, 13, 5 },
+    { "TRIM",  BTN_MENU_TRIM,  27, 1, 12, 5 },
+    { "FUN",   BTN_MENU_FUN,   0,  7, 12, 5 },
+    { "LOG",   BTN_MENU_LOG,   13, 7, 13, 5 },
+    { "SETUP", BTN_MENU_SETUP, 27, 7, 12, 5 },
+};
+#define MENU_BUTTON_COUNT ((int)(sizeof menu_buttons / sizeof menu_buttons[0]))
+
+static const button_t diag_buttons[] = {
+    { "SCAN",      BTN_DIAG_SCAN,    0,  13, 12, 5 },
+    { "STORED",    BTN_TAB_STORED,   13, 13, 13, 5 },
+    { "PENDING",   BTN_TAB_PENDING,  27, 13, 12, 5 },
+    { "PERMANENT", BTN_TAB_PERM,     0,  19, 12, 5 },  /* hidden if unsupported */
+    { "READINESS", BTN_TAB_READY,    13, 19, 13, 5 },
+    { "OLDER ^",   BTN_SCROLL_OLDER, 0,  24, 12, 5 },
+    { "NEWER v",   BTN_SCROLL_NEWER, 27, 24, 12, 5 },
+};
+#define DIAG_BUTTON_COUNT ((int)(sizeof diag_buttons / sizeof diag_buttons[0]))
+
+static const button_t setup_buttons[] = {
+    { NULL,           BTN_WIFI_SLOT,    0,  13, 12, 5 },
+    { "SETUP SLOT",   BTN_SETUP_SLOT,   13, 13, 13, 5 },
+    { "SAVE LOG",     BTN_SAVE_LOG,     27, 13, 12, 5 },
+    { "ADAPTER TEST", BTN_TEST_SCREEN,  0,  19, 12, 5 },
+    { "OLDER ^",      BTN_SCROLL_OLDER, 0,  24, 12, 5 },
+    { "NEWER v",      BTN_SCROLL_NEWER, 27, 24, 12, 5 },
+};
+#define SETUP_BUTTON_COUNT ((int)(sizeof setup_buttons / sizeof setup_buttons[0]))
+
+typedef enum { SCREEN_DIAG, SCREEN_SETUP, SCREEN_TEST } screen_t;
 
 /* Shown instead of the buttons above while the setup screen is open. */
 static const button_t confirm_buttons[] = {
@@ -84,6 +140,11 @@ static struct {
     char confirm_title[SPIKE_COMPARE_COLS];
     char confirm_lines[CONFIRM_LINES][SPIKE_COMPARE_COLS];
     int confirm_count;
+
+    obd_diag_t diag;           /* last scan result */
+    unsigned diag_version;     /* bumped when diag or scan_step changes */
+    bool scanning;
+    obd_diag_step_t scan_step;
 
     volatile bool quit;
 } shared;
@@ -242,6 +303,60 @@ static void setup_slot_preview(spike_t *s)
     spike_logf(s, "SETUP SLOT: slot %d needs changes; enter the NEW values in System Settings", slot);
 }
 
+static void scan_progress(void *ctx, obd_diag_step_t step)
+{
+    (void)ctx;
+    LightLock_Lock(&shared.lock);
+    shared.scan_step = step;
+    shared.diag_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
+/* SCAN (worker): connect if needed, then the full DIAG scan. The adapter
+ * is reset (ATZ ...) on the first scan after each new connection. */
+static void diag_scan(spike_t *s)
+{
+    static obd_diag_t d;
+    static unsigned reset_at_connect = ~0u;
+
+    LightLock_Lock(&shared.lock);
+    shared.scanning = true;
+    shared.scan_step = OBD_DIAG_STEP_CONNECT;
+    shared.diag_version++;
+    LightLock_Unlock(&shared.lock);
+
+    spike_logf(s, "SCAN");
+    if (spike_connect_if_needed(s)) {
+        bool reset = s->transport->connects != reset_at_connect;
+        time_t now = time(NULL);
+        struct tm *tm = gmtime(&now);
+        obd_diag_scan(s->elm, reset, tm != NULL ? tm->tm_year + 1900 : 0, &d,
+                      spike_trace_command, scan_progress, s);
+        if (d.result != OBD_LINK_LOST) {
+            reset_at_connect = s->transport->connects;
+        }
+        if (d.result == OBD_LINK_OK) {
+            spike_logf(s, "= Scan: CEL %s, %d stored, %d pending%s", 
+                       d.have_readiness ? (d.readiness.mil_on ? "ON" : "off") : "?",
+                       d.stored.count, d.pending.count,
+                       d.stopped_at == OBD_DIAG_STEP_DONE ? "" : " (incomplete)");
+        } else {
+            spike_logf(s, "! Scan: %s", obd_link_result_str(d.result));
+        }
+    } else {
+        memset(&d, 0, sizeof d);
+        d.make = -1;
+        d.result = OBD_LINK_NO_ADAPTER;
+        spike_logf(s, "! Scan: can't reach the adapter (see SETUP > ADAPTER TEST)");
+    }
+
+    LightLock_Lock(&shared.lock);
+    shared.diag = d;
+    shared.scanning = false;
+    shared.diag_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
 static void worker_main(void *arg)
 {
     spike_t *spike = arg;
@@ -268,6 +383,8 @@ static void worker_main(void *arg)
                 next_wifi_slot(spike);
             } else if (action == BTN_SETUP_SLOT) {
                 setup_slot_preview(spike);
+            } else if (action == BTN_DIAG_SCAN) {
+                diag_scan(spike);
             } else {
                 spike_run(spike, (spike_action_t)action);
             }
@@ -316,7 +433,7 @@ static void draw_top(int scroll, int busy, bool connected)
     }
 }
 
-static void draw_button(const button_t *b, bool flash, bool busy)
+static void draw_button_ex(const button_t *b, bool flash, bool busy, bool selected)
 {
     char slot_label[12];
     const char *label = b->label;
@@ -333,7 +450,8 @@ static void draw_button(const button_t *b, bool flash, bool busy)
     } else if (label == NULL) {
         label = spike_action_label((spike_action_t)b->action);
     }
-    const char *colors = busy ? "\x1b[41;37m" : flash ? "\x1b[43;30m" : "\x1b[44;37m";
+    const char *colors = busy ? "\x1b[41;37m" : flash ? "\x1b[43;30m"
+                       : selected ? "\x1b[42;30m" : "\x1b[44;37m";
     int label_len = (int)strlen(label);
     int pad = (b->w - label_len) / 2;
 
@@ -347,6 +465,58 @@ static void draw_button(const button_t *b, bool flash, bool busy)
         }
     }
     printf("\x1b[0m");
+}
+
+static void draw_button(const button_t *b, bool flash, bool busy)
+{
+    draw_button_ex(b, flash, busy, false);
+}
+
+static void clear_rows(int first, int last)
+{
+    for (int r = first; r <= last; r++) {
+        print_row(r, BOTTOM_COLS, "");
+    }
+}
+
+/* DIAG top screen: header, scan progress, then the panel (scrollable). */
+static char diag_lines[DIAG_VIEW_MAX][DIAG_VIEW_COLS + 1];
+
+static int diag_line_count(diag_tab_t tab)
+{
+    LightLock_Lock(&shared.lock);
+    int n = diag_view_lines(&shared.diag, tab, DIAG_VIEW_COLS, diag_lines, DIAG_VIEW_MAX);
+    LightLock_Unlock(&shared.lock);
+    return n;
+}
+
+static void draw_diag_top(int scroll, diag_tab_t tab, int busy, bool connected)
+{
+    char header[TOP_COLS + 1];
+    char status[TOP_COLS + 1];
+    int n = diag_line_count(tab);
+
+    LightLock_Lock(&shared.lock);
+    bool scanning = shared.scanning;
+    obd_diag_step_t step = shared.scan_step;
+    LightLock_Unlock(&shared.lock);
+
+    spike_format_header(header, sizeof header, connected, busy);
+    if (scanning) {
+        snprintf(status, sizeof status, "-- Scanning: %s... --", obd_diag_step_str(step));
+    } else {
+        snprintf(status, sizeof status, "-- DIAG: %s%s --", diag_tab_name(tab),
+                 scroll > 0 ? " (scrolled: tap NEWER)" : "");
+    }
+
+    consoleSelect(&top_console);
+    printf("\x1b[0m");
+    print_row(0, TOP_COLS, header);
+    print_row(1, TOP_COLS, status);
+    for (int i = 0; i < LOG_ROWS; i++) {
+        int k = scroll + i;
+        print_row(LOG_FIRST_ROW + i, TOP_COLS, k < n ? diag_lines[k] : "");
+    }
 }
 
 /* The SETUP SLOT confirmation: NOW / NEW table, SAVE and CANCEL. */
@@ -383,13 +553,72 @@ static void draw_confirm(void)
     }
 }
 
-static void draw_bottom(const gb_config_t *cfg, const uint64_t *flash_until,
-                        uint64_t now, int busy)
+typedef struct {
+    screen_t screen;
+    diag_tab_t tab;
+    const char *notice;        /* one-line message under the menu, or NULL */
+    bool permanent_hidden;
+} ui_state_t;
+
+/* Flashing, by button action (UI thread). */
+#define FLASH_SLOTS 8
+static struct { int action; uint64_t until; } flashes[FLASH_SLOTS];
+
+static void flash(int action, uint64_t now)
+{
+    for (int i = 0; i < FLASH_SLOTS; i++) {
+        if (flashes[i].until == 0 || flashes[i].action == action) {
+            flashes[i].action = action;
+            flashes[i].until = now + FLASH_MS;
+            return;
+        }
+    }
+}
+
+static bool flashing(int action, uint64_t now)
+{
+    for (int i = 0; i < FLASH_SLOTS; i++) {
+        if (flashes[i].until != 0 && flashes[i].action == action && now < flashes[i].until) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* True if a flash ran out (needs a redraw). */
+static bool flashes_expired(uint64_t now)
+{
+    bool any = false;
+    for (int i = 0; i < FLASH_SLOTS; i++) {
+        if (flashes[i].until != 0 && now >= flashes[i].until) {
+            flashes[i].until = 0;
+            any = true;
+        }
+    }
+    return any;
+}
+
+static void draw_list(const button_t *list, int count, uint64_t now, int busy, int selected,
+                      bool hide_permanent)
+{
+    for (int i = 0; i < count; i++) {
+        const button_t *b = &list[i];
+        if (hide_permanent && b->action == BTN_TAB_PERM) {
+            continue;
+        }
+        draw_button_ex(b, flashing(b->action, now), b->action >= 0 && b->action == busy,
+                       b->action == selected);
+    }
+}
+
+static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t now, int busy,
+                        bool full)
 {
     char line[BOTTOM_COLS + 1];
 
     LightLock_Lock(&shared.lock);
     bool confirm = shared.confirm;
+    bool cel_on = shared.diag.have_readiness && shared.diag.readiness.mil_on;
     LightLock_Unlock(&shared.lock);
     static bool cleared_after_confirm = true;
     if (confirm) {
@@ -400,20 +629,50 @@ static void draw_bottom(const gb_config_t *cfg, const uint64_t *flash_until,
 
     consoleSelect(&bottom_console);
     printf("\x1b[0m");
-    if (!cleared_after_confirm) {
-        for (int r = 0; r < 30; r++) {
-            print_row(r, BOTTOM_COLS, "");
-        }
+    if (!cleared_after_confirm || full) {
+        clear_rows(0, 29);
         cleared_after_confirm = true;
     }
-    snprintf(line, sizeof line, "Adapter %s:%u", cfg->adapter_host,
-             (unsigned)cfg->adapter_port);
-    print_row(0, BOTTOM_COLS, line);
-    for (int i = 0; i < BUTTON_COUNT; i++) {
-        draw_button(&buttons[i], now < flash_until[i],
-                    buttons[i].action >= 0 && buttons[i].action == busy);
+
+    if (ui->screen == SCREEN_TEST) {
+        snprintf(line, sizeof line, "Adapter test  %s:%u", cfg->adapter_host,
+                 (unsigned)cfg->adapter_port);
+        print_row(0, BOTTOM_COLS, line);
+        for (int i = 0; i < BUTTON_COUNT; i++) {
+            draw_button(&buttons[i], flashing(buttons[i].action, now),
+                        buttons[i].action >= 0 && buttons[i].action == busy);
+        }
+        print_row(29, BOTTOM_COLS, "BACK: to SETUP  Up/Down L/R: scroll");
+        return;
     }
-    print_row(29, BOTTOM_COLS, "START: exit  Up/Down L/R: scroll");
+
+    /* Row 0: CEL lamp (amber when on) and the adapter address. */
+    printf("\x1b[1;1H%s CEL %s \x1b[0m", cel_on ? "\x1b[43;30m" : "\x1b[0m",
+           cel_on ? "ON " : "off");
+    snprintf(line, sizeof line, " %s:%u", cfg->adapter_host, (unsigned)cfg->adapter_port);
+    printf("%-30.30s", line);
+
+    draw_list(menu_buttons, MENU_BUTTON_COUNT, now, busy,
+              ui->screen == SCREEN_DIAG ? BTN_MENU_DIAG : BTN_MENU_SETUP, false);
+    if (ui->notice != NULL) {
+        print_row(12, BOTTOM_COLS, ui->notice);
+    } else {
+        print_row(12, BOTTOM_COLS, ui->screen == SCREEN_DIAG ? "-- DIAG: check engine light & codes --"
+                                                             : "-- SETUP --");
+    }
+    if (ui->screen == SCREEN_DIAG) {
+        if (ui->permanent_hidden) {
+            for (int r = 19; r < 24; r++) {
+                printf("\x1b[%d;1H%-12s", r + 1, "");
+            }
+        }
+        draw_list(diag_buttons, DIAG_BUTTON_COUNT, now, busy, BTN_TAB_STORED - (int)ui->tab,
+                  ui->permanent_hidden);
+        print_row(29, BOTTOM_COLS, "SCAN with the engine running.");
+    } else {
+        draw_list(setup_buttons, SETUP_BUTTON_COUNT, now, busy, 0, false);
+        print_row(29, BOTTOM_COLS, "START: exit  Up/Down L/R: scroll log");
+    }
 }
 
 static int button_at(const button_t *list, int count, int px, int py)
@@ -542,7 +801,8 @@ void spike_ui_run(void)
     }
     spike_logf(&spike, "Adapter %s:%u. Join its Wi-Fi in System Settings,",
                cfg.adapter_host, (unsigned)cfg.adapter_port);
-    spike_logf(&spike, "then tap CONNECT and ATZ.");
+    spike_logf(&spike, "then tap SCAN on DIAG (or SETUP > ADAPTER TEST).");
+    shared.diag.make = -1;
 
     s32 prio = 0x30;
     svcGetThreadPriority(&prio, CUR_THREAD_HANDLE);
@@ -552,14 +812,19 @@ void spike_ui_run(void)
         spike_logf(&spike, "! Could not start the worker thread; buttons will not work");
     }
 
-    uint64_t flash_until[BUTTON_COUNT] = { 0 };
-    int scroll = 0;
+    ui_state_t ui = { SCREEN_DIAG, DIAG_TAB_STORED, NULL, false };
+    uint64_t notice_until = 0;
+    int scroll = 0;                /* log (SETUP, TEST) */
+    int diag_scroll = 0;           /* DIAG panel */
     unsigned drawn_version = ~0u;
+    unsigned drawn_diag_version = ~0u;
     int drawn_scroll = -1;
     int drawn_busy = -2;
     bool drawn_connected = false;
     bool drawn_confirm = false;
+    bool top_dirty = true;
     bool bottom_dirty = true;
+    bool bottom_full = true;
 
     while (aptMainLoop()) {
         hidScanInput();
@@ -571,7 +836,18 @@ void spike_ui_run(void)
         }
         LightLock_Lock(&shared.lock);
         bool confirming = shared.confirm;
+        bool perm_hidden = shared.diag.permanent_unsupported;
         LightLock_Unlock(&shared.lock);
+        if (perm_hidden != ui.permanent_hidden) {
+            ui.permanent_hidden = perm_hidden;
+            if (perm_hidden && ui.tab == DIAG_TAB_PERMANENT) {
+                ui.tab = DIAG_TAB_STORED;
+            }
+            bottom_dirty = bottom_full = top_dirty = true;
+        }
+
+        int action = 0;
+        bool tapped = false;
         if ((down & KEY_TOUCH) && confirming) {
             touchPosition tp;
             hidTouchRead(&tp);
@@ -584,27 +860,110 @@ void spike_ui_run(void)
         } else if (down & KEY_TOUCH) {
             touchPosition tp;
             hidTouchRead(&tp);
-            int i = button_at(buttons, BUTTON_COUNT, tp.px, tp.py);
-            if (i >= 0) {
-                flash_until[i] = now + FLASH_MS;
-                bottom_dirty = true;
-                if (buttons[i].action == BTN_SCROLL_OLDER) {
-                    scroll = clamp_scroll(scroll + LOG_ROWS / 2);
-                } else if (buttons[i].action == BTN_SCROLL_NEWER) {
-                    scroll = clamp_scroll(scroll - LOG_ROWS / 2);
-                } else if (worker != NULL) {
-                    enqueue(buttons[i].action);
+            int i;
+            if (ui.screen == SCREEN_TEST) {
+                i = button_at(buttons, BUTTON_COUNT, tp.px, tp.py);
+                if (i >= 0) { action = buttons[i].action; tapped = true; }
+            } else {
+                i = button_at(menu_buttons, MENU_BUTTON_COUNT, tp.px, tp.py);
+                if (i >= 0) {
+                    action = menu_buttons[i].action;
+                    tapped = true;
+                } else if (ui.screen == SCREEN_DIAG) {
+                    i = button_at(diag_buttons, DIAG_BUTTON_COUNT, tp.px, tp.py);
+                    if (i >= 0 && !(ui.permanent_hidden && diag_buttons[i].action == BTN_TAB_PERM)) {
+                        action = diag_buttons[i].action;
+                        tapped = true;
+                    }
+                } else {
+                    i = button_at(setup_buttons, SETUP_BUTTON_COUNT, tp.px, tp.py);
+                    if (i >= 0) { action = setup_buttons[i].action; tapped = true; }
                 }
             }
         }
+
+        if (tapped) {
+            flash(action, now);
+            bottom_dirty = true;
+            bool on_diag = ui.screen == SCREEN_DIAG;
+            switch (action) {
+            case BTN_SCROLL_OLDER:
+                if (on_diag) diag_scroll += LOG_ROWS / 2;
+                else scroll = clamp_scroll(scroll + LOG_ROWS / 2);
+                break;
+            case BTN_SCROLL_NEWER:
+                if (on_diag) diag_scroll -= LOG_ROWS / 2;
+                else scroll = clamp_scroll(scroll - LOG_ROWS / 2);
+                break;
+            case BTN_MENU_DIAG:
+                ui.screen = SCREEN_DIAG;
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_MENU_SETUP:
+                ui.screen = SCREEN_SETUP;
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_MENU_METER:
+            case BTN_MENU_TRIM:
+            case BTN_MENU_FUN:
+            case BTN_MENU_LOG: {
+                static const char *const soon[] = {
+                    "METER: live gauges come in version 0.2",
+                    "TRIM: fuel trims come in version 0.2",
+                    "FUN: fun modes come in version 0.6",
+                    "LOG: logging comes in version 0.4",
+                };
+                ui.notice = soon[BTN_MENU_METER - action];
+                notice_until = now + 3000;
+                break;
+            }
+            case BTN_TAB_STORED:
+            case BTN_TAB_PENDING:
+            case BTN_TAB_PERM:
+            case BTN_TAB_READY:
+                ui.tab = (diag_tab_t)(BTN_TAB_STORED - action);
+                diag_scroll = 0;
+                top_dirty = true;
+                break;
+            case BTN_TEST_SCREEN:
+                ui.screen = SCREEN_TEST;
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_BACK:
+                ui.screen = SCREEN_SETUP;
+                bottom_full = top_dirty = true;
+                break;
+            default:
+                if (action >= 0 && worker != NULL) {
+                    enqueue(action);
+                }
+                break;
+            }
+        }
+        if (ui.notice != NULL && now >= notice_until) {
+            ui.notice = NULL;
+            bottom_dirty = true;
+        }
+
         /* Optional physical shortcuts. */
-        if (down & KEY_DUP)   scroll = clamp_scroll(scroll + 1);
-        if (down & KEY_DDOWN) scroll = clamp_scroll(scroll - 1);
-        if (down & KEY_L)     scroll = clamp_scroll(scroll + LOG_ROWS);
-        if (down & KEY_R)     scroll = clamp_scroll(scroll - LOG_ROWS);
+        int step = 0;
+        if (down & KEY_DUP)   step = 1;
+        if (down & KEY_DDOWN) step = -1;
+        if (down & KEY_L)     step = LOG_ROWS;
+        if (down & KEY_R)     step = -LOG_ROWS;
+        if (step != 0) {
+            if (ui.screen == SCREEN_DIAG) diag_scroll += step;
+            else scroll = clamp_scroll(scroll + step);
+        }
+        if (ui.screen == SCREEN_DIAG) {
+            int max = diag_line_count(ui.tab) - LOG_ROWS;
+            if (diag_scroll > max) diag_scroll = max;
+            if (diag_scroll < 0) diag_scroll = 0;
+        }
 
         LightLock_Lock(&shared.lock);
         unsigned version = shared.log.version;
+        unsigned diag_version = shared.diag_version;
         int busy = shared.busy;
         bool connected = shared.connected;
         bool confirm_now = shared.confirm;
@@ -614,24 +973,30 @@ void spike_ui_run(void)
             bottom_dirty = true;
         }
 
-        if (version != drawn_version || scroll != drawn_scroll || busy != drawn_busy ||
-            connected != drawn_connected) {
-            draw_top(scroll, busy, connected);
+        bool on_diag = ui.screen == SCREEN_DIAG;
+        int shown_scroll = on_diag ? diag_scroll : scroll;
+        if (top_dirty || shown_scroll != drawn_scroll || busy != drawn_busy ||
+            connected != drawn_connected ||
+            (on_diag ? diag_version != drawn_diag_version : version != drawn_version)) {
+            if (on_diag) {
+                draw_diag_top(diag_scroll, ui.tab, busy, connected);
+            } else {
+                draw_top(scroll, busy, connected);
+            }
             drawn_version = version;
-            drawn_scroll = scroll;
-            bottom_dirty |= busy != drawn_busy;
+            drawn_diag_version = diag_version;
+            drawn_scroll = shown_scroll;
+            bottom_dirty |= busy != drawn_busy || diag_version != drawn_diag_version;
             drawn_busy = busy;
             drawn_connected = connected;
+            top_dirty = false;
         }
-        for (int i = 0; i < BUTTON_COUNT; i++) {
-            if (flash_until[i] != 0 && now >= flash_until[i]) {
-                flash_until[i] = 0;
-                bottom_dirty = true;
-            }
+        if (flashes_expired(now)) {
+            bottom_dirty = true;
         }
-        if (bottom_dirty) {
-            draw_bottom(&cfg, flash_until, now, busy);
-            bottom_dirty = false;
+        if (bottom_dirty || bottom_full) {
+            draw_bottom(&cfg, &ui, now, busy, bottom_full);
+            bottom_dirty = bottom_full = false;
         }
 
         gfxFlushBuffers();

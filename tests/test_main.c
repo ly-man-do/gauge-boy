@@ -10,6 +10,7 @@ void suite_conntest(void);
 void suite_obd(void);
 void suite_dtc(void);
 void suite_link(void);
+void suite_diag(void);
 
 int main(void)
 {
@@ -22,5 +23,6 @@ int main(void)
     suite_obd();
     suite_dtc();
     suite_link();
+    suite_diag();
     return gb_test_summary();
 }

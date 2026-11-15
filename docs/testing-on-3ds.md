@@ -135,7 +135,7 @@ If your adapter uses a different address, edit the file (card reader or FTP) and
 
 ## 5. Smoke test (at home, no adapter)
 
-1. The bottom screen shows 11 buttons: CONNECT, ATZ, ATSP0+0100 / ATDPN, ATRV, 0902 VIN / SLOT, SETUP SLOT / OLDER, SAVE LOG, NEWER. A tap flashes the button yellow; while an action runs it turns red and the top header shows `BUSY`.
+1. GaugeBoy opens on the **DIAG** screen: the main menu (METER, DIAG, TRIM, FUN, LOG, SETUP; METER, TRIM, FUN and LOG say which version brings them), then SCAN, STORED, PENDING, PERMANENT, READINESS and OLDER / NEWER. **SETUP** has SLOT, SETUP SLOT, SAVE LOG and **ADAPTER TEST**, which opens the adapter test screen: CONNECT, ATZ, ATSP0+0100 / ATDPN, ATRV, 0902 VIN / SLOT, SETUP SLOT, BACK / OLDER, SAVE LOG, NEWER. A tap flashes the button yellow; while an action runs it turns red and the top header shows `BUSY`.
 2. Tap **ATZ**. About 3 seconds later the log shows "Adapter did not answer" (or "refused or unreachable"). The buttons keep responding meanwhile.
 3. OLDER / NEWER scroll the log. SAVE LOG writes this session's log to its own file (see step 7).
 4. Exit with **START**. On the SD card, `sdmc:/3ds/gaugeboy/spike-log.txt` has the same lines as the screen.
@@ -146,14 +146,15 @@ Report anything garbled (colors, layout, text running off the screen).
 
 1. Plug in the adapter, ignition on (engine running is fine).
 2. Make sure the 3DS's wireless switch is on and it has joined the adapter's slot.
-3. Launch GaugeBoy and tap, in order:
+3. Launch GaugeBoy (engine running) and tap **SCAN** on DIAG. It connects, finds the protocol (about 5 s on ISO 9141-2) and reads the check engine light, readiness, stored / pending / permanent codes and the VIN. The top screen shows the car (maker, model year, VIN), protocol, check engine light and the chosen tab; STORED / PENDING / PERMANENT / READINESS switch the list (PERMANENT disappears if the car doesn't support it), OLDER / NEWER scroll it.
+4. Then **SETUP > ADAPTER TEST** and tap, in order:
    - **CONNECT**: expect `= Connected (... ms)`.
    - **ATZ** 10 or more times: expect `ELM327 v...` each time.
    - **ATSP0+0100**: expect `SEARCHING...` then a `41 00 ...` reply.
    - **ATDPN**: the 2008 Ridgeline reports `Protocol 3: ISO 9141-2 (5 baud init) (auto)`. Other cars can report any OBD-II protocol (J1850 PWM / VPW, ISO 9141-2, ISO 14230-4 KWP, ISO 15765-4 CAN); with only the ignition on, `0100` may say `UNABLE TO CONNECT` until the engine runs.
    - **ATRV**: expect roughly 12.4 to 14.5 V (higher with the engine running).
    - **0902 VIN**: expect several `0: 49 02 ...` lines.
-4. Transport checks:
+5. Transport checks (on the adapter test screen):
    - **Lid:** close the lid for 10 seconds, open it, tap ATRV. It should reconnect on its own.
    - **Unplug:** unplug the adapter, tap ATRV a few times (retries back off up to 8 s), plug it back in, tap CONNECT.
    - **Wrong IP:** set a wrong `host` in `config.ini`, relaunch, tap ATZ: "Adapter did not answer" within about 3 s and the app stays responsive. Put the right address back afterwards.

@@ -212,7 +212,7 @@ static void do_vin(spike_t *s)
                obd_vin_check_digit_ok(vin) ? "" : " (check digit doesn't match)");
 }
 
-static void link_trace(void *ctx, const char *cmd, const elm_response_t *resp, unsigned ms)
+void spike_trace_command(void *ctx, const char *cmd, const elm_response_t *resp, unsigned ms)
 {
     spike_t *s = ctx;
     spike_logf(s, "> %s", cmd);
@@ -227,7 +227,7 @@ static void do_search(spike_t *s)
     if (send_logged(s, "ATSP0", ELM_TIMEOUT_DEFAULT_MS) != ELM_OK) {
         return;
     }
-    if (obd_link_open_traced(s->elm, false, &link, link_trace, s) != OBD_LINK_OK) {
+    if (obd_link_open_traced(s->elm, false, &link, spike_trace_command, s) != OBD_LINK_OK) {
         spike_logf(s, "! %s", obd_link_result_str(link.result));
         return;
     }
@@ -374,4 +374,9 @@ int spike_format_slot_compare(const net_ip_settings_t *now, const net_ip_setting
         snprintf(lines[n++], SPIKE_COMPARE_COLS, "%-5s %-15s %s", labels[i], a, b);
     }
     return n;
+}
+
+bool spike_connect_if_needed(spike_t *s)
+{
+    return ensure_connected(s) == 1;
 }

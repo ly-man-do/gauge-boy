@@ -55,6 +55,14 @@ void spike_init(spike_t *s, tcp_transport_t *transport, elm_t *elm,
 
 void spike_run(spike_t *s, spike_action_t action);
 
+/* Connects to the adapter unless already connected (logged like the
+ * automatic reconnect). True if connected. */
+bool spike_connect_if_needed(spike_t *s);
+
+/* Logs a command and its reply ("> 0100", "< 41 00 ...", "= OK (n ms)");
+ * matches obd_link_trace_fn, ctx is the spike_t. */
+void spike_trace_command(void *ctx, const char *cmd, const elm_response_t *resp, unsigned ms);
+
 /* Timestamped log line, "[  12.345] text". */
 void spike_logf(spike_t *s, const char *fmt, ...);
 

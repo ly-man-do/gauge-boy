@@ -1,0 +1,163 @@
+/* A full DIAG scan against a scripted adapter, and the DIAG panel text. */
+#include <stdio.h>
+#include <string.h>
+
+#include "harness.h"
+#include "fake_io.h"
+#include "data/diag_view.h"
+#include "obd/obd_diag.h"
+
+static fake_io_t f;
+static elm_t elm;
+static obd_diag_t diag;
+static char lines[DIAG_VIEW_MAX][DIAG_VIEW_COLS + 1];
+
+static void setup(void)
+{
+    fake_io_init(&f);
+    elm_io_t io = fake_io_iface(&f);
+    elm_bind(&elm, &io);
+}
+
+/* The Ridgeline's layout (ISO 9141-2, headers off) with made-up codes and VIN. */
+static void script_ridgeline(void)
+{
+    fake_io_reply(&f, "ATZ", "ATZ\r\r\rELM327 v2.3\r\r>", 900, 0);
+    fake_io_reply(&f, "ATE0", "ATE0\rOK\r\r>", 10, 0);
+    fake_io_reply(&f, "ATL0", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "ATSP0", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "0100", "SEARCHING...\r41 00 BF BE A8 91\r\r>", 4500, 0);
+    fake_io_reply(&f, "ATDPN", "A3\r\r>", 40, 0);
+    fake_io_reply(&f, "0120", "41 20 80 00 00 00\r\r>", 60, 0);
+    fake_io_reply(&f, "0101", "41 01 82 07 65 04\r\r>", 60, 0);
+    fake_io_reply(&f, "03", "43 01 71 14 56 00 00\r\r>", 80, 0);
+    fake_io_reply(&f, "07", "NO DATA\r\r>", 80, 0);
+    fake_io_reply(&f, "0A", "NO DATA\r\r>", 80, 0);
+    fake_io_reply(&f, "0902",
+                  "49 02 01 00 00 00 32\r49 02 02 48 4A 59 4B\r49 02 03 31 36 36 31\r"
+                  "49 02 04 38 48 30 30\r49 02 05 30 31 32 33\r\r>", 500, 0);
+}
+
+static int steps_seen;
+static void count_steps(void *ctx, obd_diag_step_t step)
+{
+    (void)ctx;
+    (void)step;
+    steps_seen++;
+}
+
+static bool view_has(int n, const char *text)
+{
+    for (int i = 0; i < n; i++) {
+        if (strstr(lines[i], text) != NULL) {
+            return true;
+        }
+    }
+    return false;
+}
+
+#define CHECK_VIEW(n, text)                                                    \
+    do {                                                                       \
+        if (!view_has((n), (text))) {                                          \
+            char all_[4096] = "";                                              \
+            for (int i_ = 0; i_ < (n); i_++) {                                 \
+                strncat(all_, lines[i_], sizeof all_ - strlen(all_) - 2);      \
+                strcat(all_, "\n");                                            \
+            }                                                                  \
+            gb_check_failf(__FILE__, __LINE__, "panel lacks \"%s\":\n%s", (text), all_); \
+        }                                                                      \
+    } while (0)
+
+static void test_scan_ridgeline(void)
+{
+    setup();
+    script_ridgeline();
+    steps_seen = 0;
+    CHECK_EQ_INT(obd_diag_scan(&elm, true, 2026, &diag, NULL, count_steps, NULL), OBD_LINK_OK);
+    CHECK_EQ_INT(diag.stopped_at, OBD_DIAG_STEP_DONE);
+    CHECK_EQ_INT(steps_seen, 7);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+    CHECK_EQ_INT(diag.link.protocol, 3);
+    CHECK(diag.have_readiness && diag.readiness.mil_on);
+    CHECK_EQ_INT(diag.readiness.dtc_count, 2);
+    CHECK(diag.have_stored);
+    CHECK_EQ_INT(diag.stored.count, 2);
+    CHECK_EQ_STR(diag.stored.code[0].code, "P0171");
+    CHECK_EQ_STR(diag.stored.code[1].code, "P1456");
+    CHECK(diag.have_pending && diag.pending.count == 0);
+    CHECK(diag.permanent_unsupported && !diag.have_permanent);
+    CHECK(diag.have_vin);
+    CHECK_EQ_STR(diag.vin, "2HJYK16618H000123");
+    CHECK_EQ_INT(diag.model_year, 2008);
+    CHECK_EQ_STR(diag.maker, "Honda");
+    CHECK(diag.make >= 0);
+}
+
+static void test_panel(void)
+{
+    /* Uses the scan from test_scan_ridgeline. */
+    int n = diag_view_lines(&diag, DIAG_TAB_STORED, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "2008 Honda  VIN 2HJYK16618H000123");
+    CHECK_VIEW(n, "Protocol: ISO 9141-2 (5 baud init)");
+    CHECK_VIEW(n, "Check engine light: ON (2 stored codes)");
+    CHECK_VIEW(n, "Stored codes: 2");
+    CHECK_VIEW(n, "P0171  System Too Lean Bank 1");
+    CHECK_VIEW(n, "P1456  Evaporative Emission Control System Leak");  /* Honda text, wrapped */
+    for (int i = 0; i < n; i++) {
+        CHECK((int)strlen(lines[i]) <= DIAG_VIEW_COLS);
+    }
+
+    n = diag_view_lines(&diag, DIAG_TAB_PENDING, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "No Pending codes.");
+    n = diag_view_lines(&diag, DIAG_TAB_PERMANENT, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "not supported by this car");
+    n = diag_view_lines(&diag, DIAG_TAB_READINESS, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Readiness: 6 ready, 1 not ready (spark ignition)");
+    CHECK_VIEW(n, "Evaporative system");
+    CHECK_VIEW(n, "Not ready");
+    CHECK_VIEW(n, "Not supported: Heated catalyst");
+
+    /* Before any scan. */
+    static obd_diag_t empty;
+    memset(&empty, 0, sizeof empty);
+    n = diag_view_lines(&empty, DIAG_TAB_STORED, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Tap SCAN");
+
+    /* The line limit holds. */
+    n = diag_view_lines(&diag, DIAG_TAB_STORED, DIAG_VIEW_COLS, lines, 3);
+    CHECK_EQ_INT(n, 3);
+}
+
+static void test_scan_engine_off(void)
+{
+    setup();
+    fake_io_reply(&f, "0100", "SEARCHING...\rUNABLE TO CONNECT\r\r>", 5600, 0);
+    CHECK_EQ_INT(obd_diag_scan(&elm, false, 2026, &diag, NULL, NULL, NULL), OBD_LINK_NO_VEHICLE);
+    CHECK_EQ_INT(diag.stopped_at, OBD_DIAG_STEP_CONNECT);
+    CHECK(!diag.have_stored && !diag.have_vin);
+}
+
+static void test_scan_lost_midway(void)
+{
+    /* The adapter stops answering after the stored codes: keep what we have. */
+    setup();
+    fake_io_reply(&f, "0100", "41 00 BE 3E B8 10\r\r>", 300, 0);
+    fake_io_reply(&f, "ATDPN", "A6\r\r>", 20, 0);
+    fake_io_reply(&f, "0101", "41 01 00 07 65 00\r\r>", 40, 0);
+    fake_io_reply(&f, "03", "43 00\r\r>", 40, 0);
+    CHECK_EQ_INT(obd_diag_scan(&elm, false, 2026, &diag, NULL, NULL, NULL), OBD_LINK_LOST);
+    CHECK_EQ_INT(diag.stopped_at, OBD_DIAG_STEP_PENDING);
+    CHECK(diag.have_stored && diag.stored.count == 0);
+    CHECK(diag.have_readiness && !diag.readiness.mil_on);
+    int n = diag_view_lines(&diag, DIAG_TAB_STORED, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Scan stopped");
+}
+
+void suite_diag(void)
+{
+    gb_suite("diag");
+    RUN_TEST(test_scan_ridgeline);
+    RUN_TEST(test_panel);
+    RUN_TEST(test_scan_engine_off);
+    RUN_TEST(test_scan_lost_midway);
+}
