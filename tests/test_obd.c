@@ -4,6 +4,7 @@
 
 #include "harness.h"
 #include "obd/obd_codes.h"
+#include "obd/obd_readiness.h"
 #include "obd/obd_reply.h"
 
 static obd_reply_t reply; /* large: keep off the stack */
@@ -402,6 +403,102 @@ static void test_codes_bad(void)
     CHECK(!obd_decode_codes(&reply, 6, 0x01, &codes));
 }
 
+/* ---------- Mode 01 PID 01: CEL and readiness ---------- */
+
+static obd_readiness_t rd;
+
+static const obd_monitor_t *monitor(const char *name)
+{
+    for (int i = 0; i < OBD_MONITOR_COUNT; i++) {
+        if (rd.monitor[i].name != NULL && strcmp(rd.monitor[i].name, name) == 0) {
+            return &rd.monitor[i];
+        }
+    }
+    return NULL;
+}
+
+#define CHECK_MON(name, st)                                                  \
+    do {                                                                     \
+        const obd_monitor_t *m_ = monitor(name);                             \
+        CHECK(m_ != NULL);                                                   \
+        if (m_ != NULL) {                                                    \
+            CHECK_EQ_STR(obd_monitor_state_str(m_->state), obd_monitor_state_str(st)); \
+        }                                                                    \
+    } while (0)
+
+static void test_readiness_spark(void)
+{
+    /* MIL on, 1 code; spark; misfire/fuel/components supported, fuel not
+     * complete; catalyst, evap, O2, O2 heater supported; evap not complete. */
+    static const uint8_t abcd[4] = { 0x81, 0x27, 0x65, 0x04 };
+    obd_readiness_from_bytes(abcd, &rd);
+    CHECK(rd.valid && rd.mil_on);
+    CHECK_EQ_INT(rd.dtc_count, 1);
+    CHECK(!rd.compression);
+    CHECK_MON("Misfire", OBD_MONITOR_COMPLETE);
+    CHECK_MON("Fuel system", OBD_MONITOR_INCOMPLETE);
+    CHECK_MON("Components", OBD_MONITOR_COMPLETE);
+    CHECK_MON("Catalyst", OBD_MONITOR_COMPLETE);
+    CHECK_MON("Heated catalyst", OBD_MONITOR_NOT_SUPPORTED);
+    CHECK_MON("Evaporative system", OBD_MONITOR_INCOMPLETE);
+    CHECK_MON("Oxygen sensor", OBD_MONITOR_COMPLETE);
+    CHECK_MON("Oxygen sensor heater", OBD_MONITOR_COMPLETE);
+    CHECK_MON("EGR / VVT system", OBD_MONITOR_NOT_SUPPORTED);
+    CHECK_EQ_INT(obd_readiness_ready_count(&rd), 5);
+    CHECK_EQ_INT(obd_readiness_not_ready_count(&rd), 2);
+
+    /* Light off, no codes, everything complete. */
+    static const uint8_t clean[4] = { 0x00, 0x07, 0x65, 0x00 };
+    obd_readiness_from_bytes(clean, &rd);
+    CHECK(!rd.mil_on && rd.dtc_count == 0);
+    CHECK_EQ_INT(obd_readiness_not_ready_count(&rd), 0);
+}
+
+static void test_readiness_diesel(void)
+{
+    /* Compression ignition: different names; reserved bits never shown. */
+    static const uint8_t abcd[4] = { 0x02, 0x0F, 0xFF, 0x40 };
+    obd_readiness_from_bytes(abcd, &rd);
+    CHECK(rd.compression && !rd.mil_on && rd.dtc_count == 2);
+    CHECK_MON("NMHC catalyst", OBD_MONITOR_COMPLETE);
+    CHECK_MON("Particulate filter", OBD_MONITOR_INCOMPLETE);
+    CHECK_MON("Boost pressure", OBD_MONITOR_COMPLETE);
+    CHECK(monitor("Catalyst") == NULL);
+    CHECK_EQ_INT(rd.monitor[3 + 2].state, OBD_MONITOR_NOT_SUPPORTED); /* reserved bit 2 */
+    CHECK(rd.monitor[3 + 2].name == NULL);
+}
+
+static void test_readiness_from_reply(void)
+{
+    /* ISO 9141-2 headers off (one ECU). */
+    static const char *const one[] = { "41 01 81 07 65 04", NULL };
+    run(one, 3, false);
+    CHECK(obd_decode_readiness(&reply, &rd));
+    CHECK(rd.mil_on && rd.ecus == 1);
+    CHECK_MON("Evaporative system", OBD_MONITOR_INCOMPLETE);
+
+    /* CAN headers on: engine (light on, 2 codes) + transmission (1 code). */
+    static const char *const two[] = { "7E8 06 41 01 82 07 65 00", "7E9 06 41 01 01 00 00 00", NULL };
+    run(two, 6, true);
+    CHECK(obd_decode_readiness(&reply, &rd));
+    CHECK(rd.mil_on);
+    CHECK_EQ_INT(rd.dtc_count, 3);
+    CHECK_EQ_INT(rd.ecus, 2);
+
+    /* A second ECU marking a monitor incomplete wins. */
+    static const char *const inc[] = { "7E8 06 41 01 00 07 65 00", "7E9 06 41 01 00 07 01 01", NULL };
+    run(inc, 6, true);
+    CHECK(obd_decode_readiness(&reply, &rd));
+    CHECK_MON("Catalyst", OBD_MONITOR_INCOMPLETE);
+    CHECK_MON("Oxygen sensor", OBD_MONITOR_COMPLETE);
+
+    /* No usable reply: too short, wrong PID, refusal, NO DATA. */
+    static const char *const bad[] = { "41 01 81 07", "41 00 BE 3E B8 11", "7F 01 12", NULL };
+    run(bad, 6, false);
+    CHECK(!obd_decode_readiness(&reply, &rd));
+    CHECK(!obd_decode_readiness(NULL, &rd));
+}
+
 void suite_obd(void)
 {
     gb_suite("obd");
@@ -416,4 +513,7 @@ void suite_obd(void)
     RUN_TEST(test_codes_can);
     RUN_TEST(test_codes_legacy);
     RUN_TEST(test_codes_bad);
+    RUN_TEST(test_readiness_spark);
+    RUN_TEST(test_readiness_diesel);
+    RUN_TEST(test_readiness_from_reply);
 }
