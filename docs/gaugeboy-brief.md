@@ -1,6 +1,6 @@
 # Project Brief: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.3.0
+**Version:** 1.4.0
 **Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
 **Date:** 2026-11-14
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -86,24 +86,23 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 ## 5b. Visual Direction: 3DS Game
 
-**Mood:** GaugeBoy should look and feel like a game made for the Nintendo 3DS: bright, clean and playful, with chunky low-poly 3D models, colorful textures and big, friendly touch menus. The owner's reference image sets the palette, the feel and the mascot car.
+**Mood:** GaugeBoy should look and feel like a game made for the Nintendo 3DS: bright, clean and playful, with chunky low-poly 3D models, colorful textures and big, friendly touch menus.
 
 **Reference points (for mood only):**
-- The owner's reference image: a warm orange backdrop with a ring pattern, and chunky low-poly cars with thin dark outlines
 - 3DS games' menus, HOME menu banners and vehicle models, studied only for size and structure (triangle counts, texture sizes, how models are split into parts)
 - The owner's asset style guide (kept outside the repo), which lists every asset the app needs with sizes and budgets
 
 **Style: 3DS-game 3D.**
-- **Models:** Chunky, slightly toy-like low-poly models with colorful textures and vertex colors, lit from the top left, with an optional shine highlight. Every model has thin dark outlines, like the cars in the reference image. Budgets: about 1,000 to 1,500 triangles for the mascot car (plus a low-detail version of about 300), about 200 to 400 per gauge, and under about 10,000 for the whole top-screen scene; textures usually 256x256 or smaller.
+- **Models:** Chunky, slightly toy-like low-poly models with colorful textures and vertex colors, lit from the top left, with an optional shine highlight. Every model has thin dark outlines. Budgets: about 1,000 to 1,500 triangles for the mascot car (plus a low-detail version of about 300), about 200 to 400 per gauge, and under about 10,000 for the whole top-screen scene; textures usually 256x256 or smaller.
 - **Gauges:** Chunky, toy-like dials in the style of a 3DS game, not realistic tuner gauges: thick rounded bezels, bold numerals, a big needle and a glossy glass highlight.
 - **Digital readouts:** Bold, rounded digits on simple LCD-style panels.
 - **Controls (bottom screen):** Big, rounded, colorful buttons that visibly press in, each with an icon, plus toggles and sliders in the same style.
 - **Lighting:** Consistent light source (top-left) across models and UI art.
 
-**Mascot car:** A lime-green toy version of a 1995 Suzuki Sidekick (a compact SUV with a boxy body, upright windshield, black fender flares and bumpers, and a spare tire on the tailgate), drawn with the colors and feel of the owner's reference image: a chunky low-poly model with thin dark outlines and no maker names, badges or logos. It appears on the HOME menu icon and banner, spins in 3D on the top-screen title, drives through the attract mode and is the garage card picture until the user takes a photo.
+**Mascot car:** A lime-green toy version of a 1995 Suzuki Sidekick (a compact SUV with a boxy body, upright windshield, black fender flares and bumpers, and a spare tire on the tailgate), based on the shape of the real car: a chunky low-poly model with thin dark outlines and no maker names, badges or logos. It appears on the HOME menu icon and banner, spins in 3D on the top-screen title, drives through the attract mode and is the garage card picture until the user takes a photo.
 
 **Design language:**
-- **Colors:** Warm tan-orange backdrop (`#C58B4C`) with a darker ring pattern (`#876B39`); near-black ink (`#1A1610`) for outlines and linework; lime green (`#8FD42A`, highlight `#C6F27A`, shadow `#5E9A1A`) as the main accent; navy-to-blue glass (`#323868` to `#6C7AC8`); light neutrals for trim and panels. Signal colors stay for function only: amber for the CEL warning, red for redline, green for live values.
+- **Colors:** Warm tan-orange backdrop (`#C58B4C`) with a darker tan (`#876B39`) for patterns and panel edges; near-black ink (`#1A1610`) for outlines and linework; lime green (`#8FD42A`, highlight `#C6F27A`, shadow `#5E9A1A`) as the main accent; navy-to-blue glass (`#323868` to `#6C7AC8`); light neutrals for trim and panels. Signal colors stay for function only: amber for the CEL warning, red for redline, green for live values.
 - **Type:** A rounded, bold display font for headings; a clean UI font for menus and lists; bold digit styles for live values. Labels are in English only; there are no Japanese sub-labels.
 - **Gauges:** Mix of chunky analog dials, bar graphs and digital readouts; peak-hold markers; redline flash.
 - **Motion:** Bouncy, springy transitions; startup "sweep" where needles go to max and back; the selected item pulses.
@@ -351,6 +350,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.4.0 | 2026-11-14 | Owner's reference image removed from section 5b (mood, reference points, model outlines, mascot car); the mascot car is based on the real 1995 Sidekick; palette values unchanged, the ring pattern color is now a darker tan for patterns and panel edges; `CLAUDE.md` updated to 1.4.0 |
 | 1.3.0 | 2026-11-14 | Mascot car set to a 1995 Suzuki Sidekick (closes open question 7); music and sound effects move to a 3DS-game style (section 5f, goals); `CLAUDE.md` updated to 1.3.0 |
 | 1.2.0 | 2026-11-14 | New visual direction in section 5b: look and feel like a Nintendo 3DS game, with the owner's reference image for palette and feel; chunky toy-like gauges; thin dark outlines on all models; lime-green mascot car (icon, banner, title screen, attract mode, garage card); English labels only (Japanese sub-labels dropped); IP rule covers ripped assets; goals, DIAG, fun modes, M3, risks and open questions updated to match; `CLAUDE.md` updated to 1.2.0 |
 | 1.1.0 | 2026-11-13 | Review fixes: battery voltage via `ATRV`; manifold vacuum computed as baro − MAP with key-on fallback; M0 Wi-Fi checklist (manual IP, failed connection test, slots, sleep) and reconnect-on-wake; Japanese sub-label wording and font subsetting; version-free release filenames and a fixed `.cia` title ID; Time Attack arms while stopped and auto-starts, with interpolated speed samples; Eco Challenge MAP estimate uses engine displacement; VIN decode limited to manufacturer and year; master mute never silences the CEL chime, with a visual fallback when DSP firmware is missing; `CLAUDE.md` updated to 1.1.0 |

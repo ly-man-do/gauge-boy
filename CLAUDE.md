@@ -1,7 +1,7 @@
 # CLAUDE.md: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.3.0
-**Matches project brief:** 1.3.0 (`docs/gaugeboy-brief.md`)
+**Version:** 1.4.0
+**Matches project brief:** 1.4.0 (`docs/gaugeboy-brief.md`)
 
 You are the developer on GaugeBoy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
 
@@ -87,7 +87,7 @@ docs/          Project brief, compatibility list
 
 ## 5. UI rules
 
-- Style: look and feel like a Nintendo 3DS game, with the owner's reference palette (warm orange backdrop, lime-green accent). See brief section 5b.
+- Style: look and feel like a Nintendo 3DS game, with the palette in brief section 5b (warm orange backdrop, lime-green accent). Do not use the old reference image.
 - Models: chunky, slightly toy-like low-poly models with colorful textures and vertex colors, and thin dark outlines on every model. Gauges are chunky, toy-like dials, not realistic tuner gauges.
 - Mascot car: a lime-green 1995 Suzuki Sidekick, with no maker names, badges or logos.
 - Music and sound effects: 3DS-game style (bright, catchy, playful); see brief section 5f.
@@ -139,6 +139,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.4.0 | 2026-11-14 | Matches brief 1.4.0: the owner's reference image is dropped; the style comes from the brief's palette and the real 1995 Sidekick |
 | 1.3.0 | 2026-11-14 | Matches brief 1.3.0: mascot car is a 1995 Suzuki Sidekick; 3DS-game style music and sound effects |
 | 1.2.0 | 2026-11-14 | Matches brief 1.2.0: 3DS-game visual direction (reference palette, toy-like gauges, outlines on all models, lime-green mascot car), English-only labels, ripped assets are references only |
 | 1.1.0 | 2026-11-13 | Matches brief 1.1.0. Follow-ups filed with `--deps discovered-from` (not `bd dep add`); explicit git policy (commit, never push); owner closes epics; go / no-go issue labeled `needs-owner`; approved test harness, ELM327 emulator and `.cia` tools; version-free release filenames; platform-free logic in `data/` and `fun/`; Wi-Fi reconnect; Time Attack auto-start; CEL warning under master mute and without DSP firmware; VIN decode limits; brief/CLAUDE.md version sync rule |
