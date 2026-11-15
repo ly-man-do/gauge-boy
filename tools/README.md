@@ -15,8 +15,8 @@ tools/run-emulator.sh
 ```
 
 The first run creates `tools/.venv` and installs the package. The emulator then listens on
-`127.0.0.1:35000` with the `car` scenario: ISO 15765-4 CAN 11-bit 500 kbaud (protocol 6, as the
-2008 Ridgeline is expected to use), CEL status, stored / pending codes, bank 1 fuel trims, MAP and a
+`127.0.0.1:35000` with the `car` scenario: ISO 15765-4 CAN 11-bit 500 kbaud (protocol 6; the
+2008 Ridgeline actually uses ISO 9141-2, see Beads `gauge-boy-7v5.26`), CEL status, stored / pending codes, bank 1 fuel trims, MAP and a
 VIN. It shows a `CMD>` prompt; type `help` for its commands. Press Ctrl-D to stop it.
 
 Options:

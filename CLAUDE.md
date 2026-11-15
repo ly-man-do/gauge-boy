@@ -1,7 +1,7 @@
 # CLAUDE.md: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.8.0
-**Matches project brief:** 1.6.0 (`docs/gaugeboy-brief.md`)
+**Version:** 1.9.0
+**Matches project brief:** 1.7.0 (`docs/gaugeboy-brief.md`)
 
 You are the developer on GaugeBoy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
 
@@ -141,6 +141,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.9.0 | 2026-11-15 | Matches brief 1.7.0: all OBD-II protocols the ELM327 handles (Ridgeline is ISO 9141-2, not CAN) |
 | 1.8.0 | 2026-11-15 | `segno` approved for making the FBI install QR codes (section 2), dev and CI only |
 | 1.7.0 | 2026-11-14 | Blender approved as a dev-only 3D modeling tool (section 2): scripted models in `tools/`, converted to C data for citro3d |
 | 1.6.0 | 2026-11-14 | Matches brief 1.6.0: the mascot car's fender flares and bumpers are body-colored |

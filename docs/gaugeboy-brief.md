@@ -1,8 +1,8 @@
 # Project Brief: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.6.0
+**Version:** 1.7.0
 **Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
-**Date:** 2026-11-14
+**Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
 **Team:** Solo developer (project owner), with code written by Claude Code
 **Task tracking:** Beads (`bd`)
@@ -52,6 +52,8 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 **Go / no-go rule (end of M0):** If at least one widely available Wi-Fi ELM327 adapter connects and answers `ATZ` reliably, continue with Option A. If none do, pause the milestones and start the ESP32 bridge before M1.
 
 **Early risk spike:** Test 2 to 3 Wi-Fi ELM327 adapters for 3DS compatibility before building the UI.
+
+**OBD-II protocols:** GaugeBoy supports every protocol the ELM327 handles, found by auto-detect (`ATSP0`) and named from `ATDPN`. The tested adapter, the Vgate iCar Pro Wi-Fi (ELM327 v2.3, Wi-Fi network `V-LINK`), supports all OBD-II protocols: SAE J1850 PWM (41.6 kbaud), SAE J1850 VPW (10.4 kbaud), ISO 9141-2 (5 baud init, 10.4 kbaud), ISO 14230-4 KWP (5 baud init or fast init, 10.4 kbaud), ISO 15765-4 CAN (11-bit or 29-bit ID, 500 or 250 kbaud), SAE J1939 CAN (29-bit, 250 kbaud), and USER1 / USER2 CAN (11-bit, 125 / 50 kbaud by default, adjustable). Replies are parsed both with CAN headers (ISO-TP multi-frame, e.g. `0:`/`1:` lines) and without (J1850 / ISO 9141 / KWP, e.g. one `49 02 0N ...` line per frame). J1939 is a heavy-truck protocol with its own message format: GaugeBoy detects and names it, but reading J1939 data is not in v1.
 
 **M0 Wi-Fi checklist (per adapter):**
 - The 3DS radio is 2.4 GHz 802.11b/g only and cannot join ad-hoc networks; note each adapter's mode and security (open / WEP / WPA2).
@@ -272,7 +274,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 | Milestone | Version | Scope |
 |---|---|---|
 | M0: Spike | 0.0.x | Join adapter Wi-Fi, open socket, send `ATZ`, print reply on screen; test FBI QR install from a GitHub release link |
-| M1: Core read | 0.1.x | Auto protocol detect, read VIN, CEL status, stored / pending / permanent codes with descriptions, readiness monitors, clear codes, code history log |
+| M1: Core read | 0.1.x | Auto protocol detect across all OBD-II protocols (section 4), read VIN, CEL status, stored / pending / permanent codes with descriptions, readiness monitors, clear codes, code history log |
 | M2: Live data | 0.2.x | Polling of selected PIDs, supported-PID discovery, text dashboard, fuel trims for both banks (short-term, long-term, total) |
 | M3: UI polish | 0.3.x | 3DS-game visual style: chunky toy-like gauges with outlines, mascot car on the title screen, layered stereoscopic 3D on the top screen, touch control panel with pressable buttons, startup needle sweep, theme file, metric/imperial toggle, menu sounds |
 | M4: Logging | 0.4.x | CSV logging to SD, session list, simple graph replay |
@@ -287,7 +289,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 - New 3DS / New 3DS XL / New 2DS XL with custom firmware (Luma3DS) and Homebrew Launcher (Old 3DS family not supported in v1)
 - 2 to 3 Wi-Fi ELM327 adapters (different brands, v1.5 and v2.1 clones)
 - **Primary test vehicle: 2008 Honda Ridgeline** (3.5L V6, naturally aspirated). Notes:
-  - Expected protocol: ISO 15765-4 CAN (11-bit, 500 kbps), since US 2008 model-year vehicles were required to use CAN. Confirm in M0 with `ATDPN` after auto-detect.
+  - Protocol: ISO 9141-2 (5 baud init, 10.4 kbaud), found by auto-detect in M0 (`ATDPN` = `A3`), not ISO 15765-4 CAN as first expected. The first search takes about 4.5 s; the engine must be running (with only the ignition on, the ECU did not answer).
   - No turbo, so there is no boost reading. The boost-style gauge will show manifold vacuum instead, which keeps the boost-style dial. PID 0x0B gives absolute pressure, so vacuum = barometric pressure − MAP. Use barometric pressure from PID 0x33 if supported; otherwise use the MAP reading taken at key-on, engine-off.
   - Battery voltage comes from the adapter (`ATRV`), since PID 0x42 may not be supported.
   - Run `0100`/`0120`/`0140` supported-PID scans in M1 and record the results in the compatibility list.
@@ -350,6 +352,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.7.0 | 2026-11-15 | Protocol support covers all OBD-II protocols the ELM327 and the tested Vgate iCar Pro handle (section 4), J1939 detected but not read in v1; M1 auto-detect across all of them; the Ridgeline uses ISO 9141-2, not CAN (section 7); `CLAUDE.md` updated to 1.9.0 |
 | 1.6.0 | 2026-11-14 | Mascot car fender flares and bumpers are body-colored (was black), as in the owner's Sidekick photo; `CLAUDE.md` updated to 1.6.0 |
 | 1.5.0 | 2026-11-14 | Mascot car color changes from lime green to teal (`#2BAE9F`, from the owner's Sidekick photo); lime stays the main UI accent; goals, section 5b and open question 7 updated; `CLAUDE.md` updated to 1.5.0 |
 | 1.4.0 | 2026-11-14 | Owner's reference image removed from section 5b (mood, reference points, model outlines, mascot car); the mascot car is based on the real 1995 Sidekick; palette values unchanged, the ring pattern color is now a darker tan for patterns and panel edges; `CLAUDE.md` updated to 1.4.0 |

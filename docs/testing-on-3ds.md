@@ -150,7 +150,7 @@ Report anything garbled (colors, layout, text running off the screen).
    - **CONNECT**: expect `= Connected (... ms)`.
    - **ATZ** 10 or more times: expect `ELM327 v...` each time.
    - **ATSP0+0100**: expect `SEARCHING...` then a `41 00 ...` reply.
-   - **ATDPN**: on the 2008 Ridgeline, expect `Protocol 6: ISO 15765-4 CAN (11 bit, 500 kbaud) (auto)`.
+   - **ATDPN**: the 2008 Ridgeline reports `Protocol 3: ISO 9141-2 (5 baud init) (auto)`. Other cars can report any OBD-II protocol (J1850 PWM / VPW, ISO 9141-2, ISO 14230-4 KWP, ISO 15765-4 CAN); with only the ignition on, `0100` may say `UNABLE TO CONNECT` until the engine runs.
    - **ATRV**: expect roughly 12.4 to 14.5 V (higher with the engine running).
    - **0902 VIN**: expect several `0: 49 02 ...` lines.
 4. Transport checks:

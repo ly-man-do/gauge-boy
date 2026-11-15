@@ -45,6 +45,8 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 |---|---|---|---|
 | Vgate iCar Pro Wi-Fi | ELM327 v2.3 | `V-LINK`, adapter at `192.168.0.10:35000` | Works (0.0.2), with the slot setup below |
 
+The iCar Pro supports all OBD-II protocols (SAE J1850 PWM and VPW, ISO 9141-2, ISO 14230-4 KWP, ISO 15765-4 CAN 11/29-bit at 250/500 kbaud) plus SAE J1939 and two user-set CAN modes. GaugeBoy detects the car's protocol automatically; the 2008 Ridgeline uses ISO 9141-2.
+
 More adapters will be tested later; reports are welcome (see [Testing on a real New 3DS](docs/testing-on-3ds.md)).
 
 ## Install
