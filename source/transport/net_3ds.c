@@ -333,27 +333,54 @@ static Result aci_set_word(u16 cmd, u32 value)
     return R_FAILED(ret) ? ret : (Result)cmdbuf[1];
 }
 
-/* How an address is handed to the ac:i setters. Not documented to us:
- * a static buffer (id 0) was refused on hardware with 0xD9001830, so the
- * other descriptor kinds are tried in turn. A wrong guess is either
- * refused or caught by the read-back check before anything is saved. */
-enum { ADDR_STATIC0, ADDR_STATIC1, ADDR_STATIC2, ADDR_MAPPED_R, ADDR_MODES };
-static const char *const addr_mode_names[ADDR_MODES] = {
-    "static buffer 0", "static buffer 1", "static buffer 2", "mapped buffer",
-};
-static int addr_mode = -1; /* the one that worked, or -1 */
+/* How an address is handed to the ac:i setters is not documented to us.
+ * On hardware a 4-byte static buffer (ids 0-2) and a 4-byte mapped buffer
+ * were all refused with 0xD9001830, which suggests the service checks
+ * the buffer descriptor word exactly. So a grid of descriptor kinds, ids
+ * and sizes (and a plain word, both byte orders) is tried, each verified
+ * by reading the IP back. Refused tries change nothing; a try that is
+ * accepted but stores something else is caught by the read-back, and
+ * net_slot_write saves nothing unless the whole slot matches the plan. */
+typedef struct {
+    u8 kind;   /* 0 static buffer, 1 mapped buffer (read), 2 word LE, 3 word BE */
+    u8 id;     /* static buffer id */
+    u8 size;   /* bytes described */
+} addr_mode_t;
 
-static Result aci_set_buffer_mode(u16 cmd, const void *buf, size_t size, int mode)
+static addr_mode_t addr_mode;
+static bool addr_mode_known;
+
+static void addr_mode_name(const addr_mode_t *m, char *out, size_t len)
 {
-    u32 *cmdbuf = getThreadCommandBuffer();
-    cmdbuf[0] = IPC_MakeHeader(cmd, 0, 2);
-    switch (mode) {
-    case ADDR_STATIC0:  cmdbuf[1] = IPC_Desc_StaticBuffer(size, 0); break;
-    case ADDR_STATIC1:  cmdbuf[1] = IPC_Desc_StaticBuffer(size, 1); break;
-    case ADDR_STATIC2:  cmdbuf[1] = IPC_Desc_StaticBuffer(size, 2); break;
-    default:            cmdbuf[1] = IPC_Desc_Buffer(size, IPC_BUFFER_R); break;
+    switch (m->kind) {
+    case 0:  snprintf(out, len, "static buffer id %u size %u", m->id, m->size); break;
+    case 1:  snprintf(out, len, "mapped buffer size %u", m->size); break;
+    case 2:  snprintf(out, len, "word (little-endian)"); break;
+    default: snprintf(out, len, "word (big-endian)"); break;
     }
-    cmdbuf[2] = (u32)buf;
+}
+
+static Result aci_set_addr(u16 cmd, const u8 addr[4], const addr_mode_t *m)
+{
+    static u8 buf[32];
+    memset(buf, 0, sizeof buf);
+    memcpy(buf, addr, 4);
+    u32 *cmdbuf = getThreadCommandBuffer();
+    if (m->kind >= 2) {
+        u32 v;
+        if (m->kind == 2) {
+            memcpy(&v, addr, 4);
+        } else {
+            v = ((u32)addr[0] << 24) | ((u32)addr[1] << 16) | ((u32)addr[2] << 8) | addr[3];
+        }
+        cmdbuf[0] = IPC_MakeHeader(cmd, 1, 0);
+        cmdbuf[1] = v;
+    } else {
+        cmdbuf[0] = IPC_MakeHeader(cmd, 0, 2);
+        cmdbuf[1] = m->kind == 0 ? IPC_Desc_StaticBuffer(m->size, m->id)
+                                 : IPC_Desc_Buffer(m->size, IPC_BUFFER_R);
+        cmdbuf[2] = (u32)buf;
+    }
     Result ret = svcSendSyncRequest(*acGetSessionHandle());
     return R_FAILED(ret) ? ret : (Result)cmdbuf[1];
 }
@@ -361,43 +388,68 @@ static Result aci_set_buffer_mode(u16 cmd, const void *buf, size_t size, int mod
 static Result aci_get_buffer(u16 cmd, void *buf, size_t size);
 #define ACI_GET_IP_FOR_PROBE 0x44B
 
-/* Find how the setters take an address: for each mode, write a test
- * address to the loaded copy's IP field and read it back. Only a mode
- * whose value really arrives counts (an accepted call that stores
- * something else is caught too). The caller writes the real IP after.
- * *tried gets each refused mode for the log. */
+/* Writes test IP 10.11.12.13 with each mode until one reads back. tried
+ * gets a summary of the refusals for the log. */
 static Result detect_addr_mode(u16 set_ip_cmd, char *tried, size_t tried_len)
 {
-    static u8 probe[4] = { 10, 11, 12, 13 };
-    Result r = -1;
-    for (int m = 0; m < ADDR_MODES; m++) {
-        r = aci_set_buffer_mode(set_ip_cmd, probe, 4, m);
-        u8 back[4] = { 0, 0, 0, 0 };
-        if (R_SUCCEEDED(r)) {
-            Result g = aci_get_buffer(ACI_GET_IP_FOR_PROBE, back, 4);
-            if (R_SUCCEEDED(g) && memcmp(back, probe, 4) == 0) {
-                addr_mode = m;
-                return 0;
-            }
-            r = R_FAILED(g) ? g : -1;
-        }
-        size_t used = strlen(tried);
-        if (r == -1) {
-            snprintf(tried + used, tried_len - used, "%s%s stored %u.%u.%u.%u", used ? ", " : "",
-                     addr_mode_names[m], back[0], back[1], back[2], back[3]);
-        } else {
-            snprintf(tried + used, tried_len - used, "%s%s 0x%08lX", used ? ", " : "",
-                     addr_mode_names[m], (unsigned long)r);
+    static const u8 probe[4] = { 10, 11, 12, 13 };
+    static const u8 sizes[] = { 4, 8, 16, 32 };
+    addr_mode_t modes[48];
+    int n = 0;
+    for (unsigned si = 0; si < sizeof sizes; si++) {
+        for (u8 id = 0; id < 8; id++) {
+            modes[n++] = (addr_mode_t){ 0, id, sizes[si] };
         }
     }
-    return r;
+    modes[n++] = (addr_mode_t){ 1, 0, 4 };
+    modes[n++] = (addr_mode_t){ 1, 0, 16 };
+    modes[n++] = (addr_mode_t){ 2, 0, 4 };
+    modes[n++] = (addr_mode_t){ 3, 0, 4 };
+
+    Result last = -1, first_err = 0;
+    int refused = 0, wrong = 0;
+    for (int i = 0; i < n; i++) {
+        Result r = aci_set_addr(set_ip_cmd, probe, &modes[i]);
+        if (R_FAILED(r)) {
+            refused++;
+            if (first_err == 0) {
+                first_err = r;
+            } else if (r != first_err && strlen(tried) + 48 < tried_len) {
+                char name[40];
+                addr_mode_name(&modes[i], name, sizeof name);
+                size_t used = strlen(tried);
+                snprintf(tried + used, tried_len - used, "%s%s 0x%08lX", used ? ", " : "",
+                         name, (unsigned long)r);
+            }
+            last = r;
+            continue;
+        }
+        u8 back[4] = { 0, 0, 0, 0 };
+        Result g = aci_get_buffer(ACI_GET_IP_FOR_PROBE, back, 4);
+        if (R_SUCCEEDED(g) && memcmp(back, probe, 4) == 0) {
+            addr_mode = modes[i];
+            addr_mode_known = true;
+            return 0;
+        }
+        wrong++;
+        if (strlen(tried) + 64 < tried_len) {
+            char name[40];
+            addr_mode_name(&modes[i], name, sizeof name);
+            size_t used = strlen(tried);
+            snprintf(tried + used, tried_len - used, "%s%s accepted but stored %u.%u.%u.%u",
+                     used ? ", " : "", name, back[0], back[1], back[2], back[3]);
+        }
+        last = -1;
+    }
+    size_t used = strlen(tried);
+    snprintf(tried + used, tried_len - used, "%s%d of %d refused (first 0x%08lX), %d stored wrong",
+             used ? "; " : "", refused, n, (unsigned long)first_err, wrong);
+    return last;
 }
 
-static Result aci_set_buffer(u16 cmd, const void *buf, size_t size, char *tried, size_t tried_len)
+static Result aci_set_buffer(u16 cmd, const u8 addr[4])
 {
-    (void)tried;
-    (void)tried_len;
-    return aci_set_buffer_mode(cmd, buf, size, addr_mode >= 0 ? addr_mode : ADDR_STATIC0);
+    return aci_set_addr(cmd, addr, &addr_mode);
 }
 
 static Result aci_empty(u16 cmd)
@@ -435,20 +487,20 @@ bool net_slot_write(int slot, const net_ip_settings_t *in, char *err, size_t err
     memcpy(dns1, in->dns1, 4);
     memcpy(dns2, in->dns2, 4);
 
-    char tried[160] = "";
+    char tried[200] = "";
     const char *step = "load";
     Result r = ACI_LoadNetworkSetting((u32)(slot - 1));
 #define STEP(name, call) do { if (R_SUCCEEDED(r)) { step = (name); r = (call); } } while (0)
     STEP("IP auto-obtain", aci_set_word(ACI_SET_DHCP, in->dhcp ? 1 : 0));
     STEP("DNS auto-obtain", aci_set_word(ACI_SET_AUTO_DNS, in->auto_dns ? 1 : 0));
-    if (addr_mode < 0) {
+    if (!addr_mode_known) {
         STEP("finding how to pass addresses", detect_addr_mode(ACI_SET_IP, tried, sizeof tried));
     }
-    STEP("IP address", aci_set_buffer(ACI_SET_IP, ip, 4, tried, sizeof tried));
-    STEP("subnet mask", aci_set_buffer(ACI_SET_NETMASK, mask, 4, tried, sizeof tried));
-    STEP("gateway", aci_set_buffer(ACI_SET_GATEWAY, gw, 4, tried, sizeof tried));
-    STEP("primary DNS", aci_set_buffer(ACI_SET_DNS1, dns1, 4, tried, sizeof tried));
-    STEP("secondary DNS", aci_set_buffer(ACI_SET_DNS2, dns2, 4, tried, sizeof tried));
+    STEP("IP address", aci_set_buffer(ACI_SET_IP, ip));
+    STEP("subnet mask", aci_set_buffer(ACI_SET_NETMASK, mask));
+    STEP("gateway", aci_set_buffer(ACI_SET_GATEWAY, gw));
+    STEP("primary DNS", aci_set_buffer(ACI_SET_DNS1, dns1));
+    STEP("secondary DNS", aci_set_buffer(ACI_SET_DNS2, dns2));
     if (R_FAILED(r)) {
         /* Drop the half-edited copy so nothing else picks it up. */
         (void)ACI_LoadNetworkSetting((u32)(slot - 1));
@@ -477,7 +529,7 @@ bool net_slot_write(int slot, const net_ip_settings_t *in, char *err, size_t err
                 memcmp(got[4], in->dns2, 4) == 0;
     if (!same) {
         (void)ACI_LoadNetworkSetting((u32)(slot - 1));
-        addr_mode = -1;
+        addr_mode_known = false;
         snprintf(err, err_len, "check before saving found IP %u.%u.%u.%u DNS %u.%u.%u.%u "
                  "(read 0x%08lX); nothing saved",
                  got[0][0], got[0][1], got[0][2], got[0][3], got[3][0], got[3][1], got[3][2],
@@ -494,9 +546,9 @@ bool net_slot_write(int slot, const net_ip_settings_t *in, char *err, size_t err
         return false;
     }
     /* On success err says how the addresses were passed (for the log). */
-    snprintf(err, err_len, "addresses passed as %s%s%s",
-             addr_mode >= 0 ? addr_mode_names[addr_mode] : "?",
-             tried[0] ? "; refused: " : "", tried);
+    char how[40];
+    addr_mode_name(&addr_mode, how, sizeof how);
+    snprintf(err, err_len, "addresses passed as %s%s%s", how, tried[0] ? "; " : "", tried);
     return true;
 }
 

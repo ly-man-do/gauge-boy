@@ -42,6 +42,13 @@ size_t ct_dns_reply(const uint8_t *query, size_t len, const uint8_t ip[4],
 /* The complete HTTP response for the test page (any path). */
 const char *ct_http_reply(size_t *len);
 
+/* True if the request's Host header is one of the test host names (the
+ * 3DS's connection test), so other devices' requests can be refused. */
+bool ct_http_is_test_request(const char *request);
+
+/* A short "404 Not Found" response for any other request. */
+const char *ct_http_not_found(size_t *len);
+
 /* True once buf (len bytes read so far) holds a whole HTTP request head
  * (ends with an empty line). */
 bool ct_http_request_complete(const char *buf, size_t len);

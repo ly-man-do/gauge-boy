@@ -18,6 +18,7 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ### Fixed
 
+- GaugeBoy's connection-test web server answered every web request on the network (a file-transfer app polling the 3DS filled the log). It now serves the test page only to the 3DS's connection test, answers anything else with 404 and logs that once.
 - CONNECT no longer asks the 3DS to join Wi-Fi when it is already on a network (the system's own join counts), which had made the 3DS rejoin and drop the adapter connection about 25 seconds later.
 - Connecting to the adapter took the full 3-second timeout on the 3DS even when the adapter answered at once; a pending connect is now re-checked every 100 ms.
 - "Wi-Fi state unknown (ac 0xE0A09D2E)" in the `Network:` line now reads "Wi-Fi on (joined by the system)" or "Wi-Fi not connected".

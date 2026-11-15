@@ -140,6 +140,20 @@ static void test_http_request_complete(void)
     CHECK(!ct_http_request_complete("", 0));
 }
 
+static void test_http_only_test_hosts(void)
+{
+    CHECK(ct_http_is_test_request("GET / HTTP/1.1\r\nHost: conntest.nintendowifi.net\r\nUser-Agent: CTR AC/02\r\n\r\n"));
+    CHECK(ct_http_is_test_request("GET / HTTP/1.1\r\nhost:CTEST.cdn.nintendo.net:80\r\n\r\n"));
+    /* Another device on the network (seen on hardware). */
+    CHECK(!ct_http_is_test_request("GET /api/status HTTP/1.1\r\nHost: 192.168.1.187\r\n\r\n"));
+    CHECK(!ct_http_is_test_request("GET / HTTP/1.0\r\n\r\n"));
+    CHECK(!ct_http_is_test_request(""));
+    size_t len;
+    const char *nf = ct_http_not_found(&len);
+    CHECK_EQ_INT((int)len, (int)strlen(nf));
+    CHECK(strncmp(nf, "HTTP/1.1 404 ", 13) == 0);
+}
+
 void suite_conntest(void)
 {
     gb_suite("conntest");
@@ -150,4 +164,5 @@ void suite_conntest(void)
     RUN_TEST(test_dns_bad_packets);
     RUN_TEST(test_http_reply);
     RUN_TEST(test_http_request_complete);
+    RUN_TEST(test_http_only_test_hosts);
 }

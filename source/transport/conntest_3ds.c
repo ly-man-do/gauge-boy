@@ -123,8 +123,12 @@ static void handle_http(int tcp)
     }
     req[got] = '\0';
 
+    /* Only the 3DS's connection test gets the test page; other devices on
+     * the network (e.g. a file-transfer app probing port 80) get 404. */
+    static bool told_others;
+    bool test = ct_http_is_test_request(req);
     size_t len;
-    const char *reply = ct_http_reply(&len);
+    const char *reply = test ? ct_http_reply(&len) : ct_http_not_found(&len);
     size_t sent = 0;
     while (sent < len) {
         ssize_t n = send(c, reply + sent, len - sent, 0);
@@ -143,8 +147,13 @@ static void handle_http(int tcp)
     if (strlen(req) > 60) {
         req[60] = '\0';
     }
-    logf_ct("HTTP %s -> test page%s", got > 0 ? req : "(no request)",
-            sent == len ? "" : " (send failed)");
+    if (test) {
+        logf_ct("HTTP %s -> test page%s", req, sent == len ? "" : " (send failed)");
+    } else if (!told_others) {
+        told_others = true;
+        logf_ct("HTTP %s from another device -> 404 (not logged again)",
+                got > 0 ? req : "(no request)");
+    }
 }
 
 static void server_main(void *arg)

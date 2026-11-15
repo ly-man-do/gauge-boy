@@ -17,6 +17,18 @@ static const char *const TEST_HOSTS[] = {
 #define RCODE_FORMERR  1
 #define RCODE_NXDOMAIN 3
 
+static int strncasecmp_ascii(const char *a, const char *b, size_t n)
+{
+    for (size_t i = 0; i < n; i++) {
+        int ca = tolower((unsigned char)a[i]);
+        int cb = tolower((unsigned char)b[i]);
+        if (ca != cb || ca == 0) {
+            return ca - cb;
+        }
+    }
+    return 0;
+}
+
 bool ct_is_test_host(const char *name)
 {
     size_t n = strlen(name);
@@ -159,6 +171,51 @@ const char *ct_http_reply(size_t *len)
 {
     *len = sizeof HTTP_REPLY - 1;
     return HTTP_REPLY;
+}
+
+bool ct_http_is_test_request(const char *request)
+{
+    const char *p = request;
+    while (p != NULL && *p != '\0') {
+        const char *eol = strchr(p, '\n');
+        size_t n = eol != NULL ? (size_t)(eol - p) : strlen(p);
+        if (n >= 5 && strncasecmp_ascii(p, "host:", 5) == 0) {
+            char host[128];
+            const char *v = p + 5;
+            size_t vn = n - 5;
+            while (vn > 0 && (*v == ' ' || *v == '\t')) {
+                v++;
+                vn--;
+            }
+            while (vn > 0 && (v[vn - 1] == '\r' || v[vn - 1] == ' ')) {
+                vn--;
+            }
+            const char *colon = memchr(v, ':', vn); /* drop ":80" */
+            if (colon != NULL) {
+                vn = (size_t)(colon - v);
+            }
+            if (vn == 0 || vn >= sizeof host) {
+                return false;
+            }
+            memcpy(host, v, vn);
+            host[vn] = '\0';
+            return ct_is_test_host(host);
+        }
+        p = eol != NULL ? eol + 1 : NULL;
+    }
+    return false;
+}
+
+static const char HTTP_NOT_FOUND[] =
+    "HTTP/1.1 404 Not Found\r\n"
+    "Content-Length: 0\r\n"
+    "Connection: close\r\n"
+    "\r\n";
+
+const char *ct_http_not_found(size_t *len)
+{
+    *len = sizeof HTTP_NOT_FOUND - 1;
+    return HTTP_NOT_FOUND;
 }
 
 bool ct_http_request_complete(const char *buf, size_t len)
