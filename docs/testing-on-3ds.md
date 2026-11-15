@@ -96,7 +96,6 @@ Do this once per adapter, in the car with the adapter plugged in and the ignitio
 2. **New Connection** > **Manual Setup** > **Search for an Access Point**, and pick the adapter's network (`V-LINK` for the Vgate iCar Pro).
    - If the adapter's network doesn't appear, it is probably ad-hoc or 5 GHz, which the 3DS can't join. Note that in your report.
 3. Enter the password if it has one, then **OK** to save. The **connection test will fail** (error `003-2002`) because the adapter has no internet. That's expected; make sure the slot is still saved.
-**Check:** after step 6, open GaugeBoy, tap **SLOT** until it shows the adapter's slot (e.g. `SLOT 1`) and tap **SETUP SLOT**. It reads the slot (read-only) and says it's set up, or shows the current (NOW) and needed (NEW) values to fix in System Settings.
 
 4. Open the slot > **Change Settings** > **IP Address**:
    - Auto-Obtain IP Address: **No**
@@ -108,6 +107,8 @@ Do this once per adapter, in the car with the adapter plugged in and the ignitio
    - Primary DNS: `192.168.000.011` (the 3DS's own address, so the connection test asks GaugeBoy)
    - Secondary DNS: `000.000.000.000`
 6. Save. The connection test will still fail: GaugeBoy isn't running yet.
+
+**Check:** open GaugeBoy, tap **SLOT** until it shows the adapter's slot (e.g. `SLOT 1`) and tap **SETUP SLOT**. It reads the slot (read-only) and says it's set up, or shows the current (NOW) and needed (NEW) values to fix in System Settings.
 
 This assumes the adapter is at `192.168.0.10`, as V-LINK and most Wi-Fi ELM327 adapters are. If yours differs, use its address as the Gateway, pick a free address in the same subnet for the 3DS, and use that same address as Primary DNS.
 
