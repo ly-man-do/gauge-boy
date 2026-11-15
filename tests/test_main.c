@@ -6,6 +6,7 @@ void suite_elm327(void);
 void suite_transport(void);
 void suite_data(void);
 void suite_spike(void);
+void suite_conntest(void);
 
 int main(void)
 {
@@ -14,5 +15,6 @@ int main(void)
     suite_transport();
     suite_data();
     suite_spike();
+    suite_conntest();
     return gb_test_summary();
 }

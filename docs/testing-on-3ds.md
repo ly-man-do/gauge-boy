@@ -105,7 +105,12 @@ Do this once per adapter, in the car with the adapter plugged in and the ignitio
 
 The 3DS uses whichever saved connection is in range, so your home Wi-Fi slot can stay.
 
-Because the adapter has no internet, the 3DS may not stay on its network by itself. GaugeBoy handles this: when you tap CONNECT and the 3DS isn't on Wi-Fi, it asks the 3DS to join a saved connection (like Rosalina's **Force wireless connection**) and logs the result. The `Network:` line in the log shows which network and slot the 3DS is on and its IP address.
+Because the adapter has no internet, the 3DS fails its connection test on the adapter's network (error `003-2002`) and then won't let apps use it. GaugeBoy answers that test itself, so no other device is needed. For that, set the adapter's slot up like this (**Change Settings**):
+
+- **IP Address:** Auto-Obtain **No**; IP Address `192.168.0.11`, Subnet Mask `255.255.255.0`, Gateway `192.168.0.10`.
+- **DNS:** Auto-Obtain **No**; Primary DNS `192.168.0.11` (the 3DS's own address, so the test asks GaugeBoy); Secondary DNS `0.0.0.0`.
+
+The connection test in System Settings will still fail, because GaugeBoy isn't running then. That's expected. In GaugeBoy, tap **CONNECT**: it asks the 3DS to join the adapter's network and answers the test while it does. The log shows `Conntest:` lines when the 3DS asks GaugeBoy for the test page, and the `Network:` line shows which network and slot the 3DS is on and its IP address. If this doesn't work, `tools/fake_conntest.py` on a laptop on the adapter's network does the same job (see `tools/README.md`).
 
 ## 4. Launch GaugeBoy
 

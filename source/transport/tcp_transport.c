@@ -180,8 +180,11 @@ tp_status_t tcp_transport_connect(tcp_transport_t *t, unsigned timeout_ms)
             if (now >= deadline) {
                 return fail_socket(t, fd, TP_ERR_TIMEOUT, "connect()", ETIMEDOUT);
             }
+            /* Short slices: the 3DS's poll() may not wake when the connect
+             * completes, so connect() is asked again after each slice. */
+            unsigned left = (unsigned)(deadline - now);
             struct pollfd p = { fd, POLLOUT, 0 };
-            int pr = poll(&p, 1, clamp_timeout((unsigned)(deadline - now)));
+            int pr = poll(&p, 1, clamp_timeout(left < TP_CONNECT_SLICE_MS ? left : TP_CONNECT_SLICE_MS));
             if (pr < 0) {
                 if (errno == EINTR) {
                     continue;
@@ -189,7 +192,13 @@ tp_status_t tcp_transport_connect(tcp_transport_t *t, unsigned timeout_ms)
                 return fail_socket(t, fd, TP_ERR_SOCKET, "poll()", errno);
             }
             if (pr == 0) {
-                return fail_socket(t, fd, TP_ERR_TIMEOUT, "connect()", ETIMEDOUT);
+                if (connect(fd, (struct sockaddr *)&addr, sizeof addr) == 0 || errno == EISCONN) {
+                    break;
+                }
+                if (errno != EINPROGRESS && errno != EALREADY && errno != EWOULDBLOCK) {
+                    return fail_socket(t, fd, TP_ERR_CONNECT, "connect()", errno);
+                }
+                continue;
             }
 
             int err = 0;

@@ -26,6 +26,7 @@
 #define TP_DEFAULT_HOST        "192.168.0.10"
 #define TP_DEFAULT_PORT        35000
 #define TP_CONNECT_TIMEOUT_MS  3000u
+#define TP_CONNECT_SLICE_MS    100u /* re-check a pending connect this often */
 #define TP_WRITE_TIMEOUT_MS    1000u
 #define TP_BACKOFF_MIN_MS      500u
 #define TP_BACKOFF_MAX_MS      8000u

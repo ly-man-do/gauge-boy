@@ -6,6 +6,7 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ### Added
 
+- GaugeBoy answers the 3DS's internet connection test itself: a background thread runs a tiny DNS server and the test page on the 3DS, so the 3DS keeps a Wi-Fi OBD-II adapter's network without a laptop or other device. The adapter's connection slot needs a manual IP with Primary DNS set to that same IP (see `docs/testing-on-3ds.md`). Not yet confirmed on a real 3DS.
 - `tools/fake_conntest.py`: a small DNS and web server that answers the 3DS's internet connection test, so a 3DS can stay on a Wi-Fi OBD-II adapter's network that has no internet. Dev tool for proving the fix; test steps in `tools/README.md`.
 - CONNECT (and the automatic reconnect) first asks the 3DS to join a saved Wi-Fi connection if it isn't on one, the way Luma3DS's "Force wireless connection" does, to reach adapters that have no internet (not yet confirmed on a real 3DS). The result, including the system's error codes on failure, is logged.
 - Connection errors name the call that failed, for example `errno 115 at socket()`.
@@ -13,8 +14,10 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ### Fixed
 
+- CONNECT no longer asks the 3DS to join Wi-Fi when it is already on a network (the system's own join counts), which had made the 3DS rejoin and drop the adapter connection about 25 seconds later.
+- Connecting to the adapter took the full 3-second timeout on the 3DS even when the adapter answered at once; a pending connect is now re-checked every 100 ms.
+- "Wi-Fi state unknown (ac 0xE0A09D2E)" in the `Network:` line now reads "Wi-Fi on (joined by the system)" or "Wi-Fi not connected".
 - On the 3DS, a TCP connect that was still in progress was reported as `errno 26: Text file busy` and abandoned. libctru returns the 3DS's raw socket error there (26 means "in progress"); GaugeBoy now translates it and keeps waiting until the connect timeout, then reports "Adapter did not answer".
-
 - The `Network:` line numbered connection slots one too high, and "Wi-Fi state unknown" now includes the system's error code.
 - Connection errors showed a negative errno with no description (for example `errno -115` when the 3DS had no network). They now show the positive value and its meaning (`errno 115: Network interface is not configured`).
 

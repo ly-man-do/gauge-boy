@@ -14,6 +14,7 @@
 #include "data/config.h"
 #include "data/textlog.h"
 #include "spike_actions.h"
+#include "transport/conntest_server.h"
 #include "transport/net.h"
 #include "transport/tcp_transport.h"
 #include "version.h"
@@ -72,15 +73,20 @@ static PrintConsole bottom_console;
 static void log_sink(void *ctx, const char *line)
 {
     (void)ctx;
+    /* Called from the worker and connection-test threads too. */
     LightLock_Lock(&shared.lock);
     textlog_add(&shared.log, line);
-    LightLock_Unlock(&shared.lock);
-
     if (log_file != NULL) {
         fputs(line, log_file);
         fputc('\n', log_file);
         fflush(log_file);
     }
+    LightLock_Unlock(&shared.lock);
+}
+
+static void conntest_log(void *ctx, const char *line)
+{
+    spike_logf(ctx, "Conntest: %s", line);
 }
 
 static void enqueue(int action)
@@ -284,6 +290,9 @@ void spike_ui_run(void)
     if (!net_ok) {
         spike_logf(&spike, "! Network service did not start (is Wi-Fi on?)");
     }
+    if (net_ok && !ct_server_start(conntest_log, &spike)) {
+        spike_logf(&spike, "! Could not start the connection-test answer thread");
+    }
     spike.net_up = net_bring_up;
     spike.net_info = net_describe;
     {
@@ -380,6 +389,7 @@ void spike_ui_run(void)
         threadFree(worker);
     }
     tcp_transport_close(&transport);
+    ct_server_stop();
     if (net_ok) {
         net_exit();
     }

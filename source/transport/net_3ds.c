@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #define SOC_ALIGN      0x1000
 #define SOC_BUFFERSIZE 0x100000
@@ -63,6 +65,22 @@ void net_exit(void)
     soc_buffer = NULL;
 }
 
+/* True if the 3DS lets apps open sockets, i.e. it is on a network
+ * (socket() fails with ENETDOWN otherwise). This also covers a network
+ * the system joined itself, which ac does not report to this app. */
+static bool sockets_up(void)
+{
+    if (soc_buffer == NULL) {
+        return false;
+    }
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd < 0) {
+        return false;
+    }
+    close(fd);
+    return true;
+}
+
 /* Connection slot from ACU_GetWifiStatus: bit 0 = slot 1 (as Luma3DS and
  * emulators use it; libctru's AC_AP_TYPE_SLOTn names are one bit off). */
 static int slot_number(u32 ap)
@@ -87,7 +105,12 @@ void net_describe(char *out, size_t len)
     Result r = ac_open() ? ACU_GetWifiStatus(&ap) : ac_init_result;
     Result rs = ac_ok ? ACU_GetStatus(&status) : ac_init_result;
     if (R_FAILED(r)) {
-        snprintf(wifi, sizeof wifi, "Wi-Fi state unknown (ac 0x%08lX)", (unsigned long)r);
+        /* 0xE0A09D2E: this app hasn't joined; the system may have. */
+        if (sockets_up()) {
+            snprintf(wifi, sizeof wifi, "Wi-Fi on (joined by the system)");
+        } else {
+            snprintf(wifi, sizeof wifi, "Wi-Fi not connected (ac 0x%08lX)", (unsigned long)r);
+        }
     } else if (ap == 0) {
         snprintf(wifi, sizeof wifi, "Wi-Fi not connected (ac status %lu)",
                  R_SUCCEEDED(rs) ? (unsigned long)status : 0ul);
@@ -152,9 +175,12 @@ bool net_bring_up(char *msg, size_t len)
         return false;
     }
 
+    /* Already on a network (joined by us or by the system): asking again
+     * would make the system rejoin and drop open connections. */
     u32 ap = 0;
-    if (join_event == 0 && R_SUCCEEDED(ACU_GetWifiStatus(&ap)) && ap != 0) {
-        return true; /* already on Wi-Fi */
+    if (join_event == 0 &&
+        ((R_SUCCEEDED(ACU_GetWifiStatus(&ap)) && ap != 0) || sockets_up())) {
+        return true;
     }
 
     if (join_event == 0) {
