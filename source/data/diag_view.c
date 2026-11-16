@@ -362,6 +362,9 @@ int diag_facts(const obd_diag_t *d, int cols, char lines[][DIAG_VIEW_COLS + 1], 
                  obd_readiness_ready_count(&d->readiness),
                  obd_readiness_not_ready_count(&d->readiness));
         fact(&v, "Readiness", buf);
+    } else if (d->vin_only) {
+        fact(&v, "Codes", "not read yet: DIAG > SCAN");
+        return v.count;
     } else {
         fact(&v, "CEL", "not read");
     }

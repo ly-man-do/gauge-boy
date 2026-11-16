@@ -60,6 +60,8 @@
 #define BTN_LIVE_SAVE    108   /* worker: save the LIVE PIDs to config.ini */
 #define BTN_SET_VEHICLE  109   /* worker: save make, model, year; apply to DIAG */
 #define BTN_SET_UNITS    110   /* worker: save the units */
+#define BTN_IDENTIFY     111   /* worker (not a button): find the car after a connect */
+#define IDENTIFY_RETRY_MS 20000u
 #define BTN_LIVE_TOGGLE  (-33) /* UI: LIVE START / STOP */
 #define BTN_LIVE_PICK    (-80) /* UI: Custom PID toggle (-80 - slot on the page) */
 #define BTN_LIVE_EDIT    (-34) /* UI: LIVE Custom view -> PID toggles */
@@ -654,6 +656,9 @@ static void scan_progress(void *ctx, obd_diag_step_t step)
 static unsigned reset_at_connect = ~0u;
 static obd_link_t last_link;
 static unsigned last_link_connects = ~0u;
+static unsigned identified_connects = ~0u;   /* connection whose car is known */
+static uint64_t identify_next_ms;            /* next try while it isn't answering */
+static bool identify_told;
 
 /* SCAN (worker): connect if needed, then the full DIAG scan. The adapter
  * is reset (ATZ ...) on the first scan after each new connection. */
@@ -685,6 +690,7 @@ static void diag_scan(spike_t *s)
         if (d.result == OBD_LINK_OK) {
             last_link = d.link;
             last_link_connects = s->transport->connects;
+            identified_connects = s->transport->connects;   /* the scan read the VIN */
         }
         static char rows[4096];
         char when[24];
@@ -717,6 +723,82 @@ static void diag_scan(spike_t *s)
     shared.scanning = false;
     shared.diag_version++;
     LightLock_Unlock(&shared.lock);
+}
+
+/* Find the car (worker, idle, once per adapter connection): protocol and
+ * VIN, decoded into the DIAG state so HOME, DIAG and SETUP > VEHICLE show
+ * it. Retries every IDENTIFY_RETRY_MS while the car doesn't answer. */
+static void identify_car(spike_t *s)
+{
+    unsigned connects = s->transport->connects;
+    static obd_link_t link;
+    obd_link_result_t r = OBD_LINK_OK;
+    if (last_link.protocol != 0 && last_link_connects == connects) {
+        link = last_link;   /* LIVE or a scan already found it */
+    } else {
+        bool reset = connects != reset_at_connect;
+        r = obd_link_open_traced(s->elm, reset, &link, spike_trace_command, s);
+        if (r == OBD_LINK_LOST) {
+            tcp_transport_close(s->transport);
+            return;
+        }
+        if (reset && obd_link_adapter_ready(r)) {
+            reset_at_connect = connects;
+        }
+        if (r == OBD_LINK_OK) {
+            last_link = link;
+            last_link_connects = connects;
+        }
+    }
+    if (r != OBD_LINK_OK) {
+        if (!identify_told) {
+            spike_logf(s, "Car: not answering yet (%s); trying again every %u s",
+                       obd_link_result_str(r), IDENTIFY_RETRY_MS / 1000u);
+            identify_told = true;
+        }
+        identify_next_ms = tp_now_ms() + IDENTIFY_RETRY_MS;
+        return;
+    }
+
+    static obd_diag_t v;
+    memset(&v, 0, sizeof v);
+    v.make = -1;
+    v.link = link;
+    v.result = OBD_LINK_OK;
+    v.vin_only = true;
+    time_t now = time(NULL);
+    struct tm *tm = gmtime(&now);
+    elm_status_t st = obd_diag_read_vin(s->elm, tm != NULL ? tm->tm_year + 1900 : 0, &v,
+                                        spike_trace_command, s);
+    if (st == ELM_ERR_IO || st == ELM_ERR_TIMEOUT) {
+        tcp_transport_close(s->transport);
+        return;
+    }
+    identified_connects = connects;
+    identify_told = false;
+
+    LightLock_Lock(&shared.lock);
+    const obd_diag_t *old = &shared.diag;
+    bool same_car = old->link.protocol != 0 &&
+                    (old->have_vin ? v.have_vin && strcmp(old->vin, v.vin) == 0 : !v.have_vin);
+    if (!same_car) {
+        shared.diag = v;   /* a new car: its codes need a SCAN */
+        obd_diag_apply_make(&shared.diag, app_cfg->car_make);
+        obd_diag_apply_vehicle(&shared.diag, app_cfg->car_model, app_cfg->car_year);
+        shared.diag_version++;
+    }
+    obd_diag_t d = shared.diag;
+    LightLock_Unlock(&shared.lock);
+
+    const char *make = d.model != NULL && d.model_make != NULL ? d.model_make : d.maker;
+    if (d.have_vin) {
+        spike_logf(s, "= Car: %d %s%s%s (from the VIN)%s", d.model_year, make != NULL ? make : "",
+                   d.model != NULL ? " " : "", d.model != NULL ? d.model : "",
+                   same_car ? ", as scanned" : "");
+    } else {
+        spike_logf(s, "= Car: no VIN over OBD (%s); set it in SETUP > VEHICLE",
+                   elm_protocol_name(link.protocol));
+    }
 }
 
 /* CLEAR CODES (worker, only after the dialog): parked check, 04, then a
@@ -1061,6 +1143,22 @@ static void worker_main(void *arg)
             LightLock_Lock(&shared.lock);
             shared.connected = tcp_transport_connected(spike->transport);
             LightLock_Unlock(&shared.lock);
+        } else if (tcp_transport_connected(spike->transport) &&
+                   spike->transport->connects != identified_connects &&
+                   tp_now_ms() >= identify_next_ms) {
+            LightLock_Lock(&shared.lock);
+            bool idle = shared.queue_count == 0;
+            if (idle) {
+                shared.busy = BTN_IDENTIFY;
+            }
+            LightLock_Unlock(&shared.lock);
+            if (idle) {
+                identify_car(spike);
+                LightLock_Lock(&shared.lock);
+                shared.busy = -1;
+                shared.connected = tcp_transport_connected(spike->transport);
+                LightLock_Unlock(&shared.lock);
+            }
         }
     }
 }
@@ -2533,7 +2631,8 @@ void spike_ui_run(void)
                 break;
             case BTN_CLEAR_ASK: {
                 LightLock_Lock(&shared.lock);
-                bool scanned = shared.diag.link.protocol != 0 && !shared.scanning;
+                bool scanned = shared.diag.link.protocol != 0 && !shared.diag.vin_only &&
+                               !shared.scanning;
                 LightLock_Unlock(&shared.lock);
                 if (scanned) {
                     ui.clear_dialog = true;

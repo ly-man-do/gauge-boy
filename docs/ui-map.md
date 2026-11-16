@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-16, SETUP split into TESTS, WI-FI, VEHICLE and OTHER (gauge-boy-cib; M2 in progress)
+**As of:** 2026-11-16, the car is found after connecting and shown on HOME (gauge-boy-3n6.19; M2 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -10,7 +10,8 @@ The arrow (→) shows where a button goes or what it does. On the bottom screen 
 GaugeBoy
 ├── Unsupported device screen        (Old 3DS only: tap or START exits)
 └── Safety notice                    (tap the touch screen to continue)
-    └── HOME                         (graphics; top screen: car facts)
+    └── HOME                         (graphics; top screen: car facts, found by itself
+                                     after connecting: car, VIN, protocol)
         ├── [CEL card]               → DIAG        (shows CEL off / CEL ON / CEL not read)
         ├── [Adapter card]           → Wi-Fi guide (shows Connected / Not connected)
         ├── [LIVE  · Dash gauges]    → LIVE view list

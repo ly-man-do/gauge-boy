@@ -55,6 +55,7 @@ typedef struct {
     bool make_chosen;               /* maker / make came from SETUP, not the VIN */
     bool model_chosen;              /* model came from SETUP (no VIN model) */
     bool year_chosen;               /* model_year came from SETUP (no VIN) */
+    bool vin_only;                  /* found after a connect (link and VIN), not scanned */
 } obd_diag_t;
 
 /* Progress callback: called before each step (for "Reading codes..."). */
@@ -72,6 +73,15 @@ obd_link_result_t obd_diag_scan(elm_t *elm, bool reset, int current_year, obd_di
                                 void *ctx);
 
 const char *obd_diag_step_str(obd_diag_step_t step);
+
+/*
+ * Reads the VIN ("0902") on d->link's protocol and decodes it into d:
+ * have_vin, vin, model_year, maker / make and the vPIC model. Without a
+ * VIN they are cleared (a make chosen in SETUP stays). Re-apply the SETUP
+ * make and vehicle afterwards. Returns the adapter's status.
+ */
+elm_status_t obd_diag_read_vin(elm_t *elm, int current_year, obd_diag_t *d,
+                               obd_link_trace_fn trace, void *ctx);
 
 /*
  * Applies the make chosen in SETUP (a name from obd_dtc_make_name(), or

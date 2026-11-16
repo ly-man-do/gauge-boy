@@ -97,6 +97,43 @@ void obd_diag_apply_vehicle(obd_diag_t *d, const char *model, int year)
     }
 }
 
+elm_status_t obd_diag_read_vin(elm_t *elm, int current_year, obd_diag_t *d,
+                               obd_link_trace_fn trace, void *ctx)
+{
+    static elm_response_t r;
+    static obd_reply_t reply;
+    scan_t sc = { elm, trace, ctx };
+    int protocol = d->link.protocol;
+    d->have_vin = false;
+    d->vin[0] = '\0';
+    d->model_year = 0;
+    d->model = NULL;
+    d->model_make = NULL;
+    d->model_chosen = d->year_chosen = false;
+    if (!d->make_chosen) {
+        d->maker = NULL;
+        d->make = -1;
+    }
+    elm_status_t st = command(&sc, "0902", &r);
+    if (st == ELM_OK && obd_assemble(&r, protocol, false, &reply) == OBD_OK &&
+        obd_decode_vin(&reply, protocol, d->vin)) {
+        d->have_vin = true;
+        d->model_year = obd_vin_model_year(d->vin, current_year);
+        obd_vin_model_t md;
+        if (obd_vin_model(d->vin, d->model_year, &md)) {
+            d->model_make = md.make;
+            d->model = md.model;
+        }
+        obd_vin_maker_t mk;
+        if (obd_vin_maker(d->vin, &mk)) {
+            d->maker = mk.maker;
+            d->make = obd_dtc_make_find(mk.dtc_make);
+            d->make_chosen = false;
+        }
+    }
+    return st;
+}
+
 obd_link_result_t obd_diag_scan(elm_t *elm, bool reset, int current_year, obd_diag_t *out,
                                 obd_link_trace_fn trace, obd_diag_progress_fn progress,
                                 void *ctx)
@@ -157,25 +194,10 @@ obd_link_result_t obd_diag_scan(elm_t *elm, bool reset, int current_year, obd_di
     }
 
     progress_to(progress, ctx, OBD_DIAG_STEP_VIN);
-    st = command(&sc, "0902", &r);
+    st = obd_diag_read_vin(elm, current_year, out, trace, ctx);
     if (lost(st)) {
         out->stopped_at = OBD_DIAG_STEP_VIN;
         goto lost_link;
-    }
-    if (st == ELM_OK && obd_assemble(&r, protocol, false, &reply) == OBD_OK &&
-        obd_decode_vin(&reply, protocol, out->vin)) {
-        out->have_vin = true;
-        out->model_year = obd_vin_model_year(out->vin, current_year);
-        obd_vin_model_t md;
-        if (obd_vin_model(out->vin, out->model_year, &md)) {
-            out->model_make = md.make;
-            out->model = md.model;
-        }
-        obd_vin_maker_t mk;
-        if (obd_vin_maker(out->vin, &mk)) {
-            out->maker = mk.maker;
-            out->make = obd_dtc_make_find(mk.dtc_make);
-        }
     }
 
     out->stopped_at = OBD_DIAG_STEP_DONE;

@@ -242,6 +242,7 @@ static obd_live_step_t multi_step(obd_live_t *lv, elm_t *elm, int first, uint64_
     }
     if (count && st == ELM_ERR_UNKNOWN_COMMAND) {
         lv->multi_count_off = true;   /* no count on combined requests; nobody's miss */
+        lv->multi_count_why = "adapter answered ?";
         return OBD_LIVE_MISSED;
     }
 
@@ -271,6 +272,7 @@ static obd_live_step_t multi_step(obd_live_t *lv, elm_t *elm, int first, uint64_
         /* Nothing with the count: drop the count first (nobody's miss);
          * only an uncounted request decides the rest. */
         lv->multi_count_off = true;
+        lv->multi_count_why = st == ELM_OK ? "reply not understood" : elm_status_str(st);
         return OBD_LIVE_MISSED;
     }
     if (lv->header_set && !lv->header_checked) {
@@ -281,6 +283,7 @@ static obd_live_step_t multi_step(obd_live_t *lv, elm_t *elm, int first, uint64_
     }
     if (count && nfound < np) {
         lv->multi_count_off = true;   /* the count may cut a reply short: stop using it */
+        lv->multi_count_why = "a reply left PIDs out";
     }
     if (nfound >= 2) {
         lv->multi_worked = true;

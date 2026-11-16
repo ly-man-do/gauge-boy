@@ -430,12 +430,52 @@ static void test_wifi_guide(void)
     CHECK_EQ_STR(wifi_guide_title(9), "");
 }
 
+/* The car found after a connect: just the VIN on a known link. */
+static void test_read_vin_only(void)
+{
+    setup();
+    static obd_diag_t d;
+    memset(&d, 0, sizeof d);
+    d.make = -1;
+    d.link.protocol = 6;
+    /* A made-up Ascent VIN, CAN multi-frame with headers off. */
+    fake_io_reply(&f, "0902", "014\r0: 49 02 01 34 53 34\r1: 57 4D 41 48 44 30 50\r"
+                              "2: 33 30 30 30 30 30 31\r\r>", 80, 0);
+    CHECK_EQ_INT(obd_diag_read_vin(&elm, 2026, &d, NULL, NULL), ELM_OK);
+    CHECK(d.have_vin);
+    CHECK_EQ_STR(d.vin, "4S4WMAHD0P3000001");
+    CHECK_EQ_INT(d.model_year, 2023);
+    CHECK_EQ_STR(d.maker, "Subaru");
+    CHECK_EQ_STR(d.model, "Ascent");
+    CHECK(d.make >= 0);
+    d.vin_only = true;
+    int n = diag_facts(&d, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Car       2023 Subaru Ascent");
+    CHECK_VIEW(n, "Codes     not read yet: DIAG > SCAN");
+    for (int i = 0; i < n; i++) {
+        CHECK(strncmp(lines[i], "Scan", 4) != 0 && strncmp(lines[i], "CEL", 3) != 0);
+    }
+
+    /* No VIN over OBD: cleared, but a make chosen in SETUP stays. */
+    obd_diag_apply_make(&d, "Geo");          /* VIN wins: nothing yet */
+    d.have_vin = false;
+    d.maker = NULL;
+    obd_diag_apply_make(&d, "Geo");
+    CHECK(d.make_chosen);
+    fake_io_reply(&f, "0902", "NO DATA\r\r>", 80, 0);
+    CHECK_EQ_INT(obd_diag_read_vin(&elm, 2026, &d, NULL, NULL), ELM_ERR_NO_DATA);
+    CHECK(!d.have_vin && d.model == NULL && d.model_year == 0);
+    CHECK_EQ_STR(d.maker, "Geo");
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+}
+
 void suite_diag(void)
 {
     gb_suite("diag");
     RUN_TEST(test_scan_ridgeline);
     RUN_TEST(test_panel);
     RUN_TEST(test_chosen_make);
+    RUN_TEST(test_read_vin_only);
     RUN_TEST(test_scan_engine_off);
     RUN_TEST(test_scan_lost_midway);
     RUN_TEST(test_paged_pieces);

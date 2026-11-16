@@ -84,6 +84,7 @@ typedef struct {
     bool header_checked;     /* and a reply came back with it */
     bool header_refused;     /* refused or unanswered: every ECU again */
     bool multi_count_off;    /* combined requests with a response count left PIDs out */
+    const char *multi_count_why;   /* why the count was dropped (for the log), or NULL */
     uint32_t left_out;       /* PIDs left out of combined replies (asked again alone) */
     obd_live_left_out_t left_out_log[OBD_LIVE_LEFT_OUT_LOG];   /* the first few */
     int left_out_logged;

@@ -454,6 +454,9 @@ void spike_live_summary(spike_t *s, const obd_live_t *lv)
                : lv->header_refused && lv->use_engine_header &&
                  obd_family(lv->protocol) == OBD_FAMILY_CAN ? ", all ECUs (engine address unanswered)"
                : "");
+    if (lv->multi_count_off && lv->multi_count_why != NULL) {
+        spike_logf(s, "LIVE: no response count on combined requests: %s", lv->multi_count_why);
+    }
     char line[200] = "";
     for (int i = 0; i < lv->count; i++) {
         const obd_live_pid_t *p = &lv->pid[i];
