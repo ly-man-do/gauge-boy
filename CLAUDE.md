@@ -1,7 +1,7 @@
 # CLAUDE.md: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.17.0
-**Matches project brief:** 1.12.0 (`docs/gaugeboy-brief.md`)
+**Version:** 1.18.0
+**Matches project brief:** 1.13.0 (`docs/gaugeboy-brief.md`)
 
 You are the developer on GaugeBoy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
 
@@ -34,7 +34,7 @@ Use Beads (`bd`) for all task tracking. Do not create markdown TODO lists, plan 
 
 **Labels:** `transport`, `elm327`, `obd`, `ui`, `3d`, `audio`, `fun-mode`, `ci`, `docs`, `needs-hardware`, `needs-owner`.
 
-**Hard rule:** Never close an issue labeled `needs-hardware` or `needs-owner`. These need a real New 3DS, a test car (2008 Honda Ridgeline, or the second test car, a 1996 Geo Tracker) or an owner decision. When your part is done, add a comment with exact test steps for the owner and leave it open.
+**Hard rule:** Never close an issue labeled `needs-hardware` or `needs-owner`. These need a real New 3DS, a test car (2008 Honda Ridgeline, 1996 Geo Tracker or 2023 Subaru Ascent) or an owner decision. When your part is done, add a comment with exact test steps for the owner and leave it open.
 
 ---
 
@@ -142,6 +142,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.18.0 | 2026-11-16 | Matches brief 1.13.0: third test car, 2023 Subaru Ascent (section 1) |
 | 1.17.0 | 2026-11-16 | Owner request: keep `docs/ui-map.md` (screen and button map) current with every UI change (section 5) |
 | 1.16.0 | 2026-11-15 | Matches brief 1.12.0: the HOME START Close bar is an exception to the 40x40 px button rule (section 5) |
 | 1.15.0 | 2026-11-15 | Matches brief 1.11.0: the METER menu is renamed LIVE (section 5) |

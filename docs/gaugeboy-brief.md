@@ -1,6 +1,6 @@
 # Project Brief: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.12.0
+**Version:** 1.13.0
 **Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
 **Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -298,7 +298,12 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
   - First OBD-II model year: tests the oldest cars GaugeBoy supports (fewer supported PIDs and readiness monitors, slower ECUs).
   - Expected protocol: ISO 9141-2 (Suzuki engine computer) or possibly J1850; confirm with `ATDPN` after auto-detect.
   - The VIN is probably not readable over OBD (Mode 09 was optional then), so the make must come from elsewhere (a make choice in SETUP) for manufacturer-specific codes to get descriptions.
-  - Still no turbo: a turbo car for the boost gauge remains open.
+  - Still no turbo; the third test vehicle covers boost.
+- **Third test vehicle: 2023 Subaru Ascent** (owner's; 2.4L turbocharged flat-four). Notes:
+  - Expected protocol: ISO 15765-4 CAN (11-bit, 500 kbaud), as on all US cars from 2008; confirm with `ATDPN` (expect `A6`). The first CAN car to test: CAN-only features (several PIDs in one request, multi-ECU replies with headers) get tested here.
+  - Turbo: the boost-style gauge can show real boost (MAP above barometric pressure).
+  - 2010 and newer, so permanent codes (Mode 0A) should be supported, and the VIN should read over OBD (Subaru WMIs 4S3 / 4S4 / JF1 / JF2 are in the maker table).
+  - Many more supported PIDs than the older cars; the LIVE views and priority polling matter most here.
 - Optional: an OBD-II simulator or ELM327 emulator on a PC for bench testing without a car
 - Contingency only (do not buy unless M0 fails): ESP32 dev board plus CAN transceiver (SN65HVD230 or similar) for Option B
 
@@ -356,6 +361,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.13.0 | 2026-11-16 | Third test vehicle: the owner's 2023 Subaru Ascent (CAN, turbo) (section 7); `CLAUDE.md` updated to 1.18.0 |
 | 1.12.0 | 2026-11-15 | Owner decision: the HOME screen's START Close bar may be 32 px tall, an exception to the 40x40 px button rule (section 5b); `CLAUDE.md` updated to 1.16.0 |
 | 1.11.0 | 2026-11-15 | The METER menu is renamed LIVE ("Dash gauges"), by owner decision with the new HOME screen (section 5b); `CLAUDE.md` updated to 1.15.0 |
 | 1.10.0 | 2026-11-15 | Owner decision: removed the ban on Nintendo and third-party characters, logos, trademarks, brand names, fonts, UI art, models, textures, music and sounds, and the ripped-asset limit (studied for size and structure, never shipped, traced or converted) (section 5b); `CLAUDE.md` updated to 1.14.0 |
