@@ -66,6 +66,7 @@
 #define BTN_MENU_SETUP   (-15)
 #define BTN_HOME_CEL     (-16) /* UI: HOME status cards */
 #define BTN_HOME_WIFI    (-17)
+#define BTN_HOME_CLOSE   (-18) /* UI: HOME bar, same as START */
 #define BTN_TAB_STORED   (-20) /* UI: DIAG tabs (-20 - tab) */
 #define BTN_TAB_PENDING  (-21)
 #define BTN_TAB_PERM     (-22)
@@ -904,6 +905,7 @@ static int home_item_action(int item)
     case HOME_FUN:     return BTN_MENU_FUN;
     case HOME_LOG:     return BTN_MENU_LOG;
     case HOME_SETUP:   return BTN_MENU_SETUP;
+    case HOME_CLOSE:   return BTN_HOME_CLOSE;
     default:           return 0;
     }
 }
@@ -1370,6 +1372,7 @@ void spike_ui_run(void)
     bool top_dirty = true;
     bool bottom_dirty = true;
     bool bottom_full = true;
+    bool close_app = false;
 
     while (aptMainLoop()) {
         hidScanInput();
@@ -1430,7 +1433,9 @@ void spike_ui_run(void)
             int item = ui.screen == SCREEN_HOME && home_gfx ? home_hit(tp.px, tp.py) : -1;
             if (item >= 0) {
                 action = home_item_action(item);
-                ui.home_selected = item;
+                if (item != HOME_CLOSE) {
+                    ui.home_selected = item;
+                }
                 tapped = true;
             } else if (i >= 0 && !(ui.permanent_hidden && list[i].action == BTN_TAB_PERM)) {
                 action = list[i].action;
@@ -1469,6 +1474,9 @@ void spike_ui_run(void)
                 break;
             case BTN_SCROLL_NEWER:
                 scroll = clamp_scroll(scroll - LOG_ROWS / 2);
+                break;
+            case BTN_HOME_CLOSE:
+                close_app = true;
                 break;
             case BTN_HOME_CEL:
             case BTN_MENU_DIAG:
@@ -1585,6 +1593,9 @@ void spike_ui_run(void)
                 }
                 break;
             }
+        }
+        if (close_app) {
+            break;   /* the HOME bar: same as START */
         }
         if (ui.notice != NULL && now >= notice_until) {
             ui.notice = NULL;

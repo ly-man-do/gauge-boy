@@ -5,12 +5,12 @@
 /* Margins 13 px, gaps 6 px: the same grid as the owner-approved preview. */
 #define MARGIN   13
 #define GAP      6
-#define STATUS_Y 5
+#define STATUS_Y 4
 #define STATUS_H 32
 #define CARD_W   94
-#define CARD_H   78
-#define ROW1_Y   41
-#define ROW2_Y   125
+#define CARD_H   76
+#define ROW1_Y   40
+#define ROW2_Y   122
 
 static const struct {
     const char *label;
@@ -24,6 +24,7 @@ static const struct {
     [HOME_FUN]     = { "FUN",   "Fun modes" },
     [HOME_LOG]     = { "LOG",   "Record drives" },
     [HOME_SETUP]   = { "SETUP", "Settings" },
+    [HOME_CLOSE]   = { "", NULL },
 };
 
 home_rect_t home_item_rect(home_item_t item)
@@ -35,7 +36,12 @@ home_rect_t home_item_rect(home_item_t item)
         r.y = STATUS_Y;
         r.w = status_w;
         r.h = STATUS_H;
-    } else if (item >= HOME_LIVE && item < HOME_ITEM_COUNT) {
+    } else if (item == HOME_CLOSE) {
+        r.x = 0;
+        r.y = HOME_BAR_Y;
+        r.w = HOME_SCREEN_W;
+        r.h = HOME_SCREEN_H - HOME_BAR_Y;
+    } else if (item >= HOME_LIVE && item <= HOME_SETUP) {
         int k = item - HOME_LIVE;
         r.x = MARGIN + (k % 3) * (CARD_W + GAP);
         r.y = k < 3 ? ROW1_Y : ROW2_Y;
@@ -49,7 +55,7 @@ home_rect_t home_item_touch(home_item_t item)
 {
     home_rect_t r = home_item_rect(item);
     if (item == HOME_CEL || item == HOME_ADAPTER) {
-        r.h += r.y + 3;   /* from the top edge: 40 px */
+        r.h += r.y + 4;   /* from the top edge: 40 px */
         r.y = 0;
     }
     return r;

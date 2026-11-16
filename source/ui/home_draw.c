@@ -20,6 +20,7 @@
 #define COL_LIME_HI  RGB(198, 242, 122)
 #define COL_BAR      RGB(108, 108, 108)
 #define COL_BAR_LINE RGB(140, 140, 140)
+#define COL_BAR_DOWN RGB(84, 84, 84)
 #define COL_WHITE    RGB(255, 255, 255)
 #define COL_CEL_CARD RGB(255, 214, 120)
 #define COL_AMBER    RGB(242, 168, 26)   /* CEL warning: signal color */
@@ -320,7 +321,7 @@ void home_draw(const home_view_t *v)
     status_card(HOME_CEL, home_cel_text(v), true, cel_on, cel_on ? COL_CEL_CARD : COL_CARD, v);
     status_card(HOME_ADAPTER, home_adapter_text(v), false, v->connected, COL_CARD, v);
 
-    for (int i = HOME_LIVE; i < HOME_ITEM_COUNT; i++) {
+    for (int i = HOME_LIVE; i <= HOME_SETUP; i++) {
         home_rect_t r = home_item_rect((home_item_t)i);
         u32 fill = v->pressed == i ? COL_PRESSED : COL_CARD;
         float cx = r.x + r.w / 2.0f;
@@ -330,18 +331,19 @@ void home_draw(const home_view_t *v)
         text(font_small, home_item_sub((home_item_t)i), cx, r.y + 56, SCALE_SUB, COL_SUB, true);
     }
 
-    /* Bar: "START Close", or a notice. */
-    rect(0, HOME_BAR_Y, HOME_SCREEN_W, HOME_SCREEN_H - HOME_BAR_Y, COL_BAR);
+    /* Bar: "START Close" (tap to close), or a notice. */
+    rect(0, HOME_BAR_Y, HOME_SCREEN_W, HOME_SCREEN_H - HOME_BAR_Y,
+         v->pressed == HOME_CLOSE ? COL_BAR_DOWN : COL_BAR);
     rect(0, HOME_BAR_Y, HOME_SCREEN_W, 1, COL_BAR_LINE);
     if (v->notice != NULL) {
-        text(font_small, v->notice, HOME_SCREEN_W / 2.0f, HOME_BAR_Y + 9, SCALE_SUB, COL_WHITE, true);
+        text(font_small, v->notice, HOME_SCREEN_W / 2.0f, HOME_BAR_Y + 13, SCALE_SUB, COL_WHITE, true);
     } else {
         float badge_w = text_width(font_small, "START", SCALE_BADGE) + 8;
         float close_w = text_width(font_big, "Close", SCALE_CLOSE);
         float x = (HOME_SCREEN_W - (badge_w + 6 + close_w)) / 2;
-        rrect(x, HOME_BAR_Y + 9, badge_w, 14, 3, COL_WHITE);
-        text(font_small, "START", x + 4, HOME_BAR_Y + 10, SCALE_BADGE, RGB(70, 70, 70), false);
-        text(font_big, "Close", x + badge_w + 6, HOME_BAR_Y + 3, SCALE_CLOSE, COL_WHITE, false);
+        rrect(x, HOME_BAR_Y + 13, badge_w, 14, 3, COL_WHITE);
+        text(font_small, "START", x + 4, HOME_BAR_Y + 14, SCALE_BADGE, RGB(70, 70, 70), false);
+        text(font_big, "Close", x + badge_w + 6, HOME_BAR_Y + 7, SCALE_CLOSE, COL_WHITE, false);
     }
 
     C3D_FrameEnd(0);

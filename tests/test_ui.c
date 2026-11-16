@@ -15,7 +15,9 @@ static void test_home_rects_fit_and_dont_overlap(void)
         home_rect_t r = home_item_rect((home_item_t)i);
         home_rect_t t = home_item_touch((home_item_t)i);
         CHECK(r.x >= 0 && r.y >= 0 && r.x + r.w <= HOME_SCREEN_W);
-        CHECK(r.y + r.h + 2 < HOME_BAR_Y);           /* shadow clears the bar */
+        if (i != HOME_CLOSE) {
+            CHECK(r.y + r.h + 2 <= HOME_BAR_Y);      /* shadow clears the bar */
+        }
         CHECK(t.w >= 40 && t.h >= 40);               /* touch rule: 40x40 px */
         for (int j = i + 1; j < HOME_ITEM_COUNT; j++) {
             CHECK(!overlap(t, home_item_touch((home_item_t)j)));
@@ -41,7 +43,12 @@ static void test_home_hit(void)
     CHECK_EQ_INT(home_hit(300, 39), HOME_ADAPTER);
     CHECK_EQ_INT(home_hit(5, 100), -1);              /* margin */
     CHECK_EQ_INT(home_hit(110, 100), -1);            /* gap */
-    CHECK_EQ_INT(home_hit(160, 225), -1);            /* bar: not a button */
+    CHECK_EQ_INT(home_hit(160, 225), HOME_CLOSE);    /* bar: closes the app */
+    CHECK_EQ_INT(home_hit(0, HOME_SCREEN_H - 1), HOME_CLOSE);
+    CHECK_EQ_INT(home_hit(5, HOME_BAR_Y - 1), -1);    /* margin above the bar */
+    home_rect_t bar = home_item_touch(HOME_CLOSE);
+    CHECK_EQ_INT(bar.h, 40);
+    CHECK_EQ_INT(bar.y + bar.h, HOME_SCREEN_H);
 }
 
 static void test_home_text(void)

@@ -9,14 +9,14 @@
  *   [ CEL off ] [ Not connected ]      status cards (tap: DIAG / Wi-Fi guide)
  *   [ LIVE ] [ DIAG ] [ TRIM ]         menu cards: icon, label, second line
  *   [ FUN  ] [ LOG  ] [ SETUP ]
- *   ======= START Close =======        bar (not a button)
+ *   ======= START Close =======        bar: tap to close, like START
  */
 
 #include <stdbool.h>
 
 #define HOME_SCREEN_W 320
 #define HOME_SCREEN_H 240
-#define HOME_BAR_Y    208
+#define HOME_BAR_Y    200   /* 40 px bar: a touch target like the cards */
 
 typedef enum {
     HOME_CEL = 0,
@@ -27,6 +27,7 @@ typedef enum {
     HOME_FUN,
     HOME_LOG,
     HOME_SETUP,
+    HOME_CLOSE,          /* the START Close bar */
     HOME_ITEM_COUNT
 } home_item_t;
 
@@ -54,7 +55,7 @@ home_rect_t home_item_touch(home_item_t item);
 /* The item at a touch point, or -1. */
 int home_hit(int px, int py);
 
-/* Menu cards: "LIVE" / "Dash gauges" ...; status cards: "" / NULL. */
+/* Menu cards: "LIVE" / "Dash gauges" ...; status cards and the bar: "" / NULL. */
 const char *home_item_label(home_item_t item);
 const char *home_item_sub(home_item_t item);
 
