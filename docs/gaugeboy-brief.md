@@ -1,6 +1,6 @@
 # Project Brief: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.9.0
+**Version:** 1.10.0
 **Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
 **Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -91,7 +91,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 **Mood:** GaugeBoy should look and feel like a game made for the Nintendo 3DS: bright, clean and playful, with chunky low-poly 3D models, colorful textures and big, friendly touch menus.
 
 **Reference points (for mood only):**
-- 3DS games' menus, HOME menu banners and vehicle models, studied only for size and structure (triangle counts, texture sizes, how models are split into parts)
+- 3DS games' menus, HOME menu banners and vehicle models (triangle counts, texture sizes, how models are split into parts)
 - The owner's asset style guide (kept outside the repo), which lists every asset the app needs with sizes and budgets
 
 **Style: 3DS-game 3D.**
@@ -128,7 +128,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 - **Top screen (400x240, 3D):** Main gauge cluster on the orange backdrop; selectable layouts (single big tach, 4-gauge grid, data list).
 - **Bottom screen (320x240, touch):** Touch panel of big rounded buttons for METER / DIAG (CEL codes) / TRIM (fuel trims) / FUN (fun modes) / LOG / SETUP, with sub-menus on the same panel. An amber CEL warning lamp on the panel lights when the CEL is on.
 
-**Brand and IP rule:** The app looks and feels like a 3DS game but uses no Nintendo or third-party characters, logos, trademarks, brand names, fonts, UI art, models, textures, music or sounds. Ripped game assets may be studied for size and structure only; they are never shipped, traced or converted. All artwork, models, icons and the app logo are original. Fonts must be open-licensed (e.g. SIL OFL) so they can ship in the open-source repo.
+**Brand and IP rule:** The app looks and feels like a 3DS game. All artwork, models, icons and the app logo are original. Fonts must be open-licensed (e.g. SIL OFL) so they can ship in the open-source repo.
 
 **Theme system:** Colors and gauge styles live in a theme file on the SD card, so alternate color schemes can be added without code changes.
 
@@ -356,6 +356,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.10.0 | 2026-11-15 | Owner decision: removed the ban on Nintendo and third-party characters, logos, trademarks, brand names, fonts, UI art, models, textures, music and sounds, and the ripped-asset limit (studied for size and structure, never shipped, traced or converted) (section 5b); `CLAUDE.md` updated to 1.14.0 |
 | 1.9.0 | 2026-11-15 | Second test vehicle: the owner's 1996 Geo Tracker (first OBD-II year, likely ISO 9141-2, VIN probably not readable over OBD) (section 7); `CLAUDE.md` updated to 1.12.0 |
 | 1.8.0 | 2026-11-15 | DTC descriptions: generic plus manufacturer-specific codes for 32 makes from Wal33D/dtc-database (MIT), by owner decision (sections 5a, 5d); `CLAUDE.md` updated to 1.11.0 |
 | 1.7.0 | 2026-11-15 | Protocol support covers all OBD-II protocols the ELM327 and the tested Vgate iCar Pro handle (section 4), J1939 detected but not read in v1; M1 auto-detect across all of them; the Ridgeline uses ISO 9141-2, not CAN (section 7); `CLAUDE.md` updated to 1.9.0 |

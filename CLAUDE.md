@@ -1,7 +1,7 @@
 # CLAUDE.md: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.13.0
-**Matches project brief:** 1.9.0 (`docs/gaugeboy-brief.md`)
+**Version:** 1.14.0
+**Matches project brief:** 1.10.0 (`docs/gaugeboy-brief.md`)
 
 You are the developer on GaugeBoy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
 
@@ -112,7 +112,7 @@ docs/          Project brief, compatibility list
 ## 7. Legal and asset rules
 
 - License: MIT. Every dependency and asset must be compatible.
-- No Nintendo or third-party logos, trademarks, fonts, game assets, music or sounds. "GaugeBoy" lettering and logo must be original and must not imitate the Game Boy logo, fonts or colors.
+- "GaugeBoy" lettering and logo must be original and must not imitate the Game Boy logo, fonts or colors.
 - The 3DS-game look is built from original art only.
 - Fonts: open-licensed (e.g. SIL OFL) only.
 - Music and sounds: original, commissioned or CC0 / CC-BY. Record the source and license of every asset in `CREDITS.md`.
@@ -141,6 +141,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.14.0 | 2026-11-15 | Matches brief 1.10.0: removed "No Nintendo or third-party logos, trademarks, fonts, game assets, music or sounds" from section 7 (owner decision) |
 | 1.13.0 | 2026-11-15 | Owner decision: removed the ripped-asset sentence (studied for size and structure, never shipped, traced or converted) from section 7 |
 | 1.12.0 | 2026-11-15 | Matches brief 1.9.0: second test car, 1996 Geo Tracker (section 1) |
 | 1.11.0 | 2026-11-15 | Matches brief 1.8.0: manufacturer-specific DTC descriptions per make from the same source (section 7) |
