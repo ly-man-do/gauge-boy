@@ -1,6 +1,6 @@
 # Project Brief: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.14.0
+**Version:** 1.15.0
 **Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
 **Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -196,7 +196,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 | **G-meter** | Live G-force ball and peak-hold readout, styled as a chunky toy-like dial | 3DS built-in accelerometer; user mounts the 3DS and taps "Calibrate" while stopped |
 | **Rev Sync (parked only)** | Mini game: the needle sweeps on screen and you blip the throttle to match the target RPM. Scored in a 2000s arcade style. Locked unless vehicle speed is 0 | RPM, vehicle speed |
 | **Eco Challenge** | Live fuel economy estimate with a score and rank (C to S) for smooth driving over a trip | MAF (PID 0x10), or if MAF isn't supported, estimated from MAP, RPM and intake temp using the engine displacement from the vehicle settings and an assumed volumetric efficiency |
-| **Garage card** | Collectible-style "car card" for each vehicle: VIN-decoded manufacturer (from the WMI) and model year (VIN position 10), user-entered model name and nickname, total logged distance, personal bests and a photo taken with the 3DS camera (the mascot car until a photo is taken). Decoding model names needs a database and stays out of v1 unless the owner approves a public-domain source (e.g. NHTSA vPIC) | VIN (Mode 09), logs, 3DS camera |
+| **Garage card** | Collectible-style "car card" for each vehicle: VIN-decoded manufacturer (from the WMI), model year (VIN position 10) and model name (from NHTSA vPIC, see below; user-entered when the VIN doesn't decode), nickname, total logged distance, personal bests and a photo taken with the 3DS camera (the mascot car until a photo is taken). Model names come from NHTSA vPIC (US government data, public domain; owner decision 2026-11-16), built offline into the app by a `tools/` script from a pinned vPIC release, model names only, model years 1996 and later; the 3DS has no internet while on the adapter's Wi-Fi | VIN (Mode 09), logs, 3DS camera |
 | **Achievements** | Unlockable stickers for milestones, e.g. "First Scan", "Clean Bill of Health" (no codes, all monitors ready), "Code Breaker" (first code cleared), "100 Miles Logged". Unlocks are saved to the SD card | App events |
 | **Attract mode** | When parked and idle, the screens play a demo sequence like a 2000s arcade cabinet: gauges sweep, logo spins in 3D, the mascot car drives across the top screen, music plays | None (screensaver) |
 
@@ -361,6 +361,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.15.0 | 2026-11-16 | Owner decision: VIN model names from NHTSA vPIC (public domain), offline table of model names only, model years 1996 and later (section 5e, Garage card); `CLAUDE.md` updated to 1.20.0 |
 | 1.14.0 | 2026-11-16 | Owner decision: the "8 live PIDs at 2 Hz" success criterion applies to CAN cars; ISO 9141-2 tops out around 5.5 requests a second (Ridgeline speed test) (section 9); `CLAUDE.md` updated to 1.19.0 |
 | 1.13.0 | 2026-11-16 | Third test vehicle: the owner's 2023 Subaru Ascent (CAN, turbo) (section 7); `CLAUDE.md` updated to 1.18.0 |
 | 1.12.0 | 2026-11-15 | Owner decision: the HOME screen's START Close bar may be 32 px tall, an exception to the 40x40 px button rule (section 5b); `CLAUDE.md` updated to 1.16.0 |
