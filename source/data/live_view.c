@@ -55,7 +55,7 @@ int live_view_lines(const obd_live_t *lv, int protocol, float rate, obd_units_t 
     for (int i = 0; i < lv->count; i++) {
         const obd_live_pid_t *p = &lv->pid[i];
         const obd_pid_info_t *info = obd_pid_info(p->pid);
-        map = map || p->pid == OBD_PID_MAP;
+        map = map || p->pid == OBD_PID_MAP || p->pid == OBD_PID_MAP_WIDE;
         if (p->have) {
             obd_pid_format(p->pid, p->value, units, value, sizeof value);
         } else {
@@ -78,7 +78,9 @@ int live_view_lines(const obd_live_t *lv, int protocol, float rate, obd_units_t 
     }
     if (map) {
         float vac = 0.0f;
-        if (obd_live_vacuum(lv, &vac)) {
+        if (obd_live_vacuum(lv, &vac) && vac < -1.0f) {
+            row(&v, "Boost", obd_boost_format(-vac, units, value, sizeof value), "");
+        } else if (obd_live_vacuum(lv, &vac)) {
             row(&v, "Vacuum", obd_vacuum_format(vac, units, value, sizeof value), "");
         } else {
             row(&v, "Vacuum", "-", "needs engine-off MAP");

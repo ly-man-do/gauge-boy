@@ -35,12 +35,12 @@ static obd_pid_result_t from(const char *const *lines, int protocol, bool header
 
 static void test_pid_table(void)
 {
-    CHECK(obd_pid_count() >= 19);
+    CHECK(obd_pid_count() >= 20);
     for (int i = 0; i < obd_pid_count(); i++) {
         const obd_pid_info_t *p = obd_pid_at(i);
         CHECK(p != NULL && p->name[0] != '\0' && p->label[0] != '\0');
         CHECK(strlen(p->label) <= 10);
-        CHECK(p->bytes == 1 || p->bytes == 2);
+        CHECK(p->bytes >= 1 && p->bytes <= 5);
         CHECK(p->min < p->max);
         CHECK(obd_pid_info(p->pid) == p);
         for (int j = i + 1; j < obd_pid_count(); j++) {
@@ -186,8 +186,33 @@ static void test_pid_parse_multi(void)
     CHECK_EQ_INT(obd_pid_parse_multi(NULL, 0, pids, v, 6), 0);
 }
 
+static void test_pid_map_wide(void)
+{
+    /* Sensor A present: 0x0C80 / 32 = 100 kPa. */
+    uint8_t a[5] = { 0x01, 0x0C, 0x80, 0x00, 0x00 };
+    float v = 0.0f;
+    CHECK_EQ_INT(obd_pid_decode(0x87, a, 5, &v), OBD_PID_OK);
+    CHECK_NEAR(v, 100.0f);
+    /* Only sensor B: 0x1900 / 32 = 200 kPa (boost). */
+    uint8_t b[5] = { 0x02, 0xFF, 0xFF, 0x19, 0x00 };
+    CHECK_EQ_INT(obd_pid_decode(0x87, b, 5, &v), OBD_PID_OK);
+    CHECK_NEAR(v, 200.0f);
+    CHECK_EQ_INT(obd_pid_decode(0x87, a, 4, &v), OBD_PID_SHORT);
+    CHECK_EQ_STR(obd_pid_format(0x87, 100.0f, OBD_UNITS_US, text, sizeof text), "29.5 inHg");
+    /* In a combined CAN reply. */
+    static const uint8_t multi[] = { 0x41, 0x87, 0x01, 0x0C, 0x80, 0x00, 0x00, 0x0C, 0x0B, 0xB8 };
+    uint8_t pids[4];
+    float vals[4];
+    CHECK_EQ_INT(obd_pid_parse_multi(multi, sizeof multi, pids, vals, 4), 2);
+    CHECK_NEAR(vals[0], 100.0f);
+    CHECK_NEAR(vals[1], 750.0f);
+    CHECK_EQ_STR(obd_boost_format(50.0f, OBD_UNITS_US, text, sizeof text), "7.3 psi");
+    CHECK_EQ_STR(obd_boost_format(50.0f, OBD_UNITS_METRIC, text, sizeof text), "50 kPa");
+}
+
 void suite_pid(void)
 {
+    RUN_TEST(test_pid_map_wide);
     RUN_TEST(test_pid_parse_multi);
     RUN_TEST(test_pid_table);
     RUN_TEST(test_pid_formulas);

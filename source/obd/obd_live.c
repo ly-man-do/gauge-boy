@@ -74,7 +74,7 @@ int obd_live_init(obd_live_t *lv, const obd_link_t *link, const uint8_t *wanted,
  * if the next RPM read is 0 too (the engine may start in between). */
 static void note_engine_off_map(obd_live_t *lv, uint8_t pid, float value)
 {
-    if (pid == OBD_PID_MAP) {
+    if (pid == OBD_PID_MAP || pid == OBD_PID_MAP_WIDE) {
         float rpm = 0.0f;
         lv->have_pending_map = obd_live_value(lv, PID_RPM, &rpm) && rpm < 1.0f;
         lv->pending_map_kpa = value;
@@ -306,7 +306,7 @@ bool obd_live_vacuum(const obd_live_t *lv, float *vacuum_kpa)
         }
         baro = lv->engine_off_map_kpa;
     }
-    if (!obd_live_value(lv, OBD_PID_MAP, &map)) {
+    if (!obd_live_value(lv, OBD_PID_MAP, &map) && !obd_live_value(lv, OBD_PID_MAP_WIDE, &map)) {
         return false;
     }
     if (vacuum_kpa != NULL) {

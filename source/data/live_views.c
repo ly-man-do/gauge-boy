@@ -23,14 +23,16 @@ typedef struct {
 static const view_pid_t engine[] = {
     { 0x0C, D }, { 0x0D, D }, { 0x05, 5000 }, { 0x11, D }, { 0x04, D },
 };
-/* Idle & vacuum: vacuum leaks show as high short-term trims and low vacuum. */
+/* Idle & vacuum: vacuum leaks show as high short-term trims and low vacuum.
+ * MAP is 0B, or 87 on cars without it (the turbo Ascent); baro 33 makes the
+ * vacuum and boost figures exact. Unsupported PIDs are skipped. */
 static const view_pid_t idle[] = {
-    { 0x0C, D }, { 0x0B, D }, { 0x06, D }, { 0x08, D }, { 0x0E, D },
+    { 0x0C, D }, { 0x0B, D }, { 0x87, D }, { 0x06, D }, { 0x08, D }, { 0x0E, D }, { 0x33, D },
 };
 /* Air & fuel: lean / rich, air flow (MAF or MAP, whichever the car has). */
 static const view_pid_t air_fuel[] = {
-    { 0x10, D }, { 0x0B, D }, { 0x0F, D }, { 0x11, D },
-    { 0x06, D }, { 0x08, D }, { 0x07, 2000 }, { 0x09, 2000 },
+    { 0x10, D }, { 0x0B, D }, { 0x87, D }, { 0x0F, D }, { 0x11, D },
+    { 0x06, D }, { 0x08, D }, { 0x07, 2000 }, { 0x09, 2000 }, { 0x33, D },
 };
 /* Warm-up: thermostat, cold start; the temperatures are the point here. */
 static const view_pid_t warmup[] = {

@@ -13,6 +13,7 @@ typedef enum {
     F_MAF,       /* (256A + B) / 100 */
     F_WORD,      /* 256A + B */
     F_MILLI,     /* (256A + B) / 1000 */
+    F_MAP_WIDE,  /* PID 87: A = sensors present, (256B + C) / 32 or (256D + E) / 32 */
 } formula_t;
 
 typedef struct {
@@ -44,6 +45,7 @@ static const pid_entry_t table[] = {
     { { 0x42, 2, "Control module voltage", "Module", OBD_UNIT_VOLTS, 0.0f, 65.535f, 5000u }, F_MILLI },
     { { 0x46, 1, "Ambient air temperature", "Ambient", OBD_UNIT_CELSIUS, -40.0f, 215.0f, 60000u }, F_TEMP },
     { { 0x5C, 1, "Engine oil temperature", "Oil", OBD_UNIT_CELSIUS, -40.0f, 210.0f, 15000u }, F_TEMP },
+    { { 0x87, 5, "Intake manifold pressure (wide range)", "MAP", OBD_UNIT_KPA, 0.0f, 2048.0f, 0u }, F_MAP_WIDE },
 };
 
 #define TABLE_COUNT ((int)(sizeof table / sizeof table[0]))
@@ -96,6 +98,13 @@ obd_pid_result_t obd_pid_decode(uint8_t pid, const uint8_t *data, size_t len, fl
     case F_MAF:    v = word / 100.0f; break;
     case F_WORD:   v = word; break;
     case F_MILLI:  v = word / 1000.0f; break;
+    case F_MAP_WIDE: {
+        /* Sensor A if the car says it has one, else sensor B. */
+        bool b_only = (data[0] & 0x01) == 0 && (data[0] & 0x02) != 0;
+        const uint8_t *x = data + (b_only ? 3 : 1);
+        v = (float)(x[0] * 256u + x[1]) / 32.0f;
+        break;
+    }
     }
     if (value != NULL) {
         *value = v;
@@ -237,6 +246,15 @@ float obd_trim_total(float short_term, float long_term)
 float obd_vacuum_kpa(float baro_kpa, float map_kpa)
 {
     return baro_kpa - map_kpa;
+}
+
+char *obd_boost_format(float boost_kpa, obd_units_t units, char *out, size_t out_len)
+{
+    char num[24];
+    bool us = units == OBD_UNITS_US;
+    number(num, sizeof num, us ? boost_kpa * 0.145038f : boost_kpa, us ? 1 : 0, false);
+    snprintf(out, out_len, "%s %s", num, us ? "psi" : "kPa");
+    return out;
 }
 
 char *obd_vacuum_format(float vacuum_kpa, obd_units_t units, char *out, size_t out_len)

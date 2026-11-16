@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-16, DIAG → TRIM button (gauge-boy-3n6.7; M2 in progress)
+**As of:** 2026-11-16, boost and PID 87 in the Idle & vacuum and Air & fuel views (gauge-boy-3n6.15; M2 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -81,6 +81,6 @@ GaugeBoy
 
 - The adapter test screen and Car make are both under SETUP. SETUP's bottom row is BACK, ADAPTER and WI-FI GUIDE.
 - **SLOT** on the adapter test screen does the same thing as SETUP's **Wi-Fi slot** row.
-- LIVE views and the PIDs in each: Engine (RPM, speed, coolant, throttle, load), Idle & vacuum (RPM, MAP + vacuum, short-term trims, timing), Air & fuel (MAF, MAP, intake air, throttle, short- and long-term trims), Warm-up (coolant, intake air, oil, outside air, run time, RPM), Drive (RPM, speed, throttle, load, timing), All (every supported PID), Custom (your pick). Each view only shows what the car supports.
+- LIVE views and the PIDs in each: Engine (RPM, speed, coolant, throttle, load), Idle & vacuum (RPM, MAP (PID 0B or 87) + vacuum or boost, short-term trims, timing, baro), Air & fuel (MAF, MAP (0B or 87), intake air, throttle, short- and long-term trims, baro), Warm-up (coolant, intake air, oil, outside air, run time, RPM), Drive (RPM, speed, throttle, load, timing), All (every supported PID), Custom (your pick). Each view only shows what the car supports.
 - Only HOME is drawn with graphics (citro2d). Every other screen is still the text console until M3.
 - The code for these screens is in `source/spike_ui.c` (screens, buttons, actions) and `source/ui/` (HOME layout and drawing).

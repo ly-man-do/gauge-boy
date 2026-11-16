@@ -93,6 +93,7 @@ char *obd_pid_format(uint8_t pid, float value, obd_units_t units, char *out, siz
 #define OBD_PID_LTFT_B2 0x09
 #define OBD_PID_MAP     0x0B
 #define OBD_PID_BARO    0x33
+#define OBD_PID_MAP_WIDE 0x87   /* MAP on cars without 0B, e.g. turbo Subarus */
 
 /* Total trim = short + long, in %. */
 float obd_trim_total(float short_term, float long_term);
@@ -101,6 +102,9 @@ float obd_trim_total(float short_term, float long_term);
  * The baro comes from PID 33, or, without it, the MAP read at key-on,
  * engine off (brief section 7). */
 float obd_vacuum_kpa(float baro_kpa, float map_kpa);
+
+/* "7.3 psi" / "50 kPa" boost text (pressure above outside air). */
+char *obd_boost_format(float boost_kpa, obd_units_t units, char *out, size_t out_len);
 
 /* "18.2 inHg" / "62 kPa" vacuum text. Returns out. */
 char *obd_vacuum_format(float vacuum_kpa, obd_units_t units, char *out, size_t out_len);

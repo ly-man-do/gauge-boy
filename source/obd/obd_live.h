@@ -106,7 +106,8 @@ const obd_live_pid_t *obd_live_get(const obd_live_t *lv, uint8_t pid);
 bool obd_live_value(const obd_live_t *lv, uint8_t pid, float *value);
 
 /* Manifold vacuum in kPa: baro (PID 33) or the engine-off MAP, minus the
- * latest MAP. False until both are known. */
+ * latest MAP (PID 0B, or 87 on cars without it). Negative = boost. False
+ * until both are known. */
 bool obd_live_vacuum(const obd_live_t *lv, float *vacuum_kpa);
 
 /* Requests per second since obd_live_init (all PIDs together). */

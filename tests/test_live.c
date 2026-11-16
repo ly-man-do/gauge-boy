@@ -475,6 +475,28 @@ static void test_live_view_lines(void)
     CHECK(has_line(n, "No PIDs chosen: tap some below."));
 }
 
+static void test_live_boost_from_pid_87(void)
+{
+    /* The Ascent: no 0B, MAP in 87, baro in 33. */
+    static const uint8_t car[] = { 0x33, 0x87, 0 };
+    setup(car);
+    link.protocol = 6;
+    link.ranges_read = 5;
+    static const uint8_t want[] = { 0x0B, 0x87, 0x33 };
+    CHECK_EQ_INT(obd_live_init(&lv, &link, want, 3), 2);   /* 0B not supported */
+    fake_io_reply(&f, "ATRV", "14.1V\r\r>", 10, 0);
+    fake_io_reply(&f, "0187", "41 87 01 0F A0 00 00\r\r>", 50, 0);   /* 125 kPa */
+    fake_io_reply(&f, "0133", "41 33 64\r\r>", 50, 0);               /* 100 kPa */
+    for (int i = 0; i < 3; i++) {
+        obd_live_step(&lv, &elm, NULL, NULL);
+    }
+    float vac = 0.0f;
+    CHECK(obd_live_vacuum(&lv, &vac));
+    CHECK_NEAR(vac, -25.0f);                                  /* 25 kPa of boost */
+    int n = live_view_lines(&lv, 6, 20.0f, OBD_UNITS_US, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
+    CHECK(has_line(n, "Boost       3.6 psi"));
+}
+
 static void test_live_choices_and_toggle(void)
 {
     static const uint8_t car[] = { 0x0D, 0x0C, 0x05, 0x01, 0x03, 0 };
@@ -567,6 +589,7 @@ void suite_live(void)
     RUN_TEST(test_live_vacuum_from_engine_off_map);
     RUN_TEST(test_live_engine_starting_is_not_baro);
     RUN_TEST(test_live_vacuum_from_baro_pid);
+    RUN_TEST(test_live_boost_from_pid_87);
     RUN_TEST(test_live_trace);
     RUN_TEST(test_live_response_count);
     RUN_TEST(test_live_priority_refresh_times);
