@@ -345,17 +345,52 @@ static void test_live_multi_pid_on_can(void)
     CHECK(!lv.multi_refused);
     CHECK_EQ_INT(f.unexpected_writes, 0);
 
-    /* A PID missing from the reply counts as a miss for that PID only. */
+    /* A PID left out of the reply isn't a miss: it is asked alone next,
+     * and the reply is kept for the log. */
     setup(car);
     link.protocol = 6;
     obd_live_init(&lv, &link, want, 3);
     lv.use_multi = true;
     lv.volts_failed = true;
     fake_io_reply(&f, "010C0D05", "41 0C 1A F8 05 7B \r\r>", 60, 0);
+    fake_io_reply(&f, "010D", "41 0D 07 \r\r>", 60, 0);
     CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
-    CHECK_EQ_INT(obd_live_get(&lv, 0x0D)->misses, 1);
-    CHECK_EQ_INT(obd_live_get(&lv, 0x0C)->misses, 0);
+    CHECK_EQ_INT(obd_live_get(&lv, 0x0D)->misses, 0);
+    CHECK(obd_live_get(&lv, 0x0D)->single_next);
+    CHECK_EQ_INT((int)lv.left_out, 1);
+    CHECK_EQ_INT((int)lv.failures, 0);
+    CHECK_EQ_INT(lv.left_out_logged, 1);
+    CHECK_EQ_STR(lv.left_out_log[0].cmd, "010C0D05");
+    CHECK_EQ_INT(lv.left_out_log[0].missing_count, 1);
+    CHECK_EQ_INT(lv.left_out_log[0].missing[0], 0x0D);
+    CHECK(strstr(lv.left_out_log[0].reply, "41 0C 1A F8 05 7B") != NULL);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);   /* 010D alone */
+    CHECK(obd_live_value(&lv, 0x0D, &v) && v == 7.0f);
+    CHECK(!obd_live_get(&lv, 0x0D)->single_next);
     CHECK(!lv.multi_refused);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* Asked alone, NO DATA does count; only the first few are logged. */
+    setup(car);
+    link.protocol = 6;
+    obd_live_init(&lv, &link, want, 3);
+    lv.use_multi = true;
+    lv.volts_failed = true;
+    for (int i = 0; i < OBD_LIVE_MAX_MISSES; i++) {
+        lv.pid[0].due_ms = lv.pid[1].due_ms = lv.pid[2].due_ms = 0;
+        fake_io_reply(&f, "010C0D05", "41 0C 1A F8 05 7B \r\r>", 60, 0);
+        fake_io_reply(&f, "010D", "NO DATA\r\r>", 60, 0);
+        CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+        CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_MISSED);
+    }
+    CHECK(obd_live_get(&lv, 0x0D)->dropped);   /* 3 NO DATA alone */
+    lv.pid[1].dropped = false;                 /* once more, past the log's size */
+    lv.pid[0].due_ms = lv.pid[1].due_ms = lv.pid[2].due_ms = 0;
+    fake_io_reply(&f, "010C0D05", "41 0C 1A F8 05 7B \r\r>", 60, 0);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    CHECK_EQ_INT((int)lv.left_out, OBD_LIVE_MAX_MISSES + 1);
+    CHECK_EQ_INT(lv.left_out_logged, OBD_LIVE_LEFT_OUT_LOG);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
 }
 
 static void test_live_multi_pid_refused(void)

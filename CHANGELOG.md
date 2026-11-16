@@ -19,6 +19,7 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ### Fixed
 
+- On CAN cars, a PID left out of a combined reply counted as NO DATA, so three in a row could drop it from LIVE (seen a few times a minute on the Ascent). Now it is asked again on its own, and only NO DATA to that counts. The LIVE summary in the log says how many PIDs were left out and shows the first three replies, to find out why.
 - Every adapter request took at least ~400 ms on a 3DS, even ones only the adapter answers. On the 3DS all of an app's socket calls go through one session with the network service, one at a time, and the connection-test thread kept it busy with 100 ms waits, so each of a request's socket calls queued behind it. No socket wait happens inside the service any more (zero-timeout checks with short sleeps between them), in the adapter connection and in the connection-test thread. Thanks to 3dsDL's notes for the explanation.
 - After a reconnect whose adapter reset failed, the reset wasn't tried again, so the adapter's echo stayed on for the rest of the session. The reset is now only marked done when it worked, and a failed setup logs the command that failed.
 

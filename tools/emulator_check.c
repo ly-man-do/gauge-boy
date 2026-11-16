@@ -176,8 +176,13 @@ int main(int argc, char **argv)
     }
     snprintf(detail, sizeof detail, "%d of %d", with_value, lv.count);
     check(with_value == lv.count, "every polled PID has a value", detail);
-    printf("    %u requests, %u with several PIDs%s\n", (unsigned)lv.requests,
-           (unsigned)lv.multi_requests, lv.multi_refused ? " (refused: one at a time)" : "");
+    printf("    %u requests, %u with several PIDs%s, %u PIDs left out (asked alone)\n",
+           (unsigned)lv.requests, (unsigned)lv.multi_requests,
+           lv.multi_refused ? " (refused: one at a time)" : "", (unsigned)lv.left_out);
+    for (int i = 0; i < lv.left_out_logged; i++) {
+        printf("    %s left out %d: %s\n", lv.left_out_log[i].cmd,
+               lv.left_out_log[i].missing_count, lv.left_out_log[i].reply);
+    }
     check(lv.have_volts || lv.volts_failed, "ATRV read while polling", NULL);
 
     printf("\nSpike actions (as the 3DS app runs them):\n");

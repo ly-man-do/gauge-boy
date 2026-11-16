@@ -856,6 +856,19 @@ static void live_summary(spike_t *s, const obd_live_t *lv)
     if (line[0] != '\0') {
         spike_logf(s, "LIVE: %s", line);
     }
+    if (lv->left_out > 0) {
+        spike_logf(s, "LIVE: %u PIDs left out of combined replies (asked again alone)",
+                   (unsigned)lv->left_out);
+    }
+    for (int i = 0; i < lv->left_out_logged; i++) {
+        const obd_live_left_out_t *lo = &lv->left_out_log[i];
+        char missing[3 * OBD_LIVE_MULTI_MAX + 1] = "";
+        for (int k = 0; k < lo->missing_count; k++) {
+            snprintf(missing + strlen(missing), sizeof missing - strlen(missing), "%s%02X",
+                     k ? " " : "", (unsigned)lo->missing[k]);
+        }
+        spike_logf(s, "LIVE: %s left out %s: %s", lo->cmd, missing, lo->reply);
+    }
 }
 
 /* LIVE (worker): one poll while the LIVE screen polls. */

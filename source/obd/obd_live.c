@@ -154,7 +154,8 @@ static obd_live_step_t multi_step(obd_live_t *lv, elm_t *elm, int first, uint64_
         int best = -1;
         for (int i = 0; i < lv->count; i++) {
             const obd_live_pid_t *q = &lv->pid[i];
-            if (taken[i] || q->dropped || (q->due_ms > t0 && q->period_ms != 0)) {
+            if (taken[i] || q->dropped || q->single_next ||
+                (q->due_ms > t0 && q->period_ms != 0)) {
                 continue;
             }
             if (best < 0 || q->due_ms < lv->pid[best].due_ms) {
@@ -218,11 +219,24 @@ static obd_live_step_t multi_step(obd_live_t *lv, elm_t *elm, int first, uint64_
             return OBD_LIVE_MISSED;
         }
     }
+    obd_live_left_out_t *log = NULL;
+    if (!lv->multi_refused && nfound < np && lv->left_out_logged < OBD_LIVE_LEFT_OUT_LOG) {
+        log = &lv->left_out_log[lv->left_out_logged++];
+        memset(log, 0, sizeof *log);
+        snprintf(log->cmd, sizeof log->cmd, "%s", cmd);
+        elm_escape_raw(r.raw, r.raw_len, log->reply, sizeof log->reply);
+    }
     for (int k = 0; k < np; k++) {
         obd_live_pid_t *q = &lv->pid[pick[k]];
         q->due_ms = t1 + q->period_ms;
         if (!found[k] && !lv->multi_refused) {
-            miss(lv, q);
+            /* Not a miss: ask it alone next, where NO DATA counts. */
+            q->single_next = true;
+            q->due_ms = 0;   /* ahead of PIDs read as often as possible */
+            lv->left_out++;
+            if (log != NULL) {
+                log->missing[log->missing_count++] = q->pid;
+            }
         }
     }
     return OBD_LIVE_READ;
@@ -253,7 +267,10 @@ obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trac
     }
     obd_live_pid_t *p = &lv->pid[idx];
 
-    if (lv->use_multi && !lv->multi_refused && obd_family(lv->protocol) == OBD_FAMILY_CAN) {
+    bool single = p->single_next;
+    p->single_next = false;
+    if (!single && lv->use_multi && !lv->multi_refused &&
+        obd_family(lv->protocol) == OBD_FAMILY_CAN) {
         obd_live_step_t ms = multi_step(lv, elm, idx, t0, trace, ctx);
         if (ms != OBD_LIVE_IDLE) {
             return ms;

@@ -33,6 +33,8 @@
 #define OBD_LIVE_VOLTS_MS   5000u   /* ATRV this often */
 #define OBD_LIVE_TIMEOUT_MS 2000u   /* per request */
 #define OBD_LIVE_MULTI_MAX  6       /* PIDs in one CAN request (SAE J1979) */
+#define OBD_LIVE_LEFT_OUT_LOG 3     /* combined replies kept for the log */
+#define OBD_LIVE_LEFT_OUT_RAW 160   /* escaped reply text kept for each */
 
 typedef struct {
     uint8_t pid;
@@ -45,7 +47,16 @@ typedef struct {
     bool dropped;            /* stopped polling after OBD_LIVE_MAX_MISSES */
     uint32_t period_ms;      /* desired refresh time, 0 = as often as possible */
     uint64_t due_ms;         /* when it should be read next (0 = now) */
+    bool single_next;        /* left out of a combined reply: ask it alone next */
 } obd_live_pid_t;
+
+/* A combined request whose reply left PIDs out (for the log). */
+typedef struct {
+    char cmd[2 + 2 * OBD_LIVE_MULTI_MAX + 1];
+    uint8_t missing[OBD_LIVE_MULTI_MAX];
+    int missing_count;
+    char reply[OBD_LIVE_LEFT_OUT_RAW];   /* raw reply, escaped ("\r") */
+} obd_live_left_out_t;
 
 typedef struct {
     obd_live_pid_t pid[OBD_LIVE_MAX];
@@ -67,6 +78,9 @@ typedef struct {
     bool use_multi;          /* CAN: several PIDs per request: set after init */
     bool multi_refused;      /* the car didn't answer them: one PID at a time */
     uint32_t multi_requests; /* requests that carried several PIDs */
+    uint32_t left_out;       /* PIDs left out of combined replies (asked again alone) */
+    obd_live_left_out_t left_out_log[OBD_LIVE_LEFT_OUT_LOG];   /* the first few */
+    int left_out_logged;
 
     uint32_t requests;       /* commands sent */
     uint32_t failures;       /* NO DATA, unusable or failed replies */
@@ -93,7 +107,9 @@ int obd_live_init(obd_live_t *lv, const obd_link_t *link, const uint8_t *wanted,
  * With use_multi set and a CAN car, a request carries up to 6 PIDs: the
  * most overdue one plus others that are due or read as often as possible
  * ("010C0D05"); a car that answers with none or only the first of them
- * gets one PID per request from then on. */
+ * gets one PID per request from then on. A PID left out of a combined
+ * reply isn't a miss: it is asked alone next, where NO DATA does count
+ * (left_out, and the first few such replies in left_out_log). */
 obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trace, void *ctx);
 
 /* Change a PID's desired refresh time (0 = as often as possible). */
