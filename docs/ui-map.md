@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-16, LIVE views (gauge-boy-3n6.12; M2 in progress)
+**As of:** 2026-11-16, TRIM screen (gauge-boy-3n6.6; M2 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -15,7 +15,7 @@ GaugeBoy
         ├── [Adapter card]           → Wi-Fi guide (shows Connected / Not connected)
         ├── [LIVE  · Dash gauges]    → LIVE view list
         ├── [DIAG  · Codes & CEL]    → DIAG
-        ├── [TRIM  · Fuel trims]     → notice "comes in version 0.2"
+        ├── [TRIM  · Fuel trims]     → TRIM (starts polling)
         ├── [FUN   · Fun modes]      → notice "comes in version 0.6"
         ├── [LOG   · Record drives]  → notice "comes in version 0.4"
         ├── [SETUP · Settings]       → SETUP
@@ -35,6 +35,12 @@ GaugeBoy
         │           ├── [PID toggles] 6 per page, green = polled (the PIDs the car supports)
         │           ├── [BACK]       → Custom view, saves the choice              [B]
         │           └── [<] page n/m [>]                                          [L/R]
+        │
+        ├── TRIM                     (top: short / long / total trim per bank as
+        │   │                        colored center-zero bars, engine state, hints)
+        │   ├── (bottom: what trims mean, the color zones, how to check them)
+        │   ├── [BACK]               → HOME, stops polling                        [B]
+        │   └── [START / STOP]       pauses or resumes polling
         │
         ├── DIAG                     (top: car facts or the selected code's text)
         │   ├── [STORED] [PENDING] [PERM] [READY]   tabs (PERM hidden if unsupported)

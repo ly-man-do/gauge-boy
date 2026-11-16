@@ -22,6 +22,7 @@
 #include "data/diag_view.h"
 #include "data/live_view.h"
 #include "data/live_views.h"
+#include "data/trim_view.h"
 #include "data/wifi_guide.h"
 #include "data/textlog.h"
 #include "spike_actions.h"
@@ -164,8 +165,16 @@ typedef enum {
     SCREEN_HOME, SCREEN_DIAG, SCREEN_SETUP, SCREEN_TEST, SCREEN_GUIDE, SCREEN_MAKE,
     SCREEN_LIVE_MENU,          /* LIVE: the view list */
     SCREEN_LIVE,               /* LIVE: one view polling */
-    SCREEN_LIVE_EDIT           /* LIVE: the Custom view's PID toggles */
+    SCREEN_LIVE_EDIT,          /* LIVE: the Custom view's PID toggles */
+    SCREEN_TRIM                /* fuel trims, both banks */
 } screen_t;
+
+/* TRIM: BACK and START / STOP (the bars and hints are on the top screen). */
+static const button_t trim_buttons[] = {
+    { "BACK", BTN_BACK,        0,  25, 8, 5 },
+    { NULL,   BTN_LIVE_TOGGLE, 26, 25, 13, 5 },   /* START / STOP */
+};
+#define TRIM_BUTTON_COUNT ((int)(sizeof trim_buttons / sizeof trim_buttons[0]))
 
 /* LIVE view screen: BACK (to the list), < view >, START / STOP; EDIT in
  * the Custom view. */
@@ -1293,6 +1302,30 @@ static int live_page_count(void)
 
 /* LIVE: show view v and (re)start polling its PIDs. Remembered in
  * config.ini (saved on BACK). */
+/* Start polling these PIDs (call with shared.lock held). */
+static void live_start_locked(const uint8_t *pids, const uint32_t *periods, int n)
+{
+    memcpy(shared.live_want, pids, (size_t)n);
+    memcpy(shared.live_want_period, periods, (size_t)n * sizeof periods[0]);
+    shared.live_want_count = n;
+    shared.live_on = true;
+    shared.live_gen++;
+    shared.live_msg[0] = '\0';
+    shared.live_ui_version++;
+}
+
+/* TRIM: the four trims fast enough to watch, RPM and speed for the hints. */
+static void trim_start(void)
+{
+    static const uint8_t pids[] = { OBD_PID_STFT_B1, OBD_PID_STFT_B2, OBD_PID_LTFT_B1,
+                                    OBD_PID_LTFT_B2, 0x0C, 0x0D };
+    static const uint32_t periods[] = { 0, 0, 1000, 1000, 1000, 2000 };
+    LightLock_Lock(&shared.lock);
+    live_start_locked(pids, periods, (int)sizeof pids);
+    LightLock_Unlock(&shared.lock);
+    LightEvent_Signal(&shared.wake);
+}
+
 static void live_select_view(ui_state_t *ui, int v)
 {
     uint8_t pids[OBD_LIVE_MAX];
@@ -1300,13 +1333,7 @@ static void live_select_view(ui_state_t *ui, int v)
     LightLock_Lock(&shared.lock);
     int n = live_view_request(v, app_cfg->live_pids, app_cfg->live_pid_count, pids, periods,
                               OBD_LIVE_MAX);
-    memcpy(shared.live_want, pids, sizeof pids);
-    memcpy(shared.live_want_period, periods, sizeof periods);
-    shared.live_want_count = n;
-    shared.live_on = true;
-    shared.live_gen++;
-    shared.live_msg[0] = '\0';
-    shared.live_ui_version++;
+    live_start_locked(pids, periods, n);
     if (strcmp(app_cfg->live_view, live_view_key(v)) != 0) {
         snprintf(app_cfg->live_view, sizeof app_cfg->live_view, "%s", live_view_key(v));
         ui->live_dirty = true;
@@ -1314,6 +1341,99 @@ static void live_select_view(ui_state_t *ui, int v)
     LightLock_Unlock(&shared.lock);
     LightEvent_Signal(&shared.wake);
     ui->live_view = v;
+}
+
+/* One trim row: label, value, and the bar in its zone's color. */
+static void trim_row(int row, const char *label, bool have, float pct)
+{
+    char value[16], bar[TRIM_BAR_WIDTH + 1];
+    if (have) {
+        snprintf(value, sizeof value, "%+.1f %%", (double)pct);
+        trim_bar(pct, TRIM_BAR_WIDTH, bar);
+    } else {
+        snprintf(value, sizeof value, "-");
+        trim_bar(0.0f, TRIM_BAR_WIDTH, bar);
+    }
+    trim_zone_t z = trim_zone(pct);
+    const char *color = !have ? "\x1b[0m" : z == TRIM_ZONE_GREEN ? "\x1b[32m"
+                      : z == TRIM_ZONE_AMBER ? "\x1b[33m" : "\x1b[31m";
+    printf("\x1b[%d;1H%-14.14s%-9.9s%s%s\x1b[0m ", row + 1, label, value, color, bar);
+}
+
+/* TRIM top screen: both banks' short, long and total trims as bars, the
+ * engine state and the hints. */
+static void draw_trim_top(int busy, bool connected)
+{
+    static obd_live_t lv;
+    char header[TOP_COLS + 1], title[TOP_COLS + 16], msg[sizeof shared.live_msg];
+    LightLock_Lock(&shared.lock);
+    lv = shared.live;
+    bool have = shared.live_have;
+    int protocol = shared.live_protocol;
+    float rate = shared.live_rate;
+    bool on = shared.live_on;
+    memcpy(msg, shared.live_msg, sizeof msg);
+    LightLock_Unlock(&shared.lock);
+
+    trim_state_t ts;
+    if (have) {
+        trim_state_from_live(&lv, &ts);
+    } else {
+        memset(&ts, 0, sizeof ts);
+        ts.banks = 2;   /* until the car says otherwise */
+    }
+    spike_format_header(header, sizeof header, connected, busy);
+    if (have && protocol != 0) {
+        snprintf(title, sizeof title, "TRIM  %s, %.1f requests/s", elm_protocol_name(protocol),
+                 (double)rate);
+    } else {
+        snprintf(title, sizeof title, "TRIM  Fuel trims");
+    }
+    consoleSelect(&top_console);
+    printf("\x1b[0m");
+    print_row(0, TOP_COLS, header);
+    print_row(1, TOP_COLS, "-------------------------------------------------");
+    print_row(2, TOP_COLS, title);
+    print_row(3, TOP_COLS, "+ adds fuel (was lean)   - takes fuel (was rich)");
+    print_row(4, TOP_COLS, "                       -25 %       0       +25 %");
+    int row = 5;
+    for (int b = 0; b < (ts.banks > 0 ? ts.banks : 1); b++) {
+        const trim_bank_t *k = &ts.bank[b];
+        float total = 0.0f;
+        bool have_total = trim_total(k, &total);
+        char label[16];
+        snprintf(label, sizeof label, "Bank %d short", b + 1);
+        trim_row(row++, label, k->have_short, k->short_term);
+        trim_row(row++, "       long", k->have_long, k->long_term);
+        trim_row(row++, "       total", have_total, total);
+        print_row(row++, TOP_COLS, "");
+    }
+    char line[64];
+    if (ts.have_rpm) {
+        snprintf(line, sizeof line, "Engine %.0f rpm%s", (double)ts.rpm,
+                 trim_at_idle(&ts) ? ", at idle" : ts.rpm < 400.0f ? ", not running" : "");
+    } else {
+        snprintf(line, sizeof line, "Engine: waiting for RPM");
+    }
+    print_row(row++, TOP_COLS, line);
+    print_row(row++, TOP_COLS, "");
+    const char *hints[TRIM_HINTS_MAX];
+    int nh = have ? trim_hints(&ts, hints, TRIM_HINTS_MAX) : 0;
+    static char wrapped[8][DIAG_VIEW_COLS + 1];
+    for (int i = 0; i < nh && row < TOP_ROWS - 2; i++) {
+        int w = diag_wrap(hints[i], TOP_COLS - 2, 2, wrapped, 8);
+        for (int j = 0; j < w && row < TOP_ROWS - 2; j++) {
+            char text[DIAG_VIEW_COLS + 8];   /* print_row cuts it to the width */
+            snprintf(text, sizeof text, "%s%.*s", j == 0 ? "- " : "  ", DIAG_VIEW_COLS, wrapped[j]);
+            print_row(row++, TOP_COLS, text);
+        }
+    }
+    while (row < TOP_ROWS - 2) {
+        print_row(row++, TOP_COLS, "");
+    }
+    print_row(TOP_ROWS - 2, TOP_COLS, nh > 0 ? "Hints, not diagnoses." : "");
+    print_row(TOP_ROWS - 1, TOP_COLS, msg[0] != '\0' ? msg
+                                      : on ? "Polling." : "Stopped. Tap START to poll.");
 }
 
 /* LIVE top screen: the view, the values, refresh rates and a status line. */
@@ -1571,6 +1691,32 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         return;
     }
 
+    if (ui->screen == SCREEN_TRIM) {
+        LightLock_Lock(&shared.lock);
+        bool on = shared.live_on;
+        LightLock_Unlock(&shared.lock);
+        clear_rows(1, 24);
+        print_row(2, BOTTOM_COLS, "Fuel trims: how much fuel the engine");
+        print_row(3, BOTTOM_COLS, "computer adds (+) or takes away (-).");
+        print_row(5, BOTTOM_COLS, "Short: right now. Long: learned.");
+        print_row(6, BOTTOM_COLS, "Total: both together.");
+        printf("\x1b[9;1H\x1b[32m Green\x1b[0m  within 10 %%");
+        printf("\x1b[10;1H\x1b[33m Amber\x1b[0m  10 to 20 %%");
+        printf("\x1b[11;1H\x1b[31m Red  \x1b[0m  beyond 20 %%");
+        print_row(13, BOTTOM_COLS, "Bars run from -25 to +25 %; < or >");
+        print_row(14, BOTTOM_COLS, "at the end means beyond that.");
+        print_row(16, BOTTOM_COLS, "Check trims warm, at idle, then at");
+        print_row(17, BOTTOM_COLS, "a steady 2500 rpm (parked).");
+        for (int i = 0; i < TRIM_BUTTON_COUNT; i++) {
+            button_t b = trim_buttons[i];
+            if (b.action == BTN_LIVE_TOGGLE) {
+                b.label = on ? "STOP" : "START";
+            }
+            draw_button_ex(&b, flashing(b.action, now), false,
+                           b.action == BTN_LIVE_TOGGLE && on);
+        }
+        return;
+    }
     if (ui->screen == SCREEN_LIVE_MENU) {
         print_row(1, BOTTOM_COLS, "Pick a view: a few PIDs for one job");
         clear_rows(2, 24);
@@ -1907,6 +2053,7 @@ void spike_ui_run(void)
                 }
                 break;
             case SCREEN_LIVE_EDIT: list = live_edit_buttons; count = LIVE_EDIT_BUTTON_COUNT; break;
+            case SCREEN_TRIM:      list = trim_buttons;      count = TRIM_BUTTON_COUNT;      break;
             case SCREEN_LIVE_MENU: list = live_menu_buttons; count = LIVE_VIEW_COUNT + 1;  break;
             case SCREEN_TEST:  break;
             }
@@ -2004,10 +2151,13 @@ void spike_ui_run(void)
                 top_dirty = true;
                 break;
             case BTN_MENU_TRIM:
+                ui.screen = SCREEN_TRIM;
+                trim_start();
+                bottom_full = top_dirty = true;
+                break;
             case BTN_MENU_FUN:
             case BTN_MENU_LOG:
-                ui.notice = action == BTN_MENU_TRIM  ? "TRIM: fuel trims come in version 0.2"
-                          : action == BTN_MENU_FUN   ? "FUN: fun modes come in version 0.6"
+                ui.notice = action == BTN_MENU_FUN   ? "FUN: fun modes come in version 0.6"
                           :                            "LOG: logging comes in version 0.4";
                 notice_until = now + 3000;
                 break;
@@ -2062,6 +2212,12 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
+                if (ui.screen == SCREEN_TRIM) {
+                    LightLock_Lock(&shared.lock);
+                    shared.live_on = false;
+                    shared.live_ui_version++;
+                    LightLock_Unlock(&shared.lock);
+                }
                 if (ui.screen == SCREEN_LIVE_EDIT || ui.screen == SCREEN_LIVE) {
                     if (ui.screen == SCREEN_LIVE) {
                         LightLock_Lock(&shared.lock);
@@ -2188,13 +2344,14 @@ void spike_ui_run(void)
         }
         if (live_ui_version != drawn_live_ui_version) {
             drawn_live_ui_version = live_ui_version;
-            if (ui.screen == SCREEN_LIVE || ui.screen == SCREEN_LIVE_EDIT) {
+            if (ui.screen == SCREEN_LIVE || ui.screen == SCREEN_LIVE_EDIT ||
+                ui.screen == SCREEN_TRIM) {
                 bottom_dirty = true;
             }
         }
         /* LIVE values change many times a second: redraw at most 10 times. */
         bool live_screen = ui.screen == SCREEN_LIVE || ui.screen == SCREEN_LIVE_EDIT ||
-                           ui.screen == SCREEN_LIVE_MENU;
+                           ui.screen == SCREEN_LIVE_MENU || ui.screen == SCREEN_TRIM;
         bool live_due = live_screen && live_version != drawn_live_version &&
                         now - live_drawn_at >= 100;
 
@@ -2203,7 +2360,11 @@ void spike_ui_run(void)
         if (top_dirty || busy != drawn_busy || connected != drawn_connected || live_due ||
             (shows_log ? (version != drawn_version || scroll != drawn_scroll)
                        : !live_screen && diag_version != drawn_diag_version)) {
-            if (live_screen) {
+            if (ui.screen == SCREEN_TRIM) {
+                draw_trim_top(busy, connected);
+                drawn_live_version = live_version;
+                live_drawn_at = now;
+            } else if (live_screen) {
                 draw_live_top(ui.live_view, busy, connected);
                 drawn_live_version = live_version;
                 live_drawn_at = now;
