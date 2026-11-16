@@ -7,6 +7,7 @@
 #include "data/code_history.h"
 #include "data/diag_view.h"
 #include "data/wifi_guide.h"
+#include "obd/dtc.h"
 #include "obd/obd_diag.h"
 
 static fake_io_t f;
@@ -38,6 +39,22 @@ static void script_ridgeline(void)
     fake_io_reply(&f, "0902",
                   "49 02 01 00 00 00 32\r49 02 02 48 4A 59 4B\r49 02 03 31 36 36 31\r"
                   "49 02 04 38 48 30 30\r49 02 05 30 31 32 33\r\r>", 500, 0);
+}
+
+/* The Tracker's layout (ISO 9141-2, no VIN over OBD) with a made-up Geo code. */
+static void script_tracker(void)
+{
+    fake_io_reply(&f, "ATZ", "ATZ\r\r\rELM327 v2.3\r\r>", 900, 0);
+    fake_io_reply(&f, "ATE0", "ATE0\rOK\r\r>", 10, 0);
+    fake_io_reply(&f, "ATL0", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "ATSP0", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "0100", "SEARCHING...\r41 00 BE 3F B8 10\r\r>", 4500, 0);
+    fake_io_reply(&f, "ATDPN", "A3\r\r>", 40, 0);
+    fake_io_reply(&f, "0101", "41 01 81 07 E1 00\r\r>", 60, 0);
+    fake_io_reply(&f, "03", "43 12 50 00 00 00 00\r\r>", 80, 0);
+    fake_io_reply(&f, "07", "NO DATA\r\r>", 80, 0);
+    fake_io_reply(&f, "0A", "NO DATA\r\r>", 80, 0);
+    fake_io_reply(&f, "0902", "NO DATA\r\r>", 80, 0);
 }
 
 static int steps_seen;
@@ -93,6 +110,51 @@ static void test_scan_ridgeline(void)
     CHECK_EQ_INT(diag.model_year, 2008);
     CHECK_EQ_STR(diag.maker, "Honda");
     CHECK(diag.make >= 0);
+}
+
+static void test_chosen_make(void)
+{
+    setup();
+    script_tracker();
+    CHECK_EQ_INT(obd_diag_scan(&elm, true, 2026, &diag, NULL, NULL, NULL), OBD_LINK_OK);
+    CHECK(!diag.have_vin);
+    CHECK(diag.maker == NULL && diag.make == -1 && !diag.make_chosen);
+    CHECK_EQ_INT(diag.stored.count, 1);
+
+    static diag_item_t items[DIAG_ITEMS_MAX];
+    CHECK_EQ_INT(diag_items(&diag, DIAG_TAB_STORED, items, DIAG_ITEMS_MAX), 1);
+    CHECK(strstr(items[0].detail, "Early Fuel") == NULL);   /* make unknown */
+
+    obd_diag_apply_make(&diag, "geo");
+    CHECK(diag.make_chosen);
+    CHECK_EQ_STR(diag.maker, "Geo");
+    CHECK_EQ_INT(diag_items(&diag, DIAG_TAB_STORED, items, DIAG_ITEMS_MAX), 1);
+    CHECK(strstr(items[0].detail, "Early Fuel Evaporation Heater") != NULL);
+    int n = diag_facts(&diag, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Car       Geo (set in SETUP)");
+    CHECK_VIEW(n, "VIN       not read");
+    n = diag_view_lines(&diag, DIAG_TAB_STORED, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Geo (set in SETUP)  VIN not read");
+
+    /* changing the choice replaces it; auto and unknown names undo it */
+    obd_diag_apply_make(&diag, "Suzuki");
+    CHECK_EQ_STR(diag.maker, "Suzuki");
+    obd_diag_apply_make(&diag, "");
+    CHECK(diag.maker == NULL && diag.make == -1 && !diag.make_chosen);
+    obd_diag_apply_make(&diag, "Geo");
+    obd_diag_apply_make(&diag, "No Such Make");
+    CHECK(diag.maker == NULL && !diag.make_chosen);
+    n = diag_facts(&diag, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Car       VIN not read");
+
+    /* a make read from the VIN wins over the choice */
+    setup();
+    script_ridgeline();
+    CHECK_EQ_INT(obd_diag_scan(&elm, true, 2026, &diag, NULL, NULL, NULL), OBD_LINK_OK);
+    obd_diag_apply_make(&diag, "Geo");
+    CHECK_EQ_STR(diag.maker, "Honda");
+    CHECK(!diag.make_chosen);
+    CHECK_EQ_INT(diag.make, obd_dtc_make_find("Honda"));
 }
 
 static void test_panel(void)
@@ -324,6 +386,7 @@ void suite_diag(void)
     gb_suite("diag");
     RUN_TEST(test_scan_ridgeline);
     RUN_TEST(test_panel);
+    RUN_TEST(test_chosen_make);
     RUN_TEST(test_scan_engine_off);
     RUN_TEST(test_scan_lost_midway);
     RUN_TEST(test_paged_pieces);

@@ -56,6 +56,25 @@ static void progress_to(obd_diag_progress_fn progress, void *ctx, obd_diag_step_
     }
 }
 
+void obd_diag_apply_make(obd_diag_t *d, const char *make_name)
+{
+    if (d->make_chosen) {
+        d->maker = NULL;
+        d->make = -1;
+        d->make_chosen = false;
+    }
+    if (d->maker != NULL || make_name == NULL || make_name[0] == '\0') {
+        return;
+    }
+    int idx = obd_dtc_make_find(make_name);
+    if (idx < 0) {
+        return;
+    }
+    d->make = idx;
+    d->maker = obd_dtc_make_name(idx);
+    d->make_chosen = true;
+}
+
 obd_link_result_t obd_diag_scan(elm_t *elm, bool reset, int current_year, obd_diag_t *out,
                                 obd_link_trace_fn trace, obd_diag_progress_fn progress,
                                 void *ctx)

@@ -126,10 +126,13 @@ int diag_view_lines(const obd_diag_t *d, diag_tab_t tab, int cols,
 
     if (d->have_vin) {
         if (d->maker != NULL) {
-            addf(&v, "%d %s  VIN %s", d->model_year, d->maker, d->vin);
+            addf(&v, "%d %s%s  VIN %s", d->model_year, d->maker,
+                 d->make_chosen ? " (set in SETUP)" : "", d->vin);
         } else {
             addf(&v, "Model year %d  VIN %s", d->model_year, d->vin);
         }
+    } else if (d->make_chosen) {
+        addf(&v, "%s (set in SETUP)  VIN not read", d->maker);
     } else {
         addf(&v, "VIN not read");
     }
@@ -305,12 +308,17 @@ int diag_facts(const obd_diag_t *d, int cols, char lines[][DIAG_VIEW_COLS + 1], 
     }
     if (d->have_vin) {
         if (d->maker != NULL) {
-            snprintf(buf, sizeof buf, "%d %s", d->model_year, d->maker);
+            snprintf(buf, sizeof buf, "%d %s%s", d->model_year, d->maker,
+                     d->make_chosen ? " (SETUP)" : "");
         } else {
             snprintf(buf, sizeof buf, "Model year %d", d->model_year);
         }
         fact(&v, "Car", buf);
         fact(&v, "VIN", d->vin);
+    } else if (d->make_chosen) {
+        snprintf(buf, sizeof buf, "%s (set in SETUP)", d->maker);
+        fact(&v, "Car", buf);
+        fact(&v, "VIN", "not read");
     } else {
         fact(&v, "Car", "VIN not read");
     }

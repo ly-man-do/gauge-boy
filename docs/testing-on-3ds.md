@@ -129,13 +129,16 @@ On first launch the app creates `sdmc:/3ds/gaugeboy/config.ini`:
 host = 192.168.0.10
 port = 35000
 wifi_slot = any
+
+[vehicle]
+make = auto
 ```
 
-If your adapter uses a different address, edit the file (card reader or FTP) and relaunch. The bottom screen header shows the address in use.
+If your adapter uses a different address, edit the file (card reader or FTP) and relaunch. The bottom screen header shows the address in use. `make` is set from **SETUP > Car make** (see section 6).
 
 ## 5. Smoke test (at home, no adapter)
 
-1. GaugeBoy opens on **HOME**: six big buttons, METER, DIAG, TRIM / FUN, LOG, SETUP (METER, TRIM, FUN and LOG say which version brings them). **DIAG** has tabs STORED / PENDING / PERM / READY across the top, a list of up to three rows per page, then **BACK**, **<** page **>**, **CLEAR** and **SCAN** along the bottom. **SETUP** is a list: Wi-Fi slot (tap to change), check the slot's IP and DNS, save this session's log and **Adapter test screen**, plus **WI-FI GUIDE** bottom-right: the setup steps below with this adapter's values, and a CHECK button that reports the slot, its IP / DNS, Wi-Fi and the adapter (the adapter test screen:  CONNECT, ATZ, ATSP0+0100 / ATDPN, ATRV, 0902 VIN / SLOT, SETUP SLOT, BACK / OLDER, SAVE LOG, NEWER). Shortcuts: B = BACK, X = SCAN, L / R = page. A tap flashes the button yellow; while an action runs it turns red and the top header shows `BUSY`.
+1. GaugeBoy opens on **HOME**: six big buttons, METER, DIAG, TRIM / FUN, LOG, SETUP (METER, TRIM, FUN and LOG say which version brings them). **DIAG** has tabs STORED / PENDING / PERM / READY across the top, a list of up to three rows per page, then **BACK**, **<** page **>**, **CLEAR** and **SCAN** along the bottom. **SETUP** is a list: Wi-Fi slot (tap to change), check the slot's IP and DNS, **Car make** and save this session's log, then **BACK**, **ADAPTER** (the adapter test screen) and **WI-FI GUIDE** along the bottom. WI-FI GUIDE is the setup steps below with this adapter's values, and a CHECK button that reports the slot, its IP / DNS, Wi-Fi and the adapter (the adapter test screen:  CONNECT, ATZ, ATSP0+0100 / ATDPN, ATRV, 0902 VIN / SLOT, SETUP SLOT, BACK / OLDER, SAVE LOG, NEWER). Shortcuts: B = BACK, X = SCAN, L / R = page. A tap flashes the button yellow; while an action runs it turns red and the top header shows `BUSY`.
 2. Tap **ATZ**. About 3 seconds later the log shows "Adapter did not answer" (or "refused or unreachable"). The buttons keep responding meanwhile.
 3. OLDER / NEWER scroll the log. SAVE LOG writes this session's log to its own file (see step 7).
 4. Exit with **START**. On the SD card, `sdmc:/3ds/gaugeboy/spike-log.txt` has the same lines as the screen.
@@ -146,7 +149,7 @@ Report anything garbled (colors, layout, text running off the screen).
 
 1. Plug in the adapter, ignition on (engine running is fine).
 2. Make sure the 3DS's wireless switch is on and it has joined the adapter's slot.
-3. Launch GaugeBoy (engine running), tap **DIAG**, then **SCAN**. It connects, finds the protocol (about 5 s on ISO 9141-2) and reads the check engine light, readiness, stored / pending / permanent codes and the VIN. The top screen shows the facts (Car, VIN, Protocol, CEL, Readiness, Codes); the bottom screen lists the chosen tab's codes or monitors. Tap a row to see its full description on the top screen; **<** / **>** page through longer lists. PERM disappears if the car doesn't support permanent codes.
+3. Launch GaugeBoy (engine running), tap **DIAG**, then **SCAN**. It connects, finds the protocol (about 5 s on ISO 9141-2) and reads the check engine light, readiness, stored / pending / permanent codes and the VIN. The top screen shows the facts (Car, VIN, Protocol, CEL, Readiness, Codes); the bottom screen lists the chosen tab's codes or monitors. Tap a row to see its full description on the top screen; **<** / **>** page through longer lists. PERM disappears if the car doesn't support permanent codes. Cars that don't report a VIN over OBD (for example a 1996 Geo Tracker) show "VIN not read"; choose the make in **SETUP > Car make** (Auto, then 32 makes over three pages; L / R or **<** / **>** to page) and the Car line shows it with "(set in SETUP)", and manufacturer codes (P1xxx and so on) get that make's meanings. A make read from the VIN always wins. The choice is saved as `make` under `[vehicle]` in `config.ini`.
    - **CLEAR** (only if you want the codes gone: it also resets the readiness monitors, so the car needs more driving before an emissions test): opens a question explaining that; **CANCEL** or B backs out, the red **CLEAR CODES** clears. GaugeBoy first checks the speed is 0, then sends the clear and scans again. Parked with the ignition on and the engine off works on most cars; with the engine running some cars refuse.
 4. Then **SETUP > ADAPTER TEST** and tap, in order:
    - **CONNECT**: expect `= Connected (... ms)`.

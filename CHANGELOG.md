@@ -6,6 +6,7 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ### Added
 
+- **Car make** in SETUP, for cars that don't report a VIN over OBD (such as the 1996 Geo Tracker test car): a picker with Auto and the 32 makes that have their own code meanings. The chosen make gives manufacturer codes their meanings, shows on DIAG as "Geo (set in SETUP)" and goes into the code history; a make read from the VIN always wins. Saved as `make` under `[vehicle]` in `config.ini`. The adapter test screen moved to an ADAPTER button next to BACK.
 - **Wi-Fi setup guide** (SETUP > WI-FI GUIDE): five steps for saving the adapter's network with the manual IP and DNS GaugeBoy needs, with the values worked out from the adapter's address and shown the way the 3DS takes them (192.168.000.011). CHECK reports whether a slot is chosen and named, whether its IP and DNS match, whether the 3DS is on Wi-Fi and whether the adapter answers.
 - **Code history**: every scan and every clear is appended to `sdmc:/3ds/gaugeboy/code-history.csv` (date, VIN, car, check engine light, type, code, description; one row per code, a "none" row for a clean scan), so codes are kept after they're cleared.
 - **Clear codes** on the DIAG screen: CLEAR opens a question that explains it turns off the check engine light and resets the readiness monitors; only the red CLEAR CODES button clears (no button shortcut). GaugeBoy refuses if the car reports a speed above 0, then sends the clear and scans again, and reports when the car refuses (e.g. engine running).

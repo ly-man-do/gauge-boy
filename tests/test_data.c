@@ -32,6 +32,37 @@ static void test_config_wifi_slot(void)
     CHECK_EQ_INT(c.wifi_slot, 3);
 }
 
+static void test_config_car_make(void)
+{
+    gb_config_t c;
+    config_defaults(&c);
+    CHECK_EQ_STR(c.car_make, "");
+    CHECK_EQ_INT(config_parse(&c, "[vehicle]\nmake = Geo\n"), 0);
+    CHECK_EQ_STR(c.car_make, "Geo");
+    CHECK_EQ_INT(config_parse(&c, "[vehicle]\nmake = AUTO\n"), 0);
+    CHECK_EQ_STR(c.car_make, "");
+    CHECK_EQ_INT(config_parse(&c, "[vehicle]\nmake = Mercedes-Benz\n"), 0);
+    CHECK_EQ_STR(c.car_make, "Mercedes-Benz");
+    /* too long: warning, keeps the old value; [adapter] make is ignored */
+    CHECK_EQ_INT(config_parse(&c, "[vehicle]\nmake = ABCDEFGHIJKLMNOPQRSTUVWXYZ\n"
+                                  "[adapter]\nmake = Honda\n"), 1);
+    CHECK_EQ_STR(c.car_make, "Mercedes-Benz");
+
+    char path[] = "gaugeboy_test_make.tmp.ini";
+    strcpy(c.car_make, "Geo");
+    CHECK(config_save(&c, path));
+    gb_config_t back;
+    int w = -1;
+    CHECK(config_load(&back, path, &w));
+    CHECK_EQ_INT(w, 0);
+    CHECK_EQ_STR(back.car_make, "Geo");
+    c.car_make[0] = '\0';
+    CHECK(config_save(&c, path));
+    CHECK(config_load(&back, path, &w));
+    CHECK_EQ_STR(back.car_make, "");
+    remove(path);
+}
+
 static void test_config_parse_adapter_section(void)
 {
     gb_config_t c;
@@ -274,6 +305,7 @@ void suite_data(void)
     gb_suite("data");
     RUN_TEST(test_config_defaults);
     RUN_TEST(test_config_wifi_slot);
+    RUN_TEST(test_config_car_make);
     RUN_TEST(test_config_parse_adapter_section);
     RUN_TEST(test_config_ignores_other_sections_and_keys);
     RUN_TEST(test_config_bad_values_keep_defaults);

@@ -13,6 +13,7 @@ void config_defaults(gb_config_t *cfg)
     strcpy(cfg->adapter_host, CONFIG_DEFAULT_HOST);
     cfg->adapter_port = CONFIG_DEFAULT_PORT;
     cfg->wifi_slot = 0;
+    cfg->car_make[0] = '\0';
 }
 
 bool config_valid_ipv4(const char *s)
@@ -132,6 +133,26 @@ int config_parse(gb_config_t *cfg, const char *text)
         char *value = trim(eq + 1);
         lower(key);
 
+        if (strcmp(section, "vehicle") == 0) {
+            if (strcmp(key, "make") == 0) {
+                size_t n = strlen(value);
+                bool ok = n < sizeof cfg->car_make;
+                for (size_t i = 0; ok && i < n; i++) {
+                    ok = isprint((unsigned char)value[i]) != 0;
+                }
+                if (!ok) {
+                    warnings++;
+                } else if (n == 0 || (n == 4 && tolower((unsigned char)value[0]) == 'a'
+                                      && tolower((unsigned char)value[1]) == 'u'
+                                      && tolower((unsigned char)value[2]) == 't'
+                                      && tolower((unsigned char)value[3]) == 'o')) {
+                    cfg->car_make[0] = '\0';
+                } else {
+                    memcpy(cfg->car_make, value, n + 1);
+                }
+            }
+            continue;
+        }
         if (strcmp(section, "adapter") != 0) {
             continue;
         }
@@ -211,8 +232,15 @@ bool config_save(const gb_config_t *cfg, const char *path)
         "[adapter]\n"
         "host = %s\n"
         "port = %u\n"
-        "wifi_slot = %s\n",
-        cfg->adapter_host, (unsigned)cfg->adapter_port, slot);
+        "wifi_slot = %s\n"
+        "\n"
+        "; make: \"auto\" reads it from the VIN; set a make (e.g. Geo) for cars\n"
+        "; that don't report a VIN, so DIAG shows that make's own code meanings.\n"
+        "\n"
+        "[vehicle]\n"
+        "make = %s\n",
+        cfg->adapter_host, (unsigned)cfg->adapter_port, slot,
+        cfg->car_make[0] != '\0' ? cfg->car_make : "auto");
     bool ok = rc > 0;
     if (fclose(f) != 0) {
         ok = false;

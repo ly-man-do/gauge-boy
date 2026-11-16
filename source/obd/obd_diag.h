@@ -50,6 +50,7 @@ typedef struct {
     int model_year;                 /* 0 if unknown */
     const char *maker;              /* NULL if the WMI isn't listed */
     int make;                       /* for obd_dtc_text_for(), -1 if unknown */
+    bool make_chosen;               /* maker / make came from SETUP, not the VIN */
 } obd_diag_t;
 
 /* Progress callback: called before each step (for "Reading codes..."). */
@@ -67,6 +68,14 @@ obd_link_result_t obd_diag_scan(elm_t *elm, bool reset, int current_year, obd_di
                                 void *ctx);
 
 const char *obd_diag_step_str(obd_diag_step_t step);
+
+/*
+ * Applies the make chosen in SETUP (a name from obd_dtc_make_name(), or
+ * NULL / "" for auto). A make read from the VIN always wins; otherwise the
+ * chosen make sets maker and make and marks make_chosen. Call it after each
+ * scan and again whenever the choice changes (it undoes an earlier choice).
+ */
+void obd_diag_apply_make(obd_diag_t *d, const char *make_name);
 
 /* ---------- clearing codes (Mode 04) ---------- */
 

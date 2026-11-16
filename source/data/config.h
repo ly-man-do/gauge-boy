@@ -12,6 +12,9 @@
  *   host = 192.168.0.10
  *   port = 35000
  *   wifi_slot = any        ; or 1, 2, 3: the System Settings connection slot
+ *
+ *   [vehicle]
+ *   make = auto            ; or a make name (e.g. Geo) for cars with no VIN over OBD
  */
 
 #include <stdbool.h>
@@ -27,6 +30,7 @@ typedef struct {
     char adapter_host[16];   /* dotted IPv4 */
     uint16_t adapter_port;
     uint8_t wifi_slot;       /* 0 = any saved connection, 1-3 = that slot only */
+    char car_make[24];       /* "" = auto (from the VIN), else a DTC make name */
 } gb_config_t;
 
 #define CONFIG_WIFI_SLOTS 3

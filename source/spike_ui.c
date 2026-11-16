@@ -26,6 +26,7 @@
 #include "transport/conntest_server.h"
 #include "transport/net.h"
 #include "transport/tcp_transport.h"
+#include "obd/dtc.h"
 #include "obd/obd_diag.h"
 #include "version.h"
 
@@ -50,6 +51,7 @@
 #define BTN_DIAG_SCAN    104   /* worker: full DIAG scan */
 #define BTN_CLEAR_CODES  105   /* worker: clear codes (only from the dialog), then rescan */
 #define BTN_GUIDE_CHECK  106   /* worker: Wi-Fi guide check */
+#define BTN_SET_MAKE     107   /* worker: save the car make, apply it to DIAG */
 #define BTN_GUIDE        (-8)  /* UI: SETUP -> Wi-Fi guide */
 #define BTN_CLEAR_ASK    (-5)  /* UI: open the clear-codes dialog */
 #define BTN_CLEAR_CANCEL (-6)
@@ -66,6 +68,8 @@
 #define BTN_TAB_PERM     (-22)
 #define BTN_TAB_READY    (-23)
 #define BTN_TEST_SCREEN  (-30) /* UI: SETUP -> TEST */
+#define BTN_MAKE_SCREEN  (-31) /* UI: SETUP -> car make picker */
+#define BTN_MAKE_PICK    (-60) /* UI: -60 - button on the picker page */
 
 /* Bottom-screen buttons in 8x8 console cells: 12-13x6 cells = 96-104x48 px.
  * The third row has the Wi-Fi slot buttons, the last one the log ones. */
@@ -129,19 +133,87 @@ static const button_t diag_buttons[] = {
 };
 #define DIAG_BUTTON_COUNT ((int)(sizeof diag_buttons / sizeof diag_buttons[0]))
 
-/* SETUP: full-width list rows like DIAG's list, then BACK. The rows
- * (w 39) are drawn as list bars; BACK as a button. */
+/* SETUP: full-width list rows like DIAG's list, then BACK ADAPTER ...
+ * WI-FI GUIDE. The rows (w 39) are drawn as list bars; the bottom row
+ * (row 25) as buttons. */
+#define SETUP_BAR_ROW 25
 static const button_t setup_buttons[] = {
     { "Wi-Fi slot",                    BTN_WIFI_SLOT,   0,  2, 39, 5 },
     { "Check the slot's IP and DNS",   BTN_SETUP_SLOT,  0,  8, 39, 5 },
-    { "Save this session's log",       BTN_SAVE_LOG,    0, 14, 39, 5 },
-    { "Adapter test screen",           BTN_TEST_SCREEN, 0, 20, 39, 5 },
-    { "BACK",                          BTN_BACK,        0, 25, 11, 5 },
+    { "Car make",                      BTN_MAKE_SCREEN, 0, 14, 39, 5 },
+    { "Save this session's log",       BTN_SAVE_LOG,    0, 20, 39, 5 },
+    { "BACK",                          BTN_BACK,        0, 25, 8, 5 },
+    { "ADAPTER",                       BTN_TEST_SCREEN, 9, 25, 9, 5 },
     { "WI-FI GUIDE",                   BTN_GUIDE,       26, 25, 13, 5 },
 };
 #define SETUP_BUTTON_COUNT ((int)(sizeof setup_buttons / sizeof setup_buttons[0]))
 
-typedef enum { SCREEN_HOME, SCREEN_DIAG, SCREEN_SETUP, SCREEN_TEST, SCREEN_GUIDE } screen_t;
+typedef enum {
+    SCREEN_HOME, SCREEN_DIAG, SCREEN_SETUP, SCREEN_TEST, SCREEN_GUIDE, SCREEN_MAKE
+} screen_t;
+
+/* Car make picker: "Auto" then every make with its own code meanings,
+ * 3 x 4 buttons (12-13 x 5 cells) a page, then BACK < page >. */
+#define MAKE_PAGE_SLOTS 12
+#define MAKE_COLS       3
+static const button_t make_nav_buttons[] = {
+    { "BACK", BTN_BACK,      0,  25, 8, 5 },
+    { "<",    BTN_PAGE_PREV, 9,  25, 5, 5 },
+    { ">",    BTN_PAGE_NEXT, 17, 25, 5, 5 },
+};
+#define MAKE_NAV_COUNT ((int)(sizeof make_nav_buttons / sizeof make_nav_buttons[0]))
+
+static int make_choice_count(void)
+{
+    return 1 + obd_dtc_make_count();
+}
+
+/* Choice k: 0 = Auto (from the VIN), else a make name. */
+static const char *make_choice_name(int k)
+{
+    return k == 0 ? "Auto" : obd_dtc_make_name(k - 1);
+}
+
+static int make_page_count(void)
+{
+    return (make_choice_count() + MAKE_PAGE_SLOTS - 1) / MAKE_PAGE_SLOTS;
+}
+
+/* The choice for a config value ("" = Auto; unknown names show as Auto). */
+static int make_choice_of(const char *car_make)
+{
+    int idx = car_make[0] != '\0' ? obd_dtc_make_find(car_make) : -1;
+    return idx < 0 ? 0 : idx + 1;
+}
+
+/* This page's buttons, then the nav buttons. Returns the count. */
+static int make_screen_buttons(int page, const button_t **out)
+{
+    static button_t list[MAKE_PAGE_SLOTS + MAKE_NAV_COUNT];
+    static char labels[MAKE_PAGE_SLOTS][14];
+    int n = 0;
+    for (int slot = 0; slot < MAKE_PAGE_SLOTS; slot++) {
+        int k = page * MAKE_PAGE_SLOTS + slot;
+        if (k >= make_choice_count()) {
+            break;
+        }
+        int col = slot % MAKE_COLS;
+        int w = col == MAKE_COLS - 1 ? 13 : 12;
+        /* "Mercedes-Benz" is too wide: cut at the hyphen. */
+        snprintf(labels[slot], sizeof labels[slot], "%.*s", w,  make_choice_name(k));
+        char *dash = strchr(labels[slot], '-');
+        if (strlen(make_choice_name(k)) > (size_t)w && dash != NULL) {
+            *dash = '\0';
+        }
+        list[n++] = (button_t){ labels[slot], BTN_MAKE_PICK - slot, col * 13, 1 + (slot / MAKE_COLS) * 6,
+                                w, 5 };
+    }
+    for (int i = 0; i < MAKE_NAV_COUNT; i++) {
+        list[n++] = make_nav_buttons[i];
+    }
+    *out = list;
+    return n;
+}
 
 /* Wi-Fi guide: BACK < step > CHECK. */
 static const button_t guide_buttons[] = {
@@ -304,6 +376,25 @@ static void next_wifi_slot(spike_t *s)
     }
 }
 
+/* Car make (worker): app_cfg->car_make was set by the UI; apply it to the
+ * last scan and save config.ini. */
+static void set_car_make(spike_t *s)
+{
+    LightLock_Lock(&shared.lock);
+    gb_config_t copy = *app_cfg;
+    obd_diag_apply_make(&shared.diag, copy.car_make);
+    bool vin_wins = copy.car_make[0] != '\0' && shared.diag.maker != NULL &&
+                    !shared.diag.make_chosen;
+    shared.diag_version++;
+    LightLock_Unlock(&shared.lock);
+
+    bool saved = config_save(&copy, CONFIG_PATH);
+    spike_logf(s, "Car make: %s%s%s",
+               copy.car_make[0] != '\0' ? copy.car_make : "Auto (from the VIN)",
+               vin_wins ? "; this car's VIN gives its make, so that is used" : "",
+               saved ? "" : " (! not saved to config.ini)");
+}
+
 /* SETUP SLOT (worker): read the chosen slot and, if it differs from what
  * GaugeBoy needs, show NOW / NEW so the user can enter NEW in System
  * Settings. Read-only: writing slot settings from the app crashed the
@@ -412,6 +503,11 @@ static void diag_scan(spike_t *s)
         struct tm *tm = gmtime(&now);
         obd_diag_scan(s->elm, reset, tm != NULL ? tm->tm_year + 1900 : 0, &d,
                       spike_trace_command, scan_progress, s);
+        char car_make[sizeof app_cfg->car_make];
+        LightLock_Lock(&shared.lock);
+        strcpy(car_make, app_cfg->car_make);
+        LightLock_Unlock(&shared.lock);
+        obd_diag_apply_make(&d, car_make);
         if (d.result != OBD_LINK_LOST) {
             reset_at_connect = s->transport->connects;
         }
@@ -581,6 +677,8 @@ static void worker_main(void *arg)
                 clear_codes(spike);
             } else if (action == BTN_GUIDE_CHECK) {
                 guide_check(spike);
+            } else if (action == BTN_SET_MAKE) {
+                set_car_make(spike);
             } else {
                 spike_run(spike, (spike_action_t)action);
             }
@@ -649,13 +747,16 @@ static void draw_button_ex(const button_t *b, bool flash, bool busy, bool select
     const char *colors = busy ? "\x1b[41;37m" : flash ? "\x1b[43;30m"
                        : selected ? "\x1b[42;30m" : "\x1b[44;37m";
     int label_len = (int)strlen(label);
+    if (label_len > b->w) {
+        label_len = b->w;
+    }
     int pad = (b->w - label_len) / 2;
 
     printf("%s", colors);
     for (int r = 0; r < b->h; r++) {
         printf("\x1b[%d;%dH", b->row + r + 1, b->col + 1);
         if (r == b->h / 2) {
-            printf("%*s%s%*s", pad, "", label, b->w - pad - label_len, "");
+            printf("%*s%.*s%*s", pad, "", label_len, label, b->w - pad - label_len, "");
         } else {
             printf("%*s", b->w, "");
         }
@@ -987,7 +1088,7 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         print_row(1, BOTTOM_COLS, "");
         for (int i = 0; i < SETUP_BUTTON_COUNT; i++) {
             const button_t *b = &setup_buttons[i];
-            if (b->action == BTN_BACK || b->action == BTN_GUIDE) {
+            if (b->row == SETUP_BAR_ROW) {
                 draw_button(b, flashing(b->action, now), false);
                 continue;
             }
@@ -1003,6 +1104,12 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
                     snprintf(value, sizeof value, "%d", slot);
                 }
                 snprintf(text, sizeof text, "%-29s%7s", b->label, value);
+            } else if (b->action == BTN_MAKE_SCREEN) {
+                char make[sizeof cfg->car_make];
+                LightLock_Lock(&shared.lock);
+                strcpy(make, cfg->car_make);
+                LightLock_Unlock(&shared.lock);
+                snprintf(text, sizeof text, "%-22s%14s", b->label, make[0] != '\0' ? make : "Auto");
             } else {
                 snprintf(text, sizeof text, "%-36s", b->label);
             }
@@ -1014,8 +1121,23 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
             }
             printf("\x1b[0m");
         }
-        /* Right of BACK (cells 0-10), on its middle row. */
-        printf("\x1b[28;13H%-12.12s", "L/R: log");
+        /* Between ADAPTER (cells 9-17) and WI-FI GUIDE (26-38), middle row. */
+        printf("\x1b[28;20H%-7.7s", "L/R log");
+        return;
+    }
+    if (ui->screen == SCREEN_MAKE) {
+        LightLock_Lock(&shared.lock);
+        int chosen = make_choice_of(cfg->car_make);
+        LightLock_Unlock(&shared.lock);
+        const button_t *list;
+        int count = make_screen_buttons(ui->page, &list);
+        int slot = chosen - ui->page * MAKE_PAGE_SLOTS;
+        draw_list(list, count, now, busy,
+                  slot >= 0 && slot < MAKE_PAGE_SLOTS ? BTN_MAKE_PICK - slot : 1, false);
+        snprintf(line, sizeof line, "%d/%d", ui->page + 1, make_page_count());
+        printf("\x1b[%d;15H%-3.3s", 27 + 1, line);
+        print_row(24, BOTTOM_COLS, "For cars that don't report a VIN.");
+        printf("\x1b[28;24H%-15.15s", "Auto: from VIN");
         return;
     }
 
@@ -1256,6 +1378,7 @@ void spike_ui_run(void)
             case SCREEN_DIAG:  list = diag_buttons;  count = DIAG_BUTTON_COUNT;  break;
             case SCREEN_SETUP: list = setup_buttons; count = SETUP_BUTTON_COUNT; break;
             case SCREEN_GUIDE: list = guide_buttons; count = GUIDE_BUTTON_COUNT; break;
+            case SCREEN_MAKE:  count = make_screen_buttons(ui.page, &list);   break;
             case SCREEN_TEST:  break;
             }
             int i = button_at(list, count, tp.px, tp.py);
@@ -1282,8 +1405,8 @@ void spike_ui_run(void)
         } else if (!confirming && !tapped && !ui.clear_dialog) {
             if ((down & KEY_B) && ui.screen != SCREEN_HOME) { action = BTN_BACK; tapped = true; }
             else if ((down & KEY_X) && ui.screen == SCREEN_DIAG) { action = BTN_DIAG_SCAN; tapped = true; }
-            else if ((down & KEY_L) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE)) { action = BTN_PAGE_PREV; tapped = true; }
-            else if ((down & KEY_R) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE)) { action = BTN_PAGE_NEXT; tapped = true; }
+            else if ((down & KEY_L) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE)) { action = BTN_PAGE_PREV; tapped = true; }
+            else if ((down & KEY_R) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE)) { action = BTN_PAGE_NEXT; tapped = true; }
         }
 
         if (tapped) {
@@ -1326,10 +1449,14 @@ void spike_ui_run(void)
                 break;
             case BTN_PAGE_PREV:
                 if (ui.page > 0) { ui.page--; ui.selected = -1; top_dirty = true; }
+                bottom_full |= ui.screen == SCREEN_MAKE;   /* the last page is shorter */
                 break;
             case BTN_PAGE_NEXT: {
-                int pages = ui.screen == SCREEN_GUIDE ? WIFI_GUIDE_STEPS : page_count(n);
+                int pages = ui.screen == SCREEN_GUIDE ? WIFI_GUIDE_STEPS
+                          : ui.screen == SCREEN_MAKE  ? make_page_count()
+                          :                             page_count(n);
                 if (ui.page + 1 < pages) { ui.page++; ui.selected = -1; top_dirty = true; }
+                bottom_full |= ui.screen == SCREEN_MAKE;
                 break;
             }
             case BTN_GUIDE:
@@ -1341,12 +1468,20 @@ void spike_ui_run(void)
                 ui.screen = SCREEN_TEST;
                 bottom_full = top_dirty = true;
                 break;
+            case BTN_MAKE_SCREEN:
+                LightLock_Lock(&shared.lock);
+                ui.page = make_choice_of(cfg.car_make) / MAKE_PAGE_SLOTS;
+                LightLock_Unlock(&shared.lock);
+                ui.screen = SCREEN_MAKE;
+                bottom_full = top_dirty = true;
+                break;
             case BTN_BACK:
-                if (ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_DIAG) {
+                if (ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_DIAG ||
+                    ui.screen == SCREEN_MAKE) {
                     ui.page = 0;
                 }
-                ui.screen = (ui.screen == SCREEN_TEST || ui.screen == SCREEN_GUIDE) ? SCREEN_SETUP
-                                                                                  : SCREEN_HOME;
+                ui.screen = (ui.screen == SCREEN_TEST || ui.screen == SCREEN_GUIDE ||
+                             ui.screen == SCREEN_MAKE) ? SCREEN_SETUP : SCREEN_HOME;
                 bottom_full = top_dirty = true;
                 break;
             case BTN_CLEAR_ASK: {
@@ -1370,7 +1505,22 @@ void spike_ui_run(void)
                 }
                 break;
             default:
-                if (action <= BTN_LIST_ROW && action > BTN_LIST_ROW - LIST_PAGE_ROWS) {
+                if (ui.screen == SCREEN_MAKE && action <= BTN_MAKE_PICK &&
+                    action > BTN_MAKE_PICK - MAKE_PAGE_SLOTS) {
+                    int k = ui.page * MAKE_PAGE_SLOTS + (BTN_MAKE_PICK - action);
+                    if (k < make_choice_count()) {
+                        LightLock_Lock(&shared.lock);
+                        snprintf(cfg.car_make, sizeof cfg.car_make, "%s",
+                                 k == 0 ? "" : make_choice_name(k));
+                        LightLock_Unlock(&shared.lock);
+                        if (worker != NULL) {
+                            enqueue(BTN_SET_MAKE);
+                        }
+                        ui.screen = SCREEN_SETUP;
+                        ui.page = 0;
+                        bottom_full = top_dirty = true;
+                    }
+                } else if (action <= BTN_LIST_ROW && action > BTN_LIST_ROW - LIST_PAGE_ROWS) {
                     int k = ui.page * LIST_PAGE_ROWS + (BTN_LIST_ROW - action);
                     if (k < n) {
                         ui.selected = k;
@@ -1411,7 +1561,8 @@ void spike_ui_run(void)
             bottom_dirty = true;
         }
 
-        bool shows_log = ui.screen == SCREEN_SETUP || ui.screen == SCREEN_TEST;
+        bool shows_log = ui.screen == SCREEN_SETUP || ui.screen == SCREEN_TEST ||
+                         ui.screen == SCREEN_MAKE;
         if (top_dirty || busy != drawn_busy || connected != drawn_connected ||
             (shows_log ? (version != drawn_version || scroll != drawn_scroll)
                        : diag_version != drawn_diag_version)) {
