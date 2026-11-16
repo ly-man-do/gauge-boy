@@ -20,7 +20,7 @@ tests/build/
 # Dev-only Python environment for tools/ (ELM327 emulator)
 tools/.venv/
 # ELM327 emulator log
-elm.log
+elm.log*
 # .cia packaging tools downloaded by tools/get-cia-tools.sh
 tools/bin/
 
