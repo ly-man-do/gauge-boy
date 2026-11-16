@@ -18,7 +18,9 @@ static void test_home_rects_fit_and_dont_overlap(void)
         if (i != HOME_CLOSE) {
             CHECK(r.y + r.h + 2 <= HOME_BAR_Y);      /* shadow clears the bar */
         }
-        CHECK(t.w >= 40 && t.h >= 40);               /* touch rule: 40x40 px */
+        if (i != HOME_CLOSE) {
+            CHECK(t.w >= 40 && t.h >= 40);           /* touch rule: 40x40 px */
+        }
         for (int j = i + 1; j < HOME_ITEM_COUNT; j++) {
             CHECK(!overlap(t, home_item_touch((home_item_t)j)));
         }
@@ -47,7 +49,7 @@ static void test_home_hit(void)
     CHECK_EQ_INT(home_hit(0, HOME_SCREEN_H - 1), HOME_CLOSE);
     CHECK_EQ_INT(home_hit(5, HOME_BAR_Y - 1), -1);    /* margin above the bar */
     home_rect_t bar = home_item_touch(HOME_CLOSE);
-    CHECK_EQ_INT(bar.h, 40);
+    CHECK_EQ_INT(bar.h, 32);   /* owner's exception to the 40 px rule */
     CHECK_EQ_INT(bar.y + bar.h, HOME_SCREEN_H);
 }
 

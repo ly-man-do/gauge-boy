@@ -1,6 +1,6 @@
 # Project Brief: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.11.0
+**Version:** 1.12.0
 **Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
 **Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -119,7 +119,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 - Rendered with citro3d stereo (separate left and right eye images); the New 3DS speedup mode keeps both eyes at 60 fps.
 
 **Navigation (touch only):**
-- All menus are selected by tapping the bottom screen. Buttons are large (at least 40x40 px) so they work with a finger, not just the stylus.
+- All menus are selected by tapping the bottom screen. Buttons are large (at least 40x40 px) so they work with a finger, not just the stylus. Exception: the HOME screen's START Close bar is full width but 32 px tall.
 - Pressed buttons show a press-in animation, a click sound and a light-up state.
 - The top screen is display only; it never needs input.
 - Physical buttons are optional shortcuts only (for example B for back, L/R to switch gauge layouts); every function can be reached by touch.
@@ -356,6 +356,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.12.0 | 2026-11-15 | Owner decision: the HOME screen's START Close bar may be 32 px tall, an exception to the 40x40 px button rule (section 5b); `CLAUDE.md` updated to 1.16.0 |
 | 1.11.0 | 2026-11-15 | The METER menu is renamed LIVE ("Dash gauges"), by owner decision with the new HOME screen (section 5b); `CLAUDE.md` updated to 1.15.0 |
 | 1.10.0 | 2026-11-15 | Owner decision: removed the ban on Nintendo and third-party characters, logos, trademarks, brand names, fonts, UI art, models, textures, music and sounds, and the ripped-asset limit (studied for size and structure, never shipped, traced or converted) (section 5b); `CLAUDE.md` updated to 1.14.0 |
 | 1.9.0 | 2026-11-15 | Second test vehicle: the owner's 1996 Geo Tracker (first OBD-II year, likely ISO 9141-2, VIN probably not readable over OBD) (section 7); `CLAUDE.md` updated to 1.12.0 |

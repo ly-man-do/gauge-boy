@@ -336,14 +336,14 @@ void home_draw(const home_view_t *v)
          v->pressed == HOME_CLOSE ? COL_BAR_DOWN : COL_BAR);
     rect(0, HOME_BAR_Y, HOME_SCREEN_W, 1, COL_BAR_LINE);
     if (v->notice != NULL) {
-        text(font_small, v->notice, HOME_SCREEN_W / 2.0f, HOME_BAR_Y + 13, SCALE_SUB, COL_WHITE, true);
+        text(font_small, v->notice, HOME_SCREEN_W / 2.0f, HOME_BAR_Y + 9, SCALE_SUB, COL_WHITE, true);
     } else {
         float badge_w = text_width(font_small, "START", SCALE_BADGE) + 8;
         float close_w = text_width(font_big, "Close", SCALE_CLOSE);
         float x = (HOME_SCREEN_W - (badge_w + 6 + close_w)) / 2;
-        rrect(x, HOME_BAR_Y + 13, badge_w, 14, 3, COL_WHITE);
-        text(font_small, "START", x + 4, HOME_BAR_Y + 14, SCALE_BADGE, RGB(70, 70, 70), false);
-        text(font_big, "Close", x + badge_w + 6, HOME_BAR_Y + 7, SCALE_CLOSE, COL_WHITE, false);
+        rrect(x, HOME_BAR_Y + 9, badge_w, 14, 3, COL_WHITE);
+        text(font_small, "START", x + 4, HOME_BAR_Y + 10, SCALE_BADGE, RGB(70, 70, 70), false);
+        text(font_big, "Close", x + badge_w + 6, HOME_BAR_Y + 3, SCALE_CLOSE, COL_WHITE, false);
     }
 
     C3D_FrameEnd(0);

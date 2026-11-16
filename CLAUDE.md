@@ -1,7 +1,7 @@
 # CLAUDE.md: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.15.0
-**Matches project brief:** 1.11.0 (`docs/gaugeboy-brief.md`)
+**Version:** 1.16.0
+**Matches project brief:** 1.12.0 (`docs/gaugeboy-brief.md`)
 
 You are the developer on GaugeBoy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
 
@@ -94,7 +94,7 @@ docs/          Project brief, compatibility list
 - Mascot car: a teal 1995 Suzuki Sidekick, with no maker names, badges or logos.
 - Music and sound effects: 3DS-game style (bright, catchy, playful); see brief section 5f.
 - Top screen: display only, stereoscopic 3D with layered gauges (housing, face, needle, glass). Depth follows the 3D slider; respect the max-depth setting.
-- Bottom screen: all navigation by touch. Buttons at least 40x40 px. Menus: LIVE / DIAG / TRIM / FUN / LOG / SETUP.
+- Bottom screen: all navigation by touch. Buttons at least 40x40 px (exception: the HOME START Close bar, full width and 32 px tall). Menus: LIVE / DIAG / TRIM / FUN / LOG / SETUP.
 - Must hold 60 fps on the top screen with the 3D slider at maximum. Pre-render static layers; redraw only needles and digits each frame.
 - Physical buttons are optional shortcuts only; every function must be reachable by touch.
 - Labels are English only; no Japanese sub-labels or Japanese font.
@@ -141,6 +141,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.16.0 | 2026-11-15 | Matches brief 1.12.0: the HOME START Close bar is an exception to the 40x40 px button rule (section 5) |
 | 1.15.0 | 2026-11-15 | Matches brief 1.11.0: the METER menu is renamed LIVE (section 5) |
 | 1.14.0 | 2026-11-15 | Matches brief 1.10.0: removed "No Nintendo or third-party logos, trademarks, fonts, game assets, music or sounds" from section 7 (owner decision) |
 | 1.13.0 | 2026-11-15 | Owner decision: removed the ripped-asset sentence (studied for size and structure, never shipped, traced or converted) from section 7 |

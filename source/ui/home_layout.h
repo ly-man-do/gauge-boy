@@ -16,7 +16,7 @@
 
 #define HOME_SCREEN_W 320
 #define HOME_SCREEN_H 240
-#define HOME_BAR_Y    200   /* 40 px bar: a touch target like the cards */
+#define HOME_BAR_Y    208   /* 32 px bar, as in the preview (owner decision) */
 
 typedef enum {
     HOME_CEL = 0,

@@ -5,12 +5,12 @@
 /* Margins 13 px, gaps 6 px: the same grid as the owner-approved preview. */
 #define MARGIN   13
 #define GAP      6
-#define STATUS_Y 4
+#define STATUS_Y 5
 #define STATUS_H 32
 #define CARD_W   94
-#define CARD_H   76
-#define ROW1_Y   40
-#define ROW2_Y   122
+#define CARD_H   78
+#define ROW1_Y   41
+#define ROW2_Y   125
 
 static const struct {
     const char *label;
@@ -55,7 +55,7 @@ home_rect_t home_item_touch(home_item_t item)
 {
     home_rect_t r = home_item_rect(item);
     if (item == HOME_CEL || item == HOME_ADAPTER) {
-        r.h += r.y + 4;   /* from the top edge: 40 px */
+        r.h += r.y + 3;   /* from the top edge: 40 px */
         r.y = 0;
     }
     return r;
