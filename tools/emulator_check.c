@@ -26,6 +26,8 @@
 #include "elm327/elm327.h"
 #include "obd/dtc.h"
 #include "obd/obd_diag.h"
+#include "obd/obd_live.h"
+#include "obd/obd_pid.h"
 #include "spike_actions.h"
 #include "transport/tcp_transport.h"
 
@@ -139,6 +141,38 @@ int main(int argc, char **argv)
     } else {
         printf("    VIN not read (choose the make in SETUP on the 3DS)\n");
     }
+
+    printf("\nLive data (as the LIVE screen polls it):\n");
+    static const uint8_t wanted[] = { 0x0C, 0x0D, 0x05, 0x0F, 0x11, 0x04, 0x0B, 0x10, 0x0E,
+                                      0x06, 0x07, 0x08, 0x09, 0x33, 0x42 };
+    static obd_live_t lv;
+    int polled = obd_live_init(&lv, &d.link, wanted, (int)sizeof wanted);
+    snprintf(detail, sizeof detail, "%d of %d", polled, (int)sizeof wanted);
+    check(polled > 0, "PIDs to poll (supported and known)", detail);
+    bool lost_live = false;
+    for (int i = 0; i < 3 * polled + 2 && !lost_live; i++) {
+        lost_live = obd_live_step(&lv, &elm, NULL, NULL) == OBD_LIVE_LOST;
+    }
+    check(!lost_live, "polling kept the connection", NULL);
+    int with_value = 0;
+    for (int i = 0; i < lv.count; i++) {
+        const obd_live_pid_t *p = &lv.pid[i];
+        char text[32] = "-";
+        if (p->have) {
+            obd_pid_format(p->pid, p->value, OBD_UNITS_US, text, sizeof text);
+            with_value++;
+        }
+        printf("    %-10s %-12s %.1f Hz%s\n", obd_pid_info(p->pid)->label, text, (double)p->hz,
+               p->dropped ? " (dropped)" : "");
+    }
+    float vac = 0.0f;
+    if (obd_live_vacuum(&lv, &vac)) {
+        char text[32];
+        printf("    %-10s %s\n", "Vacuum", obd_vacuum_format(vac, OBD_UNITS_US, text, sizeof text));
+    }
+    snprintf(detail, sizeof detail, "%d of %d", with_value, lv.count);
+    check(with_value == lv.count, "every polled PID has a value", detail);
+    check(lv.have_volts || lv.volts_failed, "ATRV read while polling", NULL);
 
     printf("\nSpike actions (as the 3DS app runs them):\n");
     spike_t spike;

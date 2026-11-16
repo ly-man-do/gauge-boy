@@ -13,6 +13,7 @@ void suite_link(void);
 void suite_diag(void);
 void suite_ui(void);
 void suite_pid(void);
+void suite_live(void);
 
 int main(void)
 {
@@ -28,5 +29,6 @@ int main(void)
     suite_diag();
     suite_ui();
     suite_pid();
+    suite_live();
     return gb_test_summary();
 }

@@ -20,6 +20,7 @@ Run through tools/run-emulator.sh (ELM_SCENARIO=ridgeline ...), or directly:
     tools/.venv/bin/python -I tools/elm_scenarios.py -n 35000 -s ridgeline
 """
 
+import re
 import sys
 
 from elm import __main__ as elm_main
@@ -51,8 +52,18 @@ def vin_lines(vin):
     return lines
 
 
+def default_key(request):
+    """The key of the emulator's own entry for this request (so ours replaces
+    it instead of both answering), or a new one."""
+    for key, entry in ObdMessage["default"].items():
+        if "Request" in entry and re.match(entry["Request"], request):
+            return key
+    return "PID_" + request
+
+
 def scenario(protocol_number, protocol_name, pids, status, stored, pending, vin, volts):
-    """A non-CAN car. pids maps a Mode 01 request ("0100") to its reply."""
+    """A non-CAN car. pids maps a Mode 01 request ("0100") to its reply, or
+    to a list of replies the emulator picks from (so live values move)."""
     s = {
         # Same keys as the emulator's 'AT' and 'default' entries, so these win.
         "AT_DESCRIBE_PROTO_N": {"Request": "^ATDPN$", "Descr": "Protocol number",
@@ -82,12 +93,10 @@ def scenario(protocol_number, protocol_name, pids, status, stored, pending, vin,
         "VIN": {"Request": "^0902[0-9]?$", "Descr": "VIN",
                 "Response": "".join(vin_lines(vin)) if vin else NO_DATA},
     }
-    names = {"0100": "ELM_PIDS_A", "0120": "ELM_PIDS_B", "0140": "ELM_PIDS_C",
-             "0105": "COOLANT_TEMP", "010C": "RPM"}
     for req, reply in pids.items():
-        key = names.get(req, "PID_" + req)
-        s[key] = {"Request": "^" + req + "[0-9]?$", "Descr": "Mode 01 " + req,
-                  "Response": ST(reply)}
+        replies = [ST(r) for r in reply] if isinstance(reply, list) else ST(reply)
+        s[default_key(req)] = {"Request": "^" + req + "[0-9]?$", "Descr": "Mode 01 " + req,
+                               "Response": replies}
     s["ELM_PIDS_A"]["ResponseHeader"] = searching(4.5)
     # PIDs the car doesn't list: NO DATA, as a real car.
     for key in ("ELM_PIDS_B", "ELM_PIDS_C"):
@@ -101,18 +110,52 @@ SCENARIOS = {
     "ridgeline": scenario(
         3, "ISO 9141-2",
         {"0100": "41 00 BF BE A8 91", "0120": "41 20 80 00 11 01", "0140": "41 40 08 00 00 00",
-         "0105": "41 05 5A", "010C": "41 0C 0B B8"},
+         # Warm idle, parked. Bank 2 trims too: the V6 has two banks.
+         "0104": ["41 04 33", "41 04 35"],                             # load 20-21 %
+         "0105": "41 05 7B",                                           # coolant 83 C
+         "0106": ["41 06 80", "41 06 82", "41 06 7E", "41 06 84"],     # STFT B1 -1.6..+3.1 %
+         "0107": "41 07 83",                                           # LTFT B1 +2.3 %
+         "0108": ["41 08 81", "41 08 7D", "41 08 83"],                 # STFT B2
+         "0109": "41 09 85",                                           # LTFT B2 +3.9 %
+         "010B": ["41 0B 1E", "41 0B 1F"],                             # MAP 30-31 kPa
+         "010C": ["41 0C 0A F0", "41 0C 0B 18", "41 0C 0A C8"],        # 700 rpm +- 10
+         "010D": "41 0D 00",
+         "010E": ["41 0E 94", "41 0E 96"],                             # timing 10-11 deg
+         "010F": "41 0F 46",                                           # intake air 30 C
+         "0111": "41 11 26"},                                          # throttle 15 %
         status="41 01 00 07 E5 00", stored=None, pending=None,
         vin="2HJYK16618H000123", volts="13.2V"),
     "tracker": scenario(
         3, "ISO 9141-2",
-        {"0100": "41 00 BE 3F B8 10", "0105": "41 05 55", "010C": "41 0C 0A F0"},
+        {"0100": "41 00 BE 3F B8 10",
+         # One bank (inline 4), MAF, no PID 33.
+         "0104": "41 04 40",
+         "0105": "41 05 78",
+         "0106": ["41 06 80", "41 06 7C", "41 06 85"],
+         "0107": "41 07 7C",                                           # LTFT -3.1 %
+         "010B": "41 0B 23",
+         "010C": ["41 0C 0C 80", "41 0C 0C A8"],                       # 800-810 rpm
+         "010D": "41 0D 00",
+         "010E": "41 0E 90",
+         "010F": "41 0F 40",
+         "0110": ["41 10 01 90", "41 10 01 9A"],                       # MAF 4.0 g/s
+         "0111": "41 11 1F"},
         status="41 01 00 07 E1 00", stored=None, pending=None,
         vin=None, volts="11.1V"),
     "j1850": scenario(
         2, "SAE J1850 VPW",
         {"0100": "41 00 BE 3E B8 11", "0120": "41 20 80 00 00 00",
-         "0105": "41 05 5F", "010C": "41 0C 0C 80"},
+         # Running lean on bank 1 (P0171 stored): high positive trims.
+         "0104": "41 04 38",
+         "0105": "41 05 7D",
+         "0106": ["41 06 98", "41 06 9C"],                             # STFT B1 +19..22 %
+         "0107": "41 07 9A",                                           # LTFT B1 +20.3 %
+         "010B": "41 0B 22",
+         "010C": ["41 0C 0C 80", "41 0C 0C 30"],
+         "010D": "41 0D 00",
+         "010E": "41 0E 8C",
+         "010F": "41 0F 3C",
+         "0111": "41 11 22"},
         status="41 01 82 07 65 04",
         stored="43 01 71 03 00 00 00",      # P0171, P0300
         pending="47 04 20 00 00 00 00",     # P0420
