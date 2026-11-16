@@ -5,7 +5,9 @@
 #   tools/run-emulator.sh --lan    listen on all interfaces, so a real 3DS on the
 #                                  same Wi-Fi can connect to this computer's IP
 #
-# Environment: ELM_PORT (default 35000), ELM_SCENARIO (default car).
+# Environment: ELM_PORT (default 35000), ELM_SCENARIO (default ridgeline).
+# Scenarios: ridgeline, tracker (ISO 9141-2), j1850 (J1850 VPW, codes set)
+# from tools/elm_scenarios.py; car, default (CAN) from the emulator package.
 # Extra arguments are passed to the emulator. Type "help" at its CMD> prompt
 # for commands; Ctrl-D or "quit" stops it.
 set -e
@@ -25,6 +27,6 @@ if [ "${1:-}" = "--lan" ]; then
 fi
 
 PORT="${ELM_PORT:-35000}"
-SCENARIO="${ELM_SCENARIO:-car}"
+SCENARIO="${ELM_SCENARIO:-ridgeline}"
 echo "ELM327 emulator: $IFACE:$PORT, scenario '$SCENARIO'"
-exec "$VENV/bin/elm" -n "$PORT" -i "$IFACE" -s "$SCENARIO" "$@"
+exec "$VENV/bin/python" -I elm_scenarios.py -n "$PORT" -i "$IFACE" -s "$SCENARIO" "$@"

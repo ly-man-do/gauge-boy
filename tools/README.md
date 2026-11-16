@@ -15,9 +15,22 @@ tools/run-emulator.sh
 ```
 
 The first run creates `tools/.venv` and installs the package. The emulator then listens on
-`127.0.0.1:35000` with the `car` scenario: ISO 15765-4 CAN 11-bit 500 kbaud (protocol 6; the
-2008 Ridgeline actually uses ISO 9141-2, see Beads `gauge-boy-7v5.26`), CEL status, stored / pending codes, bank 1 fuel trims, MAP and a
-VIN. It shows a `CMD>` prompt; type `help` for its commands. Press Ctrl-D to stop it.
+`127.0.0.1:35000` with the `ridgeline` scenario. It shows a `CMD>` prompt; type `help` for its
+commands. Press Ctrl-D to stop it.
+
+Scenarios (`ELM_SCENARIO=...`):
+
+| Scenario | Protocol | What it is |
+|---|---|---|
+| `ridgeline` (default) | ISO 9141-2 (`ATDPN` A3) | Like the 2008 Honda Ridgeline: 4.5 s protocol search, PIDs 01-5F, CEL off, no codes, a multi-line VIN (made up) |
+| `tracker` | ISO 9141-2 (A3) | Like the 1996 Geo Tracker: PIDs 01-1F only, CEL off, no codes, no VIN over OBD (choose the make in SETUP) |
+| `j1850` | SAE J1850 VPW (A2) | A made-up 2002 Chevrolet truck: CEL on, stored P0171 and P0300, pending P0420, VIN |
+| `car` | ISO 15765-4 CAN 11-bit 500k (A6) | The package's CAN car (a Toyota): CEL status, codes, bank 1 fuel trims, MAP, VIN |
+| `default` | CAN (A6) | Two ECUs (CAN multi-response), no fuel trims or codes |
+
+`ridgeline`, `tracker` and `j1850` are defined in `tools/elm_scenarios.py`. They answer the way
+an ELM327 does with headers off (`ATH0`, as GaugeBoy runs it): data bytes only, one line per
+frame, no CAN header or ISO-TP frame numbers.
 
 Options:
 
@@ -25,7 +38,7 @@ Options:
 |---|---|---|
 | `--lan` | off | Listen on all interfaces so a real 3DS on the same Wi-Fi can connect to this computer's IP. macOS may ask to allow incoming connections. |
 | `ELM_PORT` | `35000` | e.g. `ELM_PORT=35001 tools/run-emulator.sh` |
-| `ELM_SCENARIO` | `car` | `default` answers with two ECUs (CAN multi-response) but has no fuel trims or codes |
+| `ELM_SCENARIO` | `ridgeline` | One of the scenarios above |
 
 Other arguments are passed to the emulator (`tools/.venv/bin/elm -h` lists them).
 
@@ -37,9 +50,18 @@ With the emulator running, in another terminal:
 make emulator-check
 ```
 
-This runs the ELM327 driver start-up sequence, `0100`, `ATDPN`, `ATRV`, `0902` and every M0 spike
+This runs the ELM327 driver start-up sequence, `0100`, `ATDPN`, `ATRV`, `0902`, a full DIAG scan
+(CEL, readiness, stored / pending / permanent codes with descriptions, VIN) and every adapter test
 button action over TCP, and prints PASS / FAIL for each. Use `EMU_HOST=... EMU_PORT=...` for another
-address. It is not part of `make test` or CI because it needs the emulator running.
+address, and `EMU_PROTOCOL=3` to require a protocol. It is not part of `make test` or CI because it
+needs the emulator running.
+
+To check every scenario in one go (each starts on its own port and stops afterwards; about
+30 seconds):
+
+```sh
+tools/check-scenarios.sh            # or: tools/check-scenarios.sh tracker
+```
 
 ### Use it with the app
 
@@ -52,8 +74,9 @@ address. It is not part of `make test` or CI because it needs the emulator runni
 
 ### Limits
 
-The emulator is not a car or a real adapter: replies are instant or fixed-delay, there are no clone
-quirks, and the `car` scenario has no bank 2 fuel trims (the Ridgeline V6 has two banks). Real
+The emulator is not a car or a real adapter: replies are instant or fixed-delay (the 4.5 s search
+excepted), there are no clone quirks, the non-CAN scenarios only answer with headers off, and no
+scenario has bank 2 fuel trims (the Ridgeline V6 has two banks). Real
 adapter and vehicle behavior is checked on hardware (see the M0 hardware test issues).
 
 ## Fake 3DS connection test

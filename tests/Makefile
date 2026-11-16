@@ -29,10 +29,11 @@ $(BUILD)/run_tests: $(SRCS) $(HDRS)
 # Driver + spike actions against a running ELM327 emulator (tools/run-emulator.sh).
 EMU_HOST ?= 127.0.0.1
 EMU_PORT ?= 35000
+EMU_PROTOCOL ?=
 EMU_SRCS := ../tools/emulator_check.c $(filter ../source/%,$(SRCS))
 
 emulator-check: $(BUILD)/emulator_check
-	./$(BUILD)/emulator_check $(EMU_HOST) $(EMU_PORT)
+	./$(BUILD)/emulator_check $(EMU_HOST) $(EMU_PORT) $(EMU_PROTOCOL)
 
 $(BUILD)/emulator_check: $(EMU_SRCS) $(HDRS)
 	@mkdir -p $(BUILD)

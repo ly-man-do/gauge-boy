@@ -34,7 +34,7 @@ test-clean:
 	@$(MAKE) --no-print-directory -C tests clean
 
 emulator-check:
-	@$(MAKE) --no-print-directory -C tests emulator-check $(if $(EMU_HOST),EMU_HOST=$(EMU_HOST)) $(if $(EMU_PORT),EMU_PORT=$(EMU_PORT))
+	@$(MAKE) --no-print-directory -C tests emulator-check $(if $(EMU_HOST),EMU_HOST=$(EMU_HOST)) $(if $(EMU_PORT),EMU_PORT=$(EMU_PORT)) $(if $(EMU_PROTOCOL),EMU_PROTOCOL=$(EMU_PROTOCOL))
 
 #---------------------------------------------------------------------------------
 else
