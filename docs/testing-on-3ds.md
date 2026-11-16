@@ -129,6 +129,7 @@ On first launch the app creates `sdmc:/3ds/gaugeboy/config.ini`:
 host = 192.168.0.10
 port = 35000
 wifi_slot = any
+keep_awake = off
 
 [vehicle]
 make = auto
@@ -159,7 +160,7 @@ Report anything garbled (colors, layout, text running off the screen).
    - **ATDPN**: the 2008 Ridgeline reports `Protocol 3: ISO 9141-2 (5 baud init) (auto)`. Other cars can report any OBD-II protocol (J1850 PWM / VPW, ISO 9141-2, ISO 14230-4 KWP, ISO 15765-4 CAN); with only the ignition on, `0100` may say `UNABLE TO CONNECT` until the engine runs.
    - **ATRV**: expect roughly 12.4 to 14.5 V (higher with the engine running).
    - **0902 VIN**: expect several `0: 49 02 ...` lines.
-   - **SPEED TEST** (engine running): sends each kind of request 10 times and logs how long they take: `ATRV` (the adapter alone, so Wi-Fi and adapter time), `010C` (a car request), `010C1` (the adapter returns after one reply instead of waiting for more ECUs; LIVE uses this) and `010C1` with `ATAT2` (the adapter's aggressive timing). The last line sums it up, e.g. `= Speed (avg ms): adapter 370, car 650, one reply ...`. Save the log afterwards.
+   - **SPEED TEST** (engine running): sends each kind of request 10 times and logs how long they take: `ATRV` (the adapter alone, so Wi-Fi and adapter time), `010C` (a car request) and `010C1` (the adapter returns after one reply instead of waiting for more ECUs; LIVE uses this), then `ATRV` and `010C1` again with keep-awake pings (a tiny packet to the adapter every 20 ms while waiting, in case the 3DS's Wi-Fi power saving holds replies back). The last line sums it up, e.g. `= Speed (avg ms): adapter 393, car 631, one reply 399; keep-awake: adapter ..., car ...`. If keep-awake is much faster, set `keep_awake = on` under `[adapter]` in `config.ini` so LIVE uses it. Save the log afterwards.
 6. Transport checks (on the adapter test screen):
    - **Lid:** close the lid for 10 seconds, open it, tap ATRV. It should reconnect on its own.
    - **Unplug:** unplug the adapter, tap ATRV a few times (retries back off up to 8 s), plug it back in, tap CONNECT.

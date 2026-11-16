@@ -112,6 +112,40 @@ static void test_read_times_out(void)
     server_stop(&s);
 }
 
+static void test_keep_awake_pings_while_waiting(void)
+{
+    static const step_t steps[] = {
+        { S_ACCEPT, NULL },
+        { S_WAIT_CLOSE, NULL },
+        { S_END, NULL },
+    };
+    server_t s;
+    server_start(&s, steps);
+
+    tcp_transport_t t;
+    tcp_transport_init(&t, "127.0.0.1", s.port);
+    CHECK_EQ_INT(tcp_transport_connect(&t, 1000), TP_OK);
+    t.keep_awake_ms = 20;
+
+    char buf[16];
+    uint64_t start = tp_now_ms();
+    CHECK_EQ_INT(tcp_transport_read(&t, buf, sizeof buf, 150), 0);   /* still times out */
+    uint64_t elapsed = tp_now_ms() - start;
+    CHECK(elapsed >= 140 && elapsed < 1000);
+    CHECK(t.awake_pings >= 5 && t.awake_pings <= 9);   /* about one per 20 ms */
+    CHECK(tcp_transport_connected(&t));
+
+    uint32_t before = t.awake_pings;
+    CHECK_EQ_INT(tcp_transport_read(&t, buf, sizeof buf, 0), 0);    /* no wait, no ping */
+    CHECK_EQ_INT((int)t.awake_pings, (int)before);
+    t.keep_awake_ms = 0;
+    CHECK_EQ_INT(tcp_transport_read(&t, buf, sizeof buf, 50), 0);   /* off: no pings */
+    CHECK_EQ_INT((int)t.awake_pings, (int)before);
+
+    tcp_transport_close(&t);
+    server_stop(&s);
+}
+
 static void test_peer_close_drops_connection(void)
 {
     static const step_t steps[] = {
@@ -261,6 +295,7 @@ void suite_transport(void)
     RUN_TEST(test_io_when_disconnected_fails);
     RUN_TEST(test_connect_and_run_elm_command);
     RUN_TEST(test_read_times_out);
+    RUN_TEST(test_keep_awake_pings_while_waiting);
     RUN_TEST(test_peer_close_drops_connection);
     RUN_TEST(test_reconnect_after_drop);
     RUN_TEST(test_connect_refused);

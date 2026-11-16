@@ -1657,6 +1657,10 @@ void spike_ui_run(void)
     shared.wifi_slot = cfg.wifi_slot;
     net_set_wifi_slot(cfg.wifi_slot);
     tcp_transport_init(&transport, cfg.adapter_host, cfg.adapter_port);
+    transport.keep_awake_ms = cfg.keep_awake ? TP_KEEP_AWAKE_MS : 0;
+    if (cfg.keep_awake) {
+        spike_logf(&spike, "Keep-awake pings on (config.ini keep_awake)");
+    }
 
     bool net_ok = net_init();
     if (!net_ok) {

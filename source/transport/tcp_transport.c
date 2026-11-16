@@ -57,6 +57,7 @@ tp_status_t tcp_transport_init(tcp_transport_t *t, const char *host, uint16_t po
 
     memset(t, 0, sizeof *t);
     t->fd = -1;
+    t->udp_fd = -1;
     t->last_step = "";
     t->backoff_min_ms = TP_BACKOFF_MIN_MS;
     t->backoff_max_ms = TP_BACKOFF_MAX_MS;
@@ -80,6 +81,37 @@ void tcp_transport_close(tcp_transport_t *t)
     if (t->fd >= 0) {
         close(t->fd);
         t->fd = -1;
+    }
+    if (t->udp_fd >= 0) {
+        close(t->udp_fd);
+        t->udp_fd = -1;
+    }
+}
+
+/* One keep-awake packet to the adapter (best effort: errors are ignored). */
+static void keep_awake_ping(tcp_transport_t *t)
+{
+    if (t->udp_fd < 0) {
+        int fd = socket(AF_INET, SOCK_DGRAM, 0);
+        if (fd < 0) {
+            return;
+        }
+        int flags = fcntl(fd, F_GETFL, 0);
+        if (flags >= 0) {
+            fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        }
+        t->udp_fd = fd;
+    }
+    struct sockaddr_in to;
+    memset(&to, 0, sizeof to);
+    to.sin_family = AF_INET;
+    to.sin_port = htons(TP_KEEP_AWAKE_PORT);
+    if (!parse_ipv4(t->host, &to.sin_addr)) {
+        return;
+    }
+    char byte = 0;
+    if (sendto(t->udp_fd, &byte, 1, 0, (struct sockaddr *)&to, sizeof to) == 1) {
+        t->awake_pings++;
     }
 }
 
@@ -308,7 +340,23 @@ int tcp_transport_read(tcp_transport_t *t, char *buf, size_t len, unsigned timeo
     }
 
     struct pollfd p = { t->fd, POLLIN, 0 };
-    int pr = poll(&p, 1, clamp_timeout(timeout_ms));
+    int pr;
+    if (t->keep_awake_ms == 0 || timeout_ms == 0) {
+        pr = poll(&p, 1, clamp_timeout(timeout_ms));
+    } else {
+        /* Wait in slices, pinging the adapter before each one. */
+        uint64_t deadline = tp_now_ms() + timeout_ms;
+        for (;;) {
+            keep_awake_ping(t);
+            uint64_t now = tp_now_ms();
+            unsigned left = now >= deadline ? 0u : (unsigned)(deadline - now);
+            unsigned slice = left < t->keep_awake_ms ? left : t->keep_awake_ms;
+            pr = poll(&p, 1, clamp_timeout(slice));
+            if (pr != 0 || left <= t->keep_awake_ms) {
+                break;
+            }
+        }
+    }
     if (pr == 0) {
         return 0;
     }

@@ -63,6 +63,29 @@ static void test_config_car_make(void)
     remove(path);
 }
 
+static void test_config_keep_awake(void)
+{
+    gb_config_t c;
+    config_defaults(&c);
+    CHECK(!c.keep_awake);
+    CHECK_EQ_INT(config_parse(&c, "[adapter]\nkeep_awake = ON\n"), 0);
+    CHECK(c.keep_awake);
+    CHECK_EQ_INT(config_parse(&c, "[adapter]\nkeep_awake = maybe\n"), 1);
+    CHECK(c.keep_awake);
+    CHECK_EQ_INT(config_parse(&c, "[adapter]\nkeep_awake = 0\n"), 0);
+    CHECK(!c.keep_awake);
+
+    char path[] = "gaugeboy_test_awake.tmp.ini";
+    c.keep_awake = true;
+    CHECK(config_save(&c, path));
+    gb_config_t back;
+    int w = -1;
+    CHECK(config_load(&back, path, &w));
+    CHECK_EQ_INT(w, 0);
+    CHECK(back.keep_awake);
+    remove(path);
+}
+
 static void test_config_live_pids(void)
 {
     gb_config_t c;
@@ -335,6 +358,7 @@ void suite_data(void)
     RUN_TEST(test_config_wifi_slot);
     RUN_TEST(test_config_car_make);
     RUN_TEST(test_config_live_pids);
+    RUN_TEST(test_config_keep_awake);
     RUN_TEST(test_config_parse_adapter_section);
     RUN_TEST(test_config_ignores_other_sections_and_keys);
     RUN_TEST(test_config_bad_values_keep_defaults);

@@ -341,7 +341,9 @@ static const char *avg_text(const speed_set_t *st, char *buf, size_t len)
 void spike_speed_test(spike_t *s, int n)
 {
     static elm_response_t r;
-    char a[12], b[12], c[12], d[12];
+    char a[12], b[12], c[12], d[12], e2[12];
+    unsigned saved_awake = s->transport->keep_awake_ms;
+    s->transport->keep_awake_ms = 0;
     spike_logf(s, "Speed test: each request %d times", n);
 
     speed_set_t adapter = time_command(s, "ATRV", n);
@@ -351,6 +353,7 @@ void spike_speed_test(spike_t *s, int n)
     if (e != ELM_OK) {
         spike_logf(s, "! Speed test: the car didn't answer 0100 (%s); is the engine running?",
                    elm_status_str(e));
+        s->transport->keep_awake_ms = saved_awake;
         return;
     }
     speed_set_t plain = time_command(s, "010C", n);
@@ -358,18 +361,20 @@ void spike_speed_test(spike_t *s, int n)
     speed_set_t one = time_command(s, "010C1", n);
     log_set(s, "010C1 (one reply)", &one);
 
-    speed_set_t fast = { UINT_MAX, 0, 0, 0, 0, true };
-    e = elm_command(s->elm, "ATAT2", ELM_TIMEOUT_DEFAULT_MS, &r);
-    if (e == ELM_OK) {
-        fast = time_command(s, "010C1", n);
-        log_set(s, "010C1 with ATAT2", &fast);
-        elm_command(s->elm, "ATAT1", ELM_TIMEOUT_DEFAULT_MS, &r);   /* the default */
-    } else {
-        spike_logf(s, "  %-20s not supported (%s)", "ATAT2", elm_status_str(e));
-    }
-    spike_logf(s, "= Speed (avg ms): adapter %s, car %s, one reply %s, ATAT2 %s",
+    /* The same with keep-awake pings while waiting (gauge-boy-3n6.4). */
+    s->transport->keep_awake_ms = TP_KEEP_AWAKE_MS;
+    uint32_t pings = s->transport->awake_pings;
+    speed_set_t awake_adapter = time_command(s, "ATRV", n);
+    log_set(s, "ATRV, keep-awake", &awake_adapter);
+    speed_set_t awake_one = time_command(s, one.unsupported ? "010C" : "010C1", n);
+    log_set(s, one.unsupported ? "010C, keep-awake" : "010C1, keep-awake", &awake_one);
+    pings = s->transport->awake_pings - pings;
+    s->transport->keep_awake_ms = saved_awake;
+
+    spike_logf(s, "= Speed (avg ms): adapter %s, car %s, one reply %s; keep-awake: adapter %s, car %s (%u pings)",
                avg_text(&adapter, a, sizeof a), avg_text(&plain, b, sizeof b),
-               avg_text(&one, c, sizeof c), avg_text(&fast, d, sizeof d));
+               avg_text(&one, c, sizeof c), avg_text(&awake_adapter, d, sizeof d),
+               avg_text(&awake_one, e2, sizeof e2), (unsigned)pings);
 }
 
 void spike_run(spike_t *s, spike_action_t action)

@@ -13,6 +13,7 @@ void config_defaults(gb_config_t *cfg)
     strcpy(cfg->adapter_host, CONFIG_DEFAULT_HOST);
     cfg->adapter_port = CONFIG_DEFAULT_PORT;
     cfg->wifi_slot = 0;
+    cfg->keep_awake = false;
     cfg->car_make[0] = '\0';
     static const uint8_t live[] = CONFIG_LIVE_DEFAULT_PIDS;
     memcpy(cfg->live_pids, live, sizeof live);
@@ -225,6 +226,15 @@ int config_parse(gb_config_t *cfg, const char *text)
             } else {
                 warnings++;
             }
+        } else if (strcmp(key, "keep_awake") == 0) {
+            lower(value);
+            if (strcmp(value, "on") == 0 || strcmp(value, "1") == 0) {
+                cfg->keep_awake = true;
+            } else if (strcmp(value, "off") == 0 || strcmp(value, "0") == 0) {
+                cfg->keep_awake = false;
+            } else {
+                warnings++;
+            }
         }
     }
     return warnings;
@@ -283,11 +293,17 @@ bool config_save(const gb_config_t *cfg, const char *path)
         ";\n"
         "; wifi_slot: the System Settings connection slot (1, 2 or 3) that holds\n"
         "; the adapter's network, or \"any\" to use whichever saved one is in range.\n"
+        ";\n"
+        "; keep_awake: on sends a tiny packet to the adapter every 20 ms while\n"
+        "; waiting for a reply, in case the 3DS's Wi-Fi power saving is what\n"
+        "; slows replies down (an experiment; SETUP > ADAPTER > SPEED TEST\n"
+        "; compares off and on).\n"
         "\n"
         "[adapter]\n"
         "host = %s\n"
         "port = %u\n"
         "wifi_slot = %s\n"
+        "keep_awake = %s\n"
         "\n"
         "; make: \"auto\" reads it from the VIN; set a make (e.g. Geo) for cars\n"
         "; that don't report a VIN, so DIAG shows that make's own code meanings.\n"
@@ -300,7 +316,7 @@ bool config_save(const gb_config_t *cfg, const char *path)
         "\n"
         "[live]\n"
         "pids = %s\n",
-        cfg->adapter_host, (unsigned)cfg->adapter_port, slot,
+        cfg->adapter_host, (unsigned)cfg->adapter_port, slot, cfg->keep_awake ? "on" : "off",
         cfg->car_make[0] != '\0' ? cfg->car_make : "auto", pids);
     bool ok = rc > 0;
     if (fclose(f) != 0) {
