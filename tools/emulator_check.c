@@ -144,7 +144,7 @@ int main(int argc, char **argv)
 
     printf("\nLive data (as the LIVE screen polls it):\n");
     static const uint8_t wanted[] = { 0x0C, 0x0D, 0x05, 0x0F, 0x11, 0x04, 0x0B, 0x10, 0x0E,
-                                      0x06, 0x07, 0x08, 0x09, 0x33, 0x42 };
+                                      0x06, 0x07, 0x08, 0x09, 0x33, 0x42, 0x87 };
     static obd_live_t lv;
     int polled = obd_live_init(&lv, &d.link, wanted, (int)sizeof wanted);
     lv.use_count = true;   /* as the app polls */
@@ -170,7 +170,9 @@ int main(int argc, char **argv)
     float vac = 0.0f;
     if (obd_live_vacuum(&lv, &vac)) {
         char text[32];
-        printf("    %-10s %s\n", "Vacuum", obd_vacuum_format(vac, OBD_UNITS_US, text, sizeof text));
+        printf("    %-10s %s\n", vac < -1.0f ? "Boost" : "Vacuum",
+               vac < -1.0f ? obd_boost_format(-vac, OBD_UNITS_US, text, sizeof text)
+                           : obd_vacuum_format(vac, OBD_UNITS_US, text, sizeof text));
     }
     snprintf(detail, sizeof detail, "%d of %d", with_value, lv.count);
     check(with_value == lv.count, "every polled PID has a value", detail);

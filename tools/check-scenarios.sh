@@ -20,7 +20,7 @@ fi
 make --no-print-directory -C tests build/emulator_check >/dev/null
 
 # scenario:expected ATDPN protocol
-ALL="car:6 ridgeline:3 tracker:3 j1850:2"
+ALL="car:6 ridgeline:3 tracker:3 j1850:2 ascent:6"
 WANT="${1:-}"
 PORT=35100
 FAILED=""

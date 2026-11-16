@@ -10,6 +10,11 @@ motorbike. GaugeBoy's test cars are not CAN, so this adds:
              CEL off, no codes and no VIN over OBD (choose the make in SETUP).
   j1850      SAE J1850 VPW (protocol 2, ATDPN A2), a made-up 2002 Chevrolet
              truck with the CEL on, two stored codes and one pending code.
+  ascent     CAN 11-bit 500k (protocol 6), like the owner's 2023 Subaru
+             Ascent (turbo): its supported-PID lists, no PID 0B, manifold
+             pressure in PID 87 (idle vacuum and boost), baro in PID 33.
+             Built on the emulator's own CAN 'car' scenario, so combined
+             requests ("010C0D05...") are answered too.
 
 Replies are what an ELM327 prints with headers off (ATH0), which is how
 GaugeBoy runs the adapter: data bytes only, one line per frame, no CAN
@@ -20,6 +25,7 @@ Run through tools/run-emulator.sh (ELM_SCENARIO=ridgeline ...), or directly:
     tools/.venv/bin/python -I tools/elm_scenarios.py -n 35000 -s ridgeline
 """
 
+import copy
 import re
 import sys
 
@@ -161,6 +167,46 @@ SCENARIOS = {
         pending="47 04 20 00 00 00 00",     # P0420
         vin="1GCEK14V62Z000417", volts="12.9V"),
 }
+
+
+
+def can(data):
+    """One CAN reply frame from ECU 7E8, as the emulator's 'car' scenario
+    writes them (headers are off in GaugeBoy, so only the data shows)."""
+    return "<header>7E8</header><size>%02X</size><data>%s</data>" % (len(data.split()), data)
+
+
+def car_key(scen, request):
+    """The key of the 'car' entry answering this request, or a new one."""
+    for key, entry in scen.items():
+        if "Request" in entry and re.match(entry["Request"], request):
+            return key
+    return "PID_" + request
+
+
+def ascent():
+    """The 2023 Subaru Ascent (owner log 2026-11-16, gauge-boy-3n6.13)."""
+    s = copy.deepcopy(ObdMessage["car"])
+    pids = {
+        # Supported-PID lists from the engine ECU (the log's first lines).
+        "0100": "41 00 BE 1D A8 13", "0120": "41 20 90 1F B0 11",
+        "0140": "41 40 FE DC A0 51", "0160": "41 60 69 08 40 01",
+        "0180": "41 80 02 04 00 0D", "01A0": "41 A0 04 00 00 00",
+        "0133": "41 33 64",                                           # baro 100 kPa
+        # PID 87, sensor A only: 35 kPa at idle, 140 kPa (5.8 psi boost).
+        "0187": ["41 87 01 04 60 00 00", "41 87 01 04 60 00 00", "41 87 01 11 80 00 00"],
+    }
+    for req, reply in pids.items():
+        replies = [can(r) for r in reply] if isinstance(reply, list) else can(reply)
+        s[car_key(s, req)] = {"Request": "^" + req + "[0-9]?$", "Descr": "Mode 01 " + req,
+                              "Header": "7E0", "Response": replies}
+    # No MAP in PID 0B on this car.
+    s[car_key(s, "010B")] = {"Request": "^010B[0-9]?$", "Descr": "Not supported",
+                             "Header": "7E0", "Response": NO_DATA}
+    return s
+
+
+SCENARIOS["ascent"] = ascent()
 
 ObdMessage.update(SCENARIOS)
 

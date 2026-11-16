@@ -6,7 +6,8 @@
 #                                  same Wi-Fi can connect to this computer's IP
 #
 # Environment: ELM_PORT (default 35000), ELM_SCENARIO (default ridgeline).
-# Scenarios: ridgeline, tracker (ISO 9141-2), j1850 (J1850 VPW, codes set)
+# Scenarios: ridgeline, tracker (ISO 9141-2), j1850 (J1850 VPW, codes set),
+# ascent (CAN, turbo: PID 87 boost)
 # from tools/elm_scenarios.py; car, default (CAN) from the emulator package.
 # Extra arguments are passed to the emulator. Type "help" at its CMD> prompt
 # for commands; Ctrl-D or "quit" stops it.
