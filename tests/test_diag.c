@@ -157,6 +157,17 @@ static void test_chosen_make(void)
     n = diag_facts(&diag, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
     CHECK_VIEW(n, "Car       VIN not read");
 
+    /* model and year typed in SETUP, for a car with no VIN */
+    obd_diag_apply_make(&diag, "Geo");
+    obd_diag_apply_vehicle(&diag, "Tracker", 1996);
+    n = diag_facts(&diag, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Car       1996 Geo Tracker (set in SETUP)");
+    n = diag_view_lines(&diag, DIAG_TAB_STORED, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "1996 Geo Tracker (set in SETUP)  VIN not read");
+    obd_diag_apply_vehicle(&diag, "", 0);   /* back to auto */
+    CHECK(diag.model == NULL && diag.model_year == 0);
+    obd_diag_apply_make(&diag, "");
+
     /* a make read from the VIN wins over the choice */
     setup();
     script_ridgeline();
@@ -165,6 +176,13 @@ static void test_chosen_make(void)
     CHECK_EQ_STR(diag.maker, "Honda");
     CHECK(!diag.make_chosen);
     CHECK_EQ_INT(diag.make, obd_dtc_make_find("Honda"));
+    /* the VIN's year wins; a typed model is used when the VIN gives none */
+    obd_diag_apply_vehicle(&diag, "Pilot", 2001);
+    CHECK_EQ_INT(diag.model_year, 2008);
+    n = diag_facts(&diag, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Car       2008 Honda Pilot (SETUP)");
+    obd_diag_apply_vehicle(&diag, NULL, 0);
+    CHECK(diag.model == NULL);
 }
 
 static void test_panel(void)

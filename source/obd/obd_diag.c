@@ -75,6 +75,28 @@ void obd_diag_apply_make(obd_diag_t *d, const char *make_name)
     d->make_chosen = true;
 }
 
+void obd_diag_apply_vehicle(obd_diag_t *d, const char *model, int year)
+{
+    if (d->model_chosen) {
+        d->model = NULL;
+        d->model_make = NULL;
+        d->model_chosen = false;
+    }
+    if (d->year_chosen) {
+        d->model_year = 0;
+        d->year_chosen = false;
+    }
+    if (!d->have_vin && year > 0) {
+        d->model_year = year;
+        d->year_chosen = true;
+    }
+    if (d->model == NULL && model != NULL && model[0] != '\0') {
+        d->model = model;
+        d->model_make = d->maker;
+        d->model_chosen = true;
+    }
+}
+
 obd_link_result_t obd_diag_scan(elm_t *elm, bool reset, int current_year, obd_diag_t *out,
                                 obd_link_trace_fn trace, obd_diag_progress_fn progress,
                                 void *ctx)

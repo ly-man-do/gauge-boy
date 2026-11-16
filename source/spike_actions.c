@@ -7,6 +7,7 @@
 #include <time.h>
 
 #include "data/config.h"
+#include "data/live_views.h"
 #include "obd/obd_link.h"
 #include "obd/obd_reply.h"
 #include "obd/obd_vin.h"
@@ -22,6 +23,7 @@ void spike_init(spike_t *s, tcp_transport_t *transport, elm_t *elm,
     s->start_ms = tp_now_ms();
     s->net_up = NULL;
     s->net_info = NULL;
+    s->units = OBD_UNITS_US;
 
     elm_io_t io = tcp_transport_io(transport);
     elm_bind(elm, &io);
@@ -51,6 +53,7 @@ const char *spike_action_label(spike_action_t action)
     case SPIKE_CONNECT:  return "CONNECT";
     case SPIKE_ATZ:      return "ATZ";
     case SPIKE_SEARCH:   return "ATSP0+0100";
+    case SPIKE_LIVE_TEST: return "LIVE TEST";
     case SPIKE_PROTOCOL: return "ATDPN";
     case SPIKE_VOLTAGE:  return "ATRV";
     case SPIKE_VIN:      return "0902 VIN";
@@ -420,9 +423,151 @@ void spike_run(spike_t *s, spike_action_t action)
     case SPIKE_SPEED:
         spike_speed_test(s, SPIKE_SPEED_COUNT);
         break;
+    case SPIKE_LIVE_TEST:
+        spike_live_test(s, SPIKE_LIVE_TEST_MS);
+        break;
     case SPIKE_CONNECT:
     case SPIKE_ACTION_COUNT:
         break;
+    }
+}
+
+void spike_live_summary(spike_t *s, const obd_live_t *lv)
+{
+    if (lv->requests == 0) {
+        return;
+    }
+    uint64_t now = lv->pid[0].at_ms > lv->volts_at_ms ? lv->pid[0].at_ms : lv->volts_at_ms;
+    for (int i = 0; i < lv->count; i++) {
+        now = lv->pid[i].at_ms > now ? lv->pid[i].at_ms : now;
+    }
+    unsigned secs = now > lv->started_ms ? (unsigned)((now - lv->started_ms) / 1000u) : 0;
+    spike_logf(s, "LIVE: %u requests in %u s, %.1f/s, %u failed%s%s", (unsigned)lv->requests, secs,
+               (double)obd_live_rate(lv, now), (unsigned)lv->failures,
+               lv->use_count ? (lv->count_refused ? ", no response count" : ", response count 1")
+                             : "",
+               lv->multi_requests > 0 ? (lv->multi_refused ? ", multi-PID refused"
+                                                           : ", several PIDs a request")
+                                      : "");
+    char line[200] = "";
+    for (int i = 0; i < lv->count; i++) {
+        const obd_live_pid_t *p = &lv->pid[i];
+        snprintf(line + strlen(line), sizeof line - strlen(line), "%s%02X %.1f Hz%s",
+                 i ? ", " : "", (unsigned)p->pid, (double)p->hz, p->dropped ? " (dropped)" : "");
+    }
+    if (line[0] != '\0') {
+        spike_logf(s, "LIVE: %s", line);
+    }
+    if (lv->left_out > 0) {
+        spike_logf(s, "LIVE: %u PIDs left out of combined replies (asked again alone)",
+                   (unsigned)lv->left_out);
+    }
+    for (int i = 0; i < lv->left_out_logged; i++) {
+        const obd_live_left_out_t *lo = &lv->left_out_log[i];
+        char missing[3 * OBD_LIVE_MULTI_MAX + 1] = "";
+        for (int k = 0; k < lo->missing_count; k++) {
+            snprintf(missing + strlen(missing), sizeof missing - strlen(missing), "%s%02X",
+                     k ? " " : "", (unsigned)lo->missing[k]);
+        }
+        spike_logf(s, "LIVE: %s left out %s: %s", lo->cmd, missing, lo->reply);
+    }
+}
+
+/* One PID asked alone, as LIVE asks it ("010C1", or "010C" if the adapter
+ * refuses the response count). Logged with its value. */
+static bool live_test_pid(spike_t *s, const obd_link_t *link, uint8_t pid, bool *count)
+{
+    static elm_response_t r;
+    static obd_reply_t reply;
+    const obd_pid_info_t *info = obd_pid_info(pid);
+    char cmd[8];
+    snprintf(cmd, sizeof cmd, *count ? "01%02X1" : "01%02X", (unsigned)pid);
+    uint64_t t0 = elm_clock(s);
+    elm_status_t st = elm_command(s->elm, cmd, ELM_TIMEOUT_DEFAULT_MS, &r);
+    if (*count && st == ELM_ERR_UNKNOWN_COMMAND) {
+        *count = false;
+        snprintf(cmd, sizeof cmd, "01%02X", (unsigned)pid);
+        t0 = elm_clock(s);
+        st = elm_command(s->elm, cmd, ELM_TIMEOUT_DEFAULT_MS, &r);
+    }
+    unsigned ms = (unsigned)(elm_clock(s) - t0);
+    float v = 0.0f;
+    char reply_text[64] = "";
+    for (int i = 0; i < r.line_count && strlen(reply_text) < sizeof reply_text - 2; i++) {
+        snprintf(reply_text + strlen(reply_text), sizeof reply_text - strlen(reply_text), "%s%s",
+                 i ? " / " : "", r.lines[i]);
+    }
+    if (st == ELM_OK && obd_assemble(&r, link->protocol, false, &reply) == OBD_OK &&
+        obd_pid_from_reply(&reply, pid, &v) == OBD_PID_OK) {
+        char value[32];
+        obd_pid_format(pid, v, s->units, value, sizeof value);
+        spike_logf(s, "  %02X %-9s %-14s %s (%u ms)", (unsigned)pid, info->label, value, reply_text, ms);
+        return true;
+    }
+    spike_logf(s, "! %02X %-9s %s: %s (%u ms)", (unsigned)pid, info->label,
+               st == ELM_OK ? "not decoded" : elm_status_str(st), reply_text, ms);
+    return false;
+}
+
+void spike_live_test(spike_t *s, unsigned poll_ms)
+{
+    static obd_link_t link;
+    if (obd_link_open(s->elm, true, &link) != OBD_LINK_OK) {
+        spike_logf(s, "! LIVE TEST: %s", obd_link_result_str(link.result));
+        return;
+    }
+    spike_logf(s, "LIVE TEST: protocol %d, %s, %d ECU%s", link.protocol,
+               elm_protocol_name(link.protocol), link.ecus, link.ecus == 1 ? "" : "s");
+
+    /* 1: every supported PID GaugeBoy decodes, once. */
+    bool count = true;
+    int asked = 0, read = 0;
+    for (int i = 0; i < obd_pid_count(); i++) {
+        uint8_t pid = obd_pid_at(i)->pid;
+        if (!obd_link_pid_supported(&link, pid)) {
+            continue;
+        }
+        asked++;
+        read += live_test_pid(s, &link, pid, &count) ? 1 : 0;
+    }
+    spike_logf(s, "= Decode: %d of %d supported PIDs read%s", read, asked,
+               count ? "" : " (no response count)");
+
+    /* 2: the Engine view for poll_ms, polled as LIVE polls it. */
+    static obd_live_t lv;
+    uint8_t pids[OBD_LIVE_MAX];
+    uint32_t periods[OBD_LIVE_MAX];
+    int n = live_view_request(LIVE_VIEW_ENGINE, NULL, 0, pids, periods, OBD_LIVE_MAX);
+    if (obd_live_init(&lv, &link, pids, n) == 0) {
+        spike_logf(s, "! LIVE TEST: the car supports none of the Engine view's PIDs");
+        return;
+    }
+    for (int i = 0; i < n; i++) {
+        if (periods[i] != LIVE_PERIOD_DEFAULT) {
+            obd_live_set_period(&lv, pids[i], periods[i]);
+        }
+    }
+    lv.use_count = true;
+    lv.use_multi = true;
+    spike_logf(s, "LIVE TEST: polling the Engine view for %u s", poll_ms / 1000u);
+    uint64_t t0 = elm_clock(s);
+    while (elm_clock(s) - t0 < poll_ms) {
+        obd_live_step_t st = obd_live_step(&lv, s->elm, NULL, NULL);
+        if (st == OBD_LIVE_LOST) {
+            spike_logf(s, "! LIVE TEST: the adapter stopped answering");
+            break;
+        }
+        if (st == OBD_LIVE_IDLE) {
+            break;
+        }
+    }
+    spike_live_summary(s, &lv);
+    char value[32];
+    for (int i = 0; i < lv.count; i++) {
+        if (lv.pid[i].have) {
+            obd_pid_format(lv.pid[i].pid, lv.pid[i].value, s->units, value, sizeof value);
+            spike_logf(s, "  %-9s %s", obd_pid_info(lv.pid[i].pid)->label, value);
+        }
     }
 }
 

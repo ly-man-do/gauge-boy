@@ -14,6 +14,9 @@ void config_defaults(gb_config_t *cfg)
     cfg->adapter_port = CONFIG_DEFAULT_PORT;
     cfg->wifi_slot = 0;
     cfg->car_make[0] = '\0';
+    cfg->car_model[0] = '\0';
+    cfg->car_year = 0;
+    cfg->metric = false;
     static const uint8_t live[] = CONFIG_LIVE_DEFAULT_PIDS;
     memcpy(cfg->live_pids, live, sizeof live);
     cfg->live_pid_count = (uint8_t)sizeof live;
@@ -192,7 +195,52 @@ int config_parse(gb_config_t *cfg, const char *text)
             }
             continue;
         }
+        if (strcmp(section, "display") == 0) {
+            if (strcmp(key, "units") == 0) {
+                if (strcmp(value, "us") == 0 || strcmp(value, "US") == 0) {
+                    cfg->metric = false;
+                } else if (strcmp(value, "metric") == 0) {
+                    cfg->metric = true;
+                } else {
+                    warnings++;
+                }
+            }
+            continue;
+        }
         if (strcmp(section, "vehicle") == 0) {
+            bool is_auto = strlen(value) == 4 && tolower((unsigned char)value[0]) == 'a' &&
+                           tolower((unsigned char)value[1]) == 'u' &&
+                           tolower((unsigned char)value[2]) == 't' &&
+                           tolower((unsigned char)value[3]) == 'o';
+            if (strcmp(key, "year") == 0) {
+                char *end = NULL;
+                long y = strtol(value, &end, 10);
+                if (value[0] == '\0' || is_auto) {
+                    cfg->car_year = 0;
+                } else if (end != NULL && *end == '\0' && y >= CONFIG_YEAR_MIN &&
+                           y <= CONFIG_YEAR_MAX) {
+                    cfg->car_year = (uint16_t)y;
+                } else {
+                    warnings++;
+                }
+                continue;
+            }
+            if (strcmp(key, "model") == 0) {
+                size_t n = strlen(value);
+                bool ok = n < sizeof cfg->car_model;
+                for (size_t i = 0; ok && i < n; i++) {
+                    ok = isprint((unsigned char)value[i]) != 0 && value[i] != ';' &&
+                         value[i] != '#';
+                }
+                if (!ok) {
+                    warnings++;
+                } else if (n == 0 || is_auto) {
+                    cfg->car_model[0] = '\0';
+                } else {
+                    memcpy(cfg->car_model, value, n + 1);
+                }
+                continue;
+            }
             if (strcmp(key, "make") == 0) {
                 size_t n = strlen(value);
                 bool ok = n < sizeof cfg->car_make;
@@ -278,6 +326,10 @@ bool config_save(const gb_config_t *cfg, const char *path)
         snprintf(pids + strlen(pids), sizeof pids - strlen(pids), "%s%02X", i ? " " : "",
                  (unsigned)cfg->live_pids[i]);
     }
+    char year[8] = "auto";
+    if (cfg->car_year != 0) {
+        snprintf(year, sizeof year, "%u", (unsigned)cfg->car_year);
+    }
     char slot[8];
     if (cfg->wifi_slot >= 1 && cfg->wifi_slot <= CONFIG_WIFI_SLOTS) {
         snprintf(slot, sizeof slot, "%u", (unsigned)cfg->wifi_slot);
@@ -300,9 +352,18 @@ bool config_save(const gb_config_t *cfg, const char *path)
         "\n"
         "; make: \"auto\" reads it from the VIN; set a make (e.g. Geo) for cars\n"
         "; that don't report a VIN, so DIAG shows that make's own code meanings.\n"
+        "; model and year: \"auto\" reads them from the VIN; set them (SETUP >\n"
+        "; VEHICLE) for cars that don't report a VIN.\n"
         "\n"
         "[vehicle]\n"
         "make = %s\n"
+        "model = %s\n"
+        "year = %s\n"
+        "\n"
+        "; units: us (mph, F, psi, inHg) or metric (km/h, C, kPa).\n"
+        "\n"
+        "[display]\n"
+        "units = %s\n"
         "\n"
         "; pids: the LIVE Custom view's Mode 01 PIDs, in hex (chosen with EDIT).\n"
         "; Fewer PIDs refresh faster. view: the LIVE view opened last.\n"
@@ -311,8 +372,9 @@ bool config_save(const gb_config_t *cfg, const char *path)
         "pids = %s\n"
         "view = %s\n",
         cfg->adapter_host, (unsigned)cfg->adapter_port, slot,
-        cfg->car_make[0] != '\0' ? cfg->car_make : "auto", pids,
-        cfg->live_view);
+        cfg->car_make[0] != '\0' ? cfg->car_make : "auto",
+        cfg->car_model[0] != '\0' ? cfg->car_model : "auto", year,
+        cfg->metric ? "metric" : "us", pids, cfg->live_view);
     bool ok = rc > 0;
     if (fclose(f) != 0) {
         ok = false;
@@ -325,4 +387,41 @@ bool config_write_default(const char *path)
     gb_config_t cfg;
     config_defaults(&cfg);
     return config_save(&cfg, path);
+}
+
+void config_clean_text(char *s)
+{
+    size_t n = 0;
+    for (size_t i = 0; s[i] != '\0'; i++) {
+        unsigned char c = (unsigned char)s[i];
+        if (isprint(c) && c != ';' && c != '#') {
+            s[n++] = (char)c;
+        }
+    }
+    while (n > 0 && s[n - 1] == ' ') {
+        n--;
+    }
+    s[n] = '\0';
+    size_t lead = 0;
+    while (s[lead] == ' ') {
+        lead++;
+    }
+    memmove(s, s + lead, n - lead + 1);
+    if (strlen(s) == 4 && tolower((unsigned char)s[0]) == 'a' &&
+        tolower((unsigned char)s[1]) == 'u' && tolower((unsigned char)s[2]) == 't' &&
+        tolower((unsigned char)s[3]) == 'o') {
+        s[0] = '\0';
+    }
+}
+
+int config_year_step(int year, int dir, int last)
+{
+    if (year == 0) {
+        return dir > 0 ? CONFIG_YEAR_STEP_FIRST : last;
+    }
+    int y = year + (dir > 0 ? 1 : -1);
+    if (y > last || y < CONFIG_YEAR_MIN || (dir < 0 && year == CONFIG_YEAR_STEP_FIRST)) {
+        return 0;
+    }
+    return y;
 }

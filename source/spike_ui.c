@@ -58,6 +58,8 @@
 #define BTN_GUIDE_CHECK  106   /* worker: Wi-Fi guide check */
 #define BTN_SET_MAKE     107   /* worker: save the car make, apply it to DIAG */
 #define BTN_LIVE_SAVE    108   /* worker: save the LIVE PIDs to config.ini */
+#define BTN_SET_VEHICLE  109   /* worker: save make, model, year; apply to DIAG */
+#define BTN_SET_UNITS    110   /* worker: save the units */
 #define BTN_LIVE_TOGGLE  (-33) /* UI: LIVE START / STOP */
 #define BTN_LIVE_PICK    (-80) /* UI: Custom PID toggle (-80 - slot on the page) */
 #define BTN_LIVE_EDIT    (-34) /* UI: LIVE Custom view -> PID toggles */
@@ -84,6 +86,16 @@
 #define BTN_TEST_SCREEN  (-30) /* UI: SETUP -> TEST */
 #define BTN_MAKE_SCREEN  (-31) /* UI: SETUP -> car make picker */
 #define BTN_MAKE_PICK    (-60) /* UI: -60 - button on the picker page */
+#define BTN_SETUP_TESTS   (-110) /* UI: SETUP menu -> its four pages */
+#define BTN_SETUP_WIFI    (-111)
+#define BTN_SETUP_VEHICLE (-112)
+#define BTN_SETUP_OTHER   (-113)
+#define BTN_MODEL_EDIT    (-114) /* UI: Vehicle: type the model (keyboard) */
+#define BTN_YEAR_PREV     (-115) /* UI: Vehicle: model year down / up */
+#define BTN_YEAR_NEXT     (-116)
+#define BTN_UNITS         (-117) /* UI: Other: US / metric */
+#define BTN_ABOUT         (-118) /* UI: Other -> About */
+#define BTN_NONE          (-119) /* a bar that only shows a value */
 
 /* Bottom-screen buttons in 8x8 console cells: 12-13x6 cells = 96-104x48 px.
  * The third row has the Wi-Fi slot buttons, the last one the log ones. */
@@ -93,18 +105,18 @@ typedef struct {
     int col, row, w, h;
 } button_t;
 
+/* SETUP > TESTS: adapter and car tests, the log's buttons. */
 static const button_t buttons[] = {
-    { NULL,         SPIKE_CONNECT,    0,  2, 12, 6 },
-    { NULL,         SPIKE_ATZ,        13, 2, 13, 6 },
-    { NULL,         SPIKE_SEARCH,     27, 2, 12, 6 },
-    { NULL,         SPIKE_PROTOCOL,   0,  9, 12, 6 },
-    { NULL,         SPIKE_VOLTAGE,    13, 9, 13, 6 },
-    { NULL,         SPIKE_VIN,        27, 9, 12, 6 },
-    { NULL,         BTN_WIFI_SLOT,    0, 16, 12, 6 },  /* "SLOT ANY" / "SLOT 2" */
-    { NULL,         SPIKE_SPEED,      13, 16, 13, 6 },  /* SETUP SLOT is in the SETUP list */
-    { "BACK",       BTN_BACK,         27, 16, 12, 6 },
-    { "OLDER ^",    BTN_SCROLL_OLDER, 0, 23, 12, 6 },
-    { "SAVE LOG",   BTN_SAVE_LOG,     13, 23, 13, 6 },
+    { NULL,         SPIKE_ATZ,        0,  2, 12, 6 },
+    { NULL,         SPIKE_SEARCH,     13, 2, 13, 6 },
+    { NULL,         SPIKE_PROTOCOL,   27, 2, 12, 6 },
+    { NULL,         SPIKE_VOLTAGE,    0,  9, 12, 6 },
+    { NULL,         SPIKE_VIN,        13, 9, 13, 6 },
+    { NULL,         SPIKE_SPEED,      27, 9, 12, 6 },
+    { NULL,         SPIKE_LIVE_TEST,  0, 16, 12, 6 },
+    { "SAVE LOG",   BTN_SAVE_LOG,     13, 16, 13, 6 },
+    { "BACK",       BTN_BACK,         0, 23, 12, 6 },
+    { "OLDER ^",    BTN_SCROLL_OLDER, 13, 23, 13, 6 },
     { "NEWER v",    BTN_SCROLL_NEWER, 27, 23, 12, 6 },
 };
 #define BUTTON_COUNT ((int)(sizeof buttons / sizeof buttons[0]))
@@ -164,27 +176,61 @@ static const button_t diag_trim_buttons[] = {
 };
 #define DIAG_TRIM_BUTTON_COUNT ((int)(sizeof diag_trim_buttons / sizeof diag_trim_buttons[0]))
 
-/* SETUP: full-width list rows like DIAG's list, then BACK ADAPTER ...
- * WI-FI GUIDE. The rows (w 39) are drawn as list bars; the bottom row
- * (row 25) as buttons. */
-#define SETUP_BAR_ROW 25
+/* SETUP: a menu of four big buttons, each a page; BACK -> HOME. */
 static const button_t setup_buttons[] = {
-    { "Wi-Fi slot",                    BTN_WIFI_SLOT,   0,  2, 39, 5 },
-    { "Check the slot's IP and DNS",   BTN_SETUP_SLOT,  0,  8, 39, 5 },
-    { "Car make",                      BTN_MAKE_SCREEN, 0, 14, 39, 5 },
-    { "Save this session's log",       BTN_SAVE_LOG,    0, 20, 39, 5 },
-    { "BACK",                          BTN_BACK,        0, 25, 8, 5 },
-    { "ADAPTER",                       BTN_TEST_SCREEN, 9, 25, 9, 5 },
-    { "WI-FI GUIDE",                   BTN_GUIDE,       26, 25, 13, 5 },
+    { "TESTS",   BTN_SETUP_TESTS,   0,  3, 19, 9 },
+    { "WI-FI",   BTN_SETUP_WIFI,    20, 3, 19, 9 },
+    { "VEHICLE", BTN_SETUP_VEHICLE, 0, 14, 19, 9 },
+    { "OTHER",   BTN_SETUP_OTHER,   20, 14, 19, 9 },
+    { "BACK",    BTN_BACK,          0, 25, 8, 5 },
 };
 #define SETUP_BUTTON_COUNT ((int)(sizeof setup_buttons / sizeof setup_buttons[0]))
+
+/* SETUP pages: full-width bars (label left, value right) like DIAG's list,
+ * BACK bottom-left (-> the SETUP menu). */
+#define BAR_ROWS_LAST 24
+static const button_t wifi_buttons[] = {
+    { "Connect to the adapter",      SPIKE_CONNECT,  0,  2, 39, 5 },
+    { "Wi-Fi slot",                  BTN_WIFI_SLOT,  0,  8, 39, 5 },
+    { "Check the slot's IP and DNS", BTN_SETUP_SLOT, 0, 14, 39, 5 },
+    { "Wi-Fi setup guide",           BTN_GUIDE,      0, 20, 39, 5 },
+    { "BACK",                        BTN_BACK,       0, 25, 8, 5 },
+};
+#define WIFI_BUTTON_COUNT ((int)(sizeof wifi_buttons / sizeof wifi_buttons[0]))
+
+static const button_t vehicle_buttons[] = {
+    { "Make",              BTN_MAKE_SCREEN, 0,  2, 39, 5 },
+    { "Model",             BTN_MODEL_EDIT,  0,  8, 39, 5 },
+    { "Year",              BTN_NONE,        0, 14, 27, 5 },
+    { "<",                 BTN_YEAR_PREV,   28, 14, 5, 5 },
+    { ">",                 BTN_YEAR_NEXT,   34, 14, 5, 5 },
+    { "VIN (tap to read)", BTN_DIAG_SCAN,   0, 20, 39, 5 },
+    { "BACK",              BTN_BACK,        0, 25, 8, 5 },
+};
+#define VEHICLE_BUTTON_COUNT ((int)(sizeof vehicle_buttons / sizeof vehicle_buttons[0]))
+
+static const button_t other_buttons[] = {
+    { "Units",          BTN_UNITS, 0, 2, 39, 5 },
+    { "About GaugeBoy", BTN_ABOUT, 0, 8, 39, 5 },
+    { "BACK",           BTN_BACK,  0, 25, 8, 5 },
+};
+#define OTHER_BUTTON_COUNT ((int)(sizeof other_buttons / sizeof other_buttons[0]))
+
+static const button_t about_buttons[] = {
+    { "BACK", BTN_BACK, 0, 25, 8, 5 },
+};
+#define ABOUT_BUTTON_COUNT 1
 
 typedef enum {
     SCREEN_HOME, SCREEN_DIAG, SCREEN_SETUP, SCREEN_TEST, SCREEN_GUIDE, SCREEN_MAKE,
     SCREEN_LIVE_MENU,          /* LIVE: the view list */
     SCREEN_LIVE,               /* LIVE: one view polling */
     SCREEN_LIVE_EDIT,          /* LIVE: the Custom view's PID toggles */
-    SCREEN_TRIM                /* fuel trims, both banks */
+    SCREEN_TRIM,               /* fuel trims, both banks */
+    SCREEN_SETUP_WIFI,         /* SETUP > WI-FI (SCREEN_TEST is SETUP > TESTS) */
+    SCREEN_SETUP_VEHICLE,      /* SETUP > VEHICLE */
+    SCREEN_SETUP_OTHER,        /* SETUP > OTHER */
+    SCREEN_ABOUT               /* SETUP > OTHER > About */
 } screen_t;
 
 /* TRIM: BACK and START / STOP (the bars and hints are on the top screen). */
@@ -480,20 +526,39 @@ static void next_wifi_slot(spike_t *s)
 
 /* Car make (worker): app_cfg->car_make was set by the UI; apply it to the
  * last scan and save config.ini. */
-static void set_car_make(spike_t *s)
+/* SETUP > VEHICLE (worker): save make, model and year, apply them to DIAG. */
+static void set_vehicle(spike_t *s)
 {
     LightLock_Lock(&shared.lock);
     gb_config_t copy = *app_cfg;
-    obd_diag_apply_make(&shared.diag, copy.car_make);
+    obd_diag_apply_make(&shared.diag, app_cfg->car_make);
+    obd_diag_apply_vehicle(&shared.diag, app_cfg->car_model, app_cfg->car_year);
     bool vin_wins = copy.car_make[0] != '\0' && shared.diag.maker != NULL &&
                     !shared.diag.make_chosen;
     shared.diag_version++;
     LightLock_Unlock(&shared.lock);
 
     bool saved = config_save(&copy, CONFIG_PATH);
-    spike_logf(s, "Car make: %s%s%s",
-               copy.car_make[0] != '\0' ? copy.car_make : "Auto (from the VIN)",
+    char year[8] = "Auto";
+    if (copy.car_year != 0) {
+        snprintf(year, sizeof year, "%u", (unsigned)copy.car_year);
+    }
+    spike_logf(s, "Vehicle: make %s, model %s, year %s%s%s",
+               copy.car_make[0] != '\0' ? copy.car_make : "Auto",
+               copy.car_model[0] != '\0' ? copy.car_model : "Auto", year,
                vin_wins ? "; this car's VIN gives its make, so that is used" : "",
+               saved ? "" : " (! not saved to config.ini)");
+}
+
+/* SETUP > OTHER (worker): save the units; the log uses them too. */
+static void set_units(spike_t *s)
+{
+    LightLock_Lock(&shared.lock);
+    gb_config_t copy = *app_cfg;
+    LightLock_Unlock(&shared.lock);
+    s->units = copy.metric ? OBD_UNITS_METRIC : OBD_UNITS_US;
+    bool saved = config_save(&copy, CONFIG_PATH);
+    spike_logf(s, "Units: %s%s", copy.metric ? "metric (km/h, C, kPa)" : "US (mph, F, psi, inHg)",
                saved ? "" : " (! not saved to config.ini)");
 }
 
@@ -510,7 +575,7 @@ static void setup_slot_preview(spike_t *s)
     LightLock_Unlock(&shared.lock);
 
     if (slot == 0) {
-        spike_logf(s, "! SETUP SLOT: tap SLOT first to pick the adapter's slot");
+        spike_logf(s, "! SETUP SLOT: pick the adapter's slot first (SETUP > WI-FI > Wi-Fi slot)");
         return;
     }
     char name[40];
@@ -610,11 +675,10 @@ static void diag_scan(spike_t *s)
         struct tm *tm = gmtime(&now);
         obd_diag_scan(s->elm, reset, tm != NULL ? tm->tm_year + 1900 : 0, &d,
                       spike_trace_command, scan_progress, s);
-        char car_make[sizeof app_cfg->car_make];
         LightLock_Lock(&shared.lock);
-        strcpy(car_make, app_cfg->car_make);
+        obd_diag_apply_make(&d, app_cfg->car_make);
+        obd_diag_apply_vehicle(&d, app_cfg->car_model, app_cfg->car_year);
         LightLock_Unlock(&shared.lock);
-        obd_diag_apply_make(&d, car_make);
         if (reset && obd_link_adapter_ready(d.result)) {
             reset_at_connect = s->transport->connects;
         }
@@ -645,7 +709,7 @@ static void diag_scan(spike_t *s)
         memset(&d, 0, sizeof d);
         d.make = -1;
         d.result = OBD_LINK_NO_ADAPTER;
-        spike_logf(s, "! Scan: can't reach the adapter (see SETUP > ADAPTER TEST)");
+        spike_logf(s, "! Scan: can't reach the adapter (see SETUP > WI-FI)");
     }
 
     LightLock_Lock(&shared.lock);
@@ -727,7 +791,7 @@ static void guide_check(spike_t *s)
                 snprintf(out[n++], 40, "OK IP and DNS as in steps 3-4");
             } else {
                 snprintf(out[n++], 40, "! IP / DNS differ from steps 3-4");
-                snprintf(out[n++], 40, "  (SETUP > Check the slot's IP...)");
+                snprintf(out[n++], 40, "  (SETUP > WI-FI > Check the slot)");
             }
         }
     }
@@ -829,48 +893,6 @@ static live_open_t live_open(spike_t *s, obd_link_t *link)
     return LIVE_OPEN_OK;
 }
 
-/* LIVE (worker): how fast the poller went, for comparing logs. */
-static void live_summary(spike_t *s, const obd_live_t *lv)
-{
-    if (lv->requests == 0) {
-        return;
-    }
-    uint64_t now = lv->pid[0].at_ms > lv->volts_at_ms ? lv->pid[0].at_ms : lv->volts_at_ms;
-    for (int i = 0; i < lv->count; i++) {
-        now = lv->pid[i].at_ms > now ? lv->pid[i].at_ms : now;
-    }
-    unsigned secs = now > lv->started_ms ? (unsigned)((now - lv->started_ms) / 1000u) : 0;
-    spike_logf(s, "LIVE: %u requests in %u s, %.1f/s, %u failed%s%s", (unsigned)lv->requests, secs,
-               (double)obd_live_rate(lv, now), (unsigned)lv->failures,
-               lv->use_count ? (lv->count_refused ? ", no response count" : ", response count 1")
-                             : "",
-               lv->multi_requests > 0 ? (lv->multi_refused ? ", multi-PID refused"
-                                                           : ", several PIDs a request")
-                                      : "");
-    char line[200] = "";
-    for (int i = 0; i < lv->count; i++) {
-        const obd_live_pid_t *p = &lv->pid[i];
-        snprintf(line + strlen(line), sizeof line - strlen(line), "%s%02X %.1f Hz%s",
-                 i ? ", " : "", (unsigned)p->pid, (double)p->hz, p->dropped ? " (dropped)" : "");
-    }
-    if (line[0] != '\0') {
-        spike_logf(s, "LIVE: %s", line);
-    }
-    if (lv->left_out > 0) {
-        spike_logf(s, "LIVE: %u PIDs left out of combined replies (asked again alone)",
-                   (unsigned)lv->left_out);
-    }
-    for (int i = 0; i < lv->left_out_logged; i++) {
-        const obd_live_left_out_t *lo = &lv->left_out_log[i];
-        char missing[3 * OBD_LIVE_MULTI_MAX + 1] = "";
-        for (int k = 0; k < lo->missing_count; k++) {
-            snprintf(missing + strlen(missing), sizeof missing - strlen(missing), "%s%02X",
-                     k ? " " : "", (unsigned)lo->missing[k]);
-        }
-        spike_logf(s, "LIVE: %s left out %s: %s", lo->cmd, missing, lo->reply);
-    }
-}
-
 /* LIVE (worker): one poll while the LIVE screen polls. */
 static void live_poll(spike_t *s)
 {
@@ -891,7 +913,7 @@ static void live_poll(spike_t *s)
 
     if (!on) {
         if (ready) {
-            live_summary(s, &lv);
+            spike_live_summary(s, &lv);
         }
         ready = false;   /* start again from the link next time */
         return;
@@ -913,7 +935,7 @@ static void live_poll(spike_t *s)
     }
     if (!ready || gen != gen_seen) {
         if (ready) {
-            live_summary(s, &lv);   /* the old PID set's rates */
+            spike_live_summary(s, &lv);   /* the old PID set's rates */
         }
         int count = obd_live_init(&lv, &link, pids, n);
         for (int i = 0; i < n; i++) {
@@ -1009,8 +1031,10 @@ static void worker_main(void *arg)
                 clear_codes(spike);
             } else if (action == BTN_GUIDE_CHECK) {
                 guide_check(spike);
-            } else if (action == BTN_SET_MAKE) {
-                set_car_make(spike);
+            } else if (action == BTN_SET_MAKE || action == BTN_SET_VEHICLE) {
+                set_vehicle(spike);
+            } else if (action == BTN_SET_UNITS) {
+                set_units(spike);
             } else if (action == BTN_LIVE_SAVE) {
                 live_save(spike);
             } else {
@@ -1060,7 +1084,7 @@ static void draw_top(int scroll, int busy, bool connected)
     consoleSelect(&top_console);
     printf("\x1b[0m");
     print_row(0, TOP_COLS, header);
-    print_row(1, TOP_COLS, scroll > 0 ? "-- scrolled back: tap NEWER to follow --"
+    print_row(1, TOP_COLS, scroll > 0 ? "-- scrolled back: NEWER or R to follow --"
                                       : "-------------------------------------------------");
     for (int i = 0; i < LOG_ROWS; i++) {
         print_row(LOG_FIRST_ROW + i, TOP_COLS, visible[i]);
@@ -1498,7 +1522,8 @@ static void draw_live_top(int view, int busy, bool connected)
     memcpy(msg, shared.live_msg, sizeof msg);
     LightLock_Unlock(&shared.lock);
 
-    int n = live_view_lines(have ? &lv : NULL, have ? protocol : 0, rate, OBD_UNITS_US, TOP_COLS,
+    int n = live_view_lines(have ? &lv : NULL, have ? protocol : 0, rate,
+                            app_cfg->metric ? OBD_UNITS_METRIC : OBD_UNITS_US, TOP_COLS,
                             lines, LIVE_VIEW_MAX);
     spike_format_header(header, sizeof header, connected, busy);
     snprintf(title, sizeof title, "%s  %s", live_view_name(view), lines[0]);
@@ -1585,6 +1610,116 @@ static void draw_clear_dialog(void)
     printf("\x1b[0m");
 }
 
+/* A SETUP page bar: label left, value right, b->w cells wide. */
+static void draw_bar(const button_t *b, const char *value, bool active)
+{
+    int inner = b->w - 2;
+    char text[48];
+    int vlen = (int)strlen(value);
+    if (vlen > inner - 1) {
+        vlen = inner - 1;
+    }
+    snprintf(text, sizeof text, "%-*.*s%*.*s", inner - vlen, inner - vlen, b->label, vlen, vlen,
+             value);
+    printf("%s", active ? "\x1b[43;30m" : "\x1b[47;30m");
+    for (int r = 0; r < b->h; r++) {
+        printf("\x1b[%d;%dH %-*.*s ", b->row + r + 1, b->col + 1, inner, inner,
+               r == b->h / 2 ? text : "");
+    }
+    printf("\x1b[0m");
+}
+
+/* The value shown on a SETUP page bar. */
+static void bar_value(int action, const gb_config_t *cfg, char *out, size_t len)
+{
+    LightLock_Lock(&shared.lock);
+    const obd_diag_t *d = &shared.diag;
+    out[0] = '\0';
+    switch (action) {
+    case SPIKE_CONNECT:
+        snprintf(out, len, "%s", shared.connected ? "Connected" : "Not connected");
+        break;
+    case BTN_WIFI_SLOT:
+        if (shared.wifi_slot == 0) {
+            snprintf(out, len, "Any");
+        } else {
+            snprintf(out, len, "%d", shared.wifi_slot);
+        }
+        break;
+    case BTN_SETUP_SLOT:
+    case BTN_GUIDE:
+    case BTN_ABOUT:
+        snprintf(out, len, ">");
+        break;
+    case BTN_MAKE_SCREEN:
+        if (d->maker != NULL && !d->make_chosen) {
+            snprintf(out, len, "%s (VIN)", d->maker);
+        } else {
+            snprintf(out, len, "%s", cfg->car_make[0] != '\0' ? cfg->car_make : "Auto");
+        }
+        break;
+    case BTN_MODEL_EDIT:
+        if (d->model != NULL && !d->model_chosen) {
+            snprintf(out, len, "%s (VIN)", d->model);
+        } else {
+            snprintf(out, len, "%s", cfg->car_model[0] != '\0' ? cfg->car_model : "Auto");
+        }
+        break;
+    case BTN_NONE:   /* the year */
+        if (d->have_vin && d->model_year > 0) {
+            snprintf(out, len, "%d (VIN)", d->model_year);
+        } else if (cfg->car_year != 0) {
+            snprintf(out, len, "%u", (unsigned)cfg->car_year);
+        } else {
+            snprintf(out, len, "Auto");
+        }
+        break;
+    case BTN_DIAG_SCAN:
+        snprintf(out, len, "%s", shared.scanning ? "reading..." : d->have_vin ? d->vin
+                                                                              : "not read");
+        break;
+    case BTN_UNITS:
+        snprintf(out, len, "%s", cfg->metric ? "Metric" : "US");
+        break;
+    default:
+        break;
+    }
+    LightLock_Unlock(&shared.lock);
+}
+
+/* About GaugeBoy (top screen). */
+static void draw_about_top(int busy, bool connected)
+{
+    char header[TOP_COLS + 1];
+    spike_format_header(header, sizeof header, connected, busy);
+    consoleSelect(&top_console);
+    printf("\x1b[0m\x1b[2J");
+    print_row(0, TOP_COLS, header);
+    static const char *const about[] = {
+        "",
+        "GaugeBoy: OBD-II Deluxe",
+        "Version " GB_VERSION_TEXT,
+        "",
+        "Reads a car's OBD-II data (check engine light,",
+        "trouble codes, live data, fuel trims) through a",
+        "Wi-Fi ELM327 adapter.",
+        "",
+        "Unofficial homebrew. Not made, endorsed or",
+        "supported by Nintendo.",
+        "",
+        "MIT license. github.com/ly-man-do/gauge-boy",
+        "",
+        "Trouble code text: Wal33D/dtc-database (MIT).",
+        "VIN models: NHTSA vPIC (US government, public",
+        "domain). Fonts and the rest: CREDITS.md.",
+        "",
+        "Not for use by the driver while driving.",
+    };
+    for (int i = 0; i < (int)(sizeof about / sizeof about[0]); i++) {
+        print_row(2 + i, TOP_COLS, about[i]);
+    }
+}
+
 static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t now, int busy,
                         bool full)
 {
@@ -1633,14 +1768,14 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
     }
 
     if (ui->screen == SCREEN_TEST) {
-        snprintf(line, sizeof line, "Adapter test  %s:%u", cfg->adapter_host,
+        snprintf(line, sizeof line, "SETUP > TESTS  %s:%u", cfg->adapter_host,
                  (unsigned)cfg->adapter_port);
         print_row(0, BOTTOM_COLS, line);
         for (int i = 0; i < BUTTON_COUNT; i++) {
             draw_button(&buttons[i], flashing(buttons[i].action, now),
                         buttons[i].action >= 0 && buttons[i].action == busy);
         }
-        print_row(29, BOTTOM_COLS, "BACK: to SETUP  Up/Down L/R: scroll");
+        print_row(29, BOTTOM_COLS, "Results go to the log. L/R: scroll it");
         return;
     }
 
@@ -1680,44 +1815,49 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         return;
     }
     if (ui->screen == SCREEN_SETUP) {
-        print_row(1, BOTTOM_COLS, "");
-        for (int i = 0; i < SETUP_BUTTON_COUNT; i++) {
-            const button_t *b = &setup_buttons[i];
-            if (b->row == SETUP_BAR_ROW) {
-                draw_button(b, flashing(b->action, now), false);
+        clear_rows(1, 29);
+        print_row(1, BOTTOM_COLS, "SETUP");
+        draw_list(setup_buttons, SETUP_BUTTON_COUNT, now, busy, 0, false);
+        printf("\x1b[28;11H%-28.28s", "L/R: scroll the log above");
+        return;
+    }
+    if (ui->screen == SCREEN_SETUP_WIFI || ui->screen == SCREEN_SETUP_VEHICLE ||
+        ui->screen == SCREEN_SETUP_OTHER) {
+        const button_t *list = ui->screen == SCREEN_SETUP_WIFI ? wifi_buttons
+                             : ui->screen == SCREEN_SETUP_VEHICLE ? vehicle_buttons
+                             : other_buttons;
+        int count = ui->screen == SCREEN_SETUP_WIFI ? WIFI_BUTTON_COUNT
+                  : ui->screen == SCREEN_SETUP_VEHICLE ? VEHICLE_BUTTON_COUNT
+                  : OTHER_BUTTON_COUNT;
+        print_row(1, BOTTOM_COLS, ui->screen == SCREEN_SETUP_WIFI ? "SETUP > WI-FI"
+                                : ui->screen == SCREEN_SETUP_VEHICLE ? "SETUP > VEHICLE"
+                                : "SETUP > OTHER");
+        clear_rows(2, 29);
+        for (int i = 0; i < count; i++) {
+            const button_t *b = &list[i];
+            bool active = flashing(b->action, now) || (b->action >= 0 && b->action == busy);
+            if (b->w < 39 && b->action != BTN_NONE) {
+                draw_button(b, flashing(b->action, now), b->action >= 0 && b->action == busy);
                 continue;
             }
-            char text[64];
-            if (b->action == BTN_WIFI_SLOT) {
-                LightLock_Lock(&shared.lock);
-                int slot = shared.wifi_slot;
-                LightLock_Unlock(&shared.lock);
-                char value[12];
-                if (slot == 0) {
-                    snprintf(value, sizeof value, "Any");
-                } else {
-                    snprintf(value, sizeof value, "%d", slot);
-                }
-                snprintf(text, sizeof text, "%-29s%7s", b->label, value);
-            } else if (b->action == BTN_MAKE_SCREEN) {
-                char make[sizeof cfg->car_make];
-                LightLock_Lock(&shared.lock);
-                strcpy(make, cfg->car_make);
-                LightLock_Unlock(&shared.lock);
-                snprintf(text, sizeof text, "%-22s%14s", b->label, make[0] != '\0' ? make : "Auto");
-            } else {
-                snprintf(text, sizeof text, "%-36s", b->label);
-            }
-            bool active = flashing(b->action, now) || (b->action >= 0 && b->action == busy);
-            const char *colors = active ? "\x1b[43;30m" : "\x1b[47;30m";
-            printf("%s", colors);
-            for (int r = 0; r < b->h; r++) {
-                printf("\x1b[%d;1H %-37.37s ", b->row + r + 1, r == b->h / 2 ? text : "");
-            }
-            printf("\x1b[0m");
+            char value[40];
+            bar_value(b->action, cfg, value, sizeof value);
+            draw_bar(b, value, active);
         }
-        /* Between ADAPTER (cells 9-17) and WI-FI GUIDE (26-38), middle row. */
-        printf("\x1b[28;20H%-7.7s", "L/R log");
+        if (ui->screen == SCREEN_SETUP_VEHICLE) {
+            printf("\x1b[27;11H%-28.28s", "Values from the VIN win;");
+            printf("\x1b[28;11H%-28.28s", "yours are for cars with no");
+            printf("\x1b[29;11H%-28.28s", "VIN. Tap a row to change it.");
+        } else {
+            printf("\x1b[28;11H%-28.28s", "L/R: scroll the log above");
+        }
+        return;
+    }
+    if (ui->screen == SCREEN_ABOUT) {
+        clear_rows(1, 29);
+        print_row(1, BOTTOM_COLS, "SETUP > OTHER > About");
+        print_row(3, BOTTOM_COLS, "About GaugeBoy is on the top screen.");
+        draw_list(about_buttons, ABOUT_BUTTON_COUNT, now, busy, 0, false);
         return;
     }
     if (ui->screen == SCREEN_MAKE) {
@@ -1922,6 +2062,35 @@ static void open_log_file(void)
     }
 }
 
+/* SETUP > VEHICLE > Model: the system keyboard (UI thread; the keyboard
+ * applet takes both screens until it closes). Empty = auto. True if the
+ * model changed. */
+static bool edit_model(gb_config_t *cfg)
+{
+    char text[sizeof cfg->car_model];
+    LightLock_Lock(&shared.lock);
+    snprintf(text, sizeof text, "%s", cfg->car_model);
+    LightLock_Unlock(&shared.lock);
+
+    SwkbdState kb;
+    swkbdInit(&kb, SWKBD_TYPE_NORMAL, 2, (int)sizeof text - 1);
+    swkbdSetHintText(&kb, "Model, e.g. Tracker (empty: from the VIN)");
+    swkbdSetInitialText(&kb, text);
+    swkbdSetValidation(&kb, SWKBD_ANYTHING, 0, 0);
+    char out[sizeof cfg->car_model];
+    if (swkbdInputText(&kb, out, sizeof out) != SWKBD_BUTTON_CONFIRM) {
+        return false;
+    }
+    config_clean_text(out);
+    if (strcmp(out, text) == 0) {
+        return false;
+    }
+    LightLock_Lock(&shared.lock);
+    snprintf(cfg->car_model, sizeof cfg->car_model, "%s", out);
+    LightLock_Unlock(&shared.lock);
+    return true;
+}
+
 static void load_config(spike_t *spike, gb_config_t *cfg)
 {
     int warnings = 0;
@@ -1965,6 +2134,7 @@ void spike_ui_run(void)
     }
 
     load_config(&spike, &cfg);
+    spike.units = cfg.metric ? OBD_UNITS_METRIC : OBD_UNITS_US;
     app_cfg = &cfg;
     shared.wifi_slot = cfg.wifi_slot;
     net_set_wifi_slot(cfg.wifi_slot);
@@ -1994,7 +2164,7 @@ void spike_ui_run(void)
         } else {
             snprintf(using, sizeof using, "slot %u", (unsigned)cfg.wifi_slot);
         }
-        spike_logf(&spike, "Wi-Fi slots: 1 \"%s\", 2 \"%s\", 3 \"%s\"; using %s (tap SLOT)",
+        spike_logf(&spike, "Wi-Fi slots: 1 \"%s\", 2 \"%s\", 3 \"%s\"; using %s (SETUP > WI-FI)",
                    names[0], names[1], names[2], using);
         /* Read-only check of each saved slot's IP settings (gauge-boy-7v5.30). */
         for (int i = 0; i < CONFIG_WIFI_SLOTS; i++) {
@@ -2007,7 +2177,7 @@ void spike_ui_run(void)
     }
     spike_logf(&spike, "Adapter %s:%u. Join its Wi-Fi in System Settings,",
                cfg.adapter_host, (unsigned)cfg.adapter_port);
-    spike_logf(&spike, "then DIAG > SCAN (or SETUP > ADAPTER TEST).");
+    spike_logf(&spike, "then DIAG > SCAN (or SETUP > TESTS).");
     shared.diag.make = -1;
 
     s32 prio = 0x30;
@@ -2096,6 +2266,10 @@ void spike_ui_run(void)
                 }
                 break;
             case SCREEN_SETUP: list = setup_buttons; count = SETUP_BUTTON_COUNT; break;
+            case SCREEN_SETUP_WIFI:    list = wifi_buttons;    count = WIFI_BUTTON_COUNT;    break;
+            case SCREEN_SETUP_VEHICLE: list = vehicle_buttons; count = VEHICLE_BUTTON_COUNT; break;
+            case SCREEN_SETUP_OTHER:   list = other_buttons;   count = OTHER_BUTTON_COUNT;   break;
+            case SCREEN_ABOUT:         list = about_buttons;   count = ABOUT_BUTTON_COUNT;   break;
             case SCREEN_GUIDE: list = guide_buttons; count = GUIDE_BUTTON_COUNT; break;
             case SCREEN_MAKE:  count = make_screen_buttons(ui.page, &list);   break;
             case SCREEN_LIVE:
@@ -2250,9 +2424,51 @@ void spike_ui_run(void)
                 bottom_full |= ui.screen == SCREEN_MAKE;
                 break;
             }
+            case BTN_SETUP_TESTS:
+            case BTN_SETUP_WIFI:
+            case BTN_SETUP_VEHICLE:
+            case BTN_SETUP_OTHER:
+                ui.screen = action == BTN_SETUP_TESTS ? SCREEN_TEST
+                          : action == BTN_SETUP_WIFI  ? SCREEN_SETUP_WIFI
+                          : action == BTN_SETUP_VEHICLE ? SCREEN_SETUP_VEHICLE
+                          : SCREEN_SETUP_OTHER;
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_ABOUT:
+                ui.screen = SCREEN_ABOUT;
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_MODEL_EDIT:
+                if (edit_model(&cfg) && worker != NULL) {
+                    enqueue(BTN_SET_VEHICLE);
+                }
+                bottom_full = top_dirty = true;   /* the keyboard covered both screens */
+                break;
+            case BTN_YEAR_PREV:
+            case BTN_YEAR_NEXT: {
+                time_t t = time(NULL);
+                struct tm *tm = gmtime(&t);
+                int last = (tm != NULL ? tm->tm_year + 1900 : 2026) + 1;
+                LightLock_Lock(&shared.lock);
+                cfg.car_year = (uint16_t)config_year_step(cfg.car_year, action == BTN_YEAR_NEXT ? 1 : -1,
+                                                   last);
+                LightLock_Unlock(&shared.lock);
+                if (worker != NULL) {
+                    enqueue(BTN_SET_VEHICLE);
+                }
+                break;
+            }
+            case BTN_UNITS:
+                LightLock_Lock(&shared.lock);
+                cfg.metric = !cfg.metric;
+                LightLock_Unlock(&shared.lock);
+                if (worker != NULL) {
+                    enqueue(BTN_SET_UNITS);
+                }
+                break;
             case BTN_GUIDE:
             case BTN_HOME_WIFI:
-                ui.guide_back = action == BTN_GUIDE ? SCREEN_SETUP : SCREEN_HOME;
+                ui.guide_back = action == BTN_GUIDE ? SCREEN_SETUP_WIFI : SCREEN_HOME;
                 ui.screen = SCREEN_GUIDE;
                 ui.page = 0;
                 bottom_full = top_dirty = true;
@@ -2297,7 +2513,11 @@ void spike_ui_run(void)
                 }
                 ui.screen = ui.screen == SCREEN_GUIDE ? ui.guide_back
                           : ui.screen == SCREEN_TRIM ? ui.trim_back
-                          : (ui.screen == SCREEN_TEST || ui.screen == SCREEN_MAKE) ? SCREEN_SETUP
+                          : ui.screen == SCREEN_MAKE ? SCREEN_SETUP_VEHICLE
+                          : ui.screen == SCREEN_ABOUT ? SCREEN_SETUP_OTHER
+                          : (ui.screen == SCREEN_TEST || ui.screen == SCREEN_SETUP_WIFI ||
+                             ui.screen == SCREEN_SETUP_VEHICLE ||
+                             ui.screen == SCREEN_SETUP_OTHER) ? SCREEN_SETUP
                           : SCREEN_HOME;
                 bottom_full = top_dirty = true;
                 break;
@@ -2351,7 +2571,7 @@ void spike_ui_run(void)
                         if (worker != NULL) {
                             enqueue(BTN_SET_MAKE);
                         }
-                        ui.screen = SCREEN_SETUP;
+                        ui.screen = SCREEN_SETUP_VEHICLE;
                         ui.page = 0;
                         bottom_full = top_dirty = true;
                     }
@@ -2375,8 +2595,10 @@ void spike_ui_run(void)
             bottom_dirty = true;
         }
 
-        /* Log scrolling on SETUP / TEST. */
-        if (ui.screen == SCREEN_SETUP || ui.screen == SCREEN_TEST) {
+        /* Log scrolling on SETUP and its pages. */
+        if (ui.screen == SCREEN_SETUP || ui.screen == SCREEN_TEST ||
+            ui.screen == SCREEN_SETUP_WIFI || ui.screen == SCREEN_SETUP_VEHICLE ||
+            ui.screen == SCREEN_SETUP_OTHER) {
             int step = 0;
             if (down & KEY_DUP)   step = 1;
             if (down & KEY_DDOWN) step = -1;
@@ -2414,7 +2636,8 @@ void spike_ui_run(void)
                         now - live_drawn_at >= 100;
 
         bool shows_log = ui.screen == SCREEN_SETUP || ui.screen == SCREEN_TEST ||
-                         ui.screen == SCREEN_MAKE;
+                         ui.screen == SCREEN_MAKE || ui.screen == SCREEN_SETUP_WIFI ||
+                         ui.screen == SCREEN_SETUP_VEHICLE || ui.screen == SCREEN_SETUP_OTHER;
         if (top_dirty || busy != drawn_busy || connected != drawn_connected || live_due ||
             (shows_log ? (version != drawn_version || scroll != drawn_scroll)
                        : !live_screen && diag_version != drawn_diag_version)) {
@@ -2428,6 +2651,8 @@ void spike_ui_run(void)
                 live_drawn_at = now;
             } else if (ui.screen == SCREEN_GUIDE) {
                 draw_guide_top(ui.page, cfg.adapter_host, busy, connected);
+            } else if (ui.screen == SCREEN_ABOUT) {
+                draw_about_top(busy, connected);
             } else if (shows_log) {
                 draw_top(scroll, busy, connected);
             } else {

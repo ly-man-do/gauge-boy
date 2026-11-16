@@ -190,6 +190,10 @@ int main(int argc, char **argv)
     spike_t spike;
     spike_init(&spike, &tp, &elm, print_line, NULL);
     for (int a = 0; a < SPIKE_ACTION_COUNT; a++) {
+        if (a == SPIKE_LIVE_TEST) {
+            spike_live_test(&spike, 3000u);   /* shorter than the app's 10 s */
+            continue;
+        }
         spike_run(&spike, (spike_action_t)a);
     }
     check(tcp_transport_connected(&tp), "still connected after all spike actions", NULL);

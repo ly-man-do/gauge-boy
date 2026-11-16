@@ -53,6 +53,8 @@ typedef struct {
     const char *model;              /* e.g. "Cherokee"; NULL if not decoded */
     int make;                       /* for obd_dtc_text_for(), -1 if unknown */
     bool make_chosen;               /* maker / make came from SETUP, not the VIN */
+    bool model_chosen;              /* model came from SETUP (no VIN model) */
+    bool year_chosen;               /* model_year came from SETUP (no VIN) */
 } obd_diag_t;
 
 /* Progress callback: called before each step (for "Reading codes..."). */
@@ -78,6 +80,15 @@ const char *obd_diag_step_str(obd_diag_step_t step);
  * scan and again whenever the choice changes (it undoes an earlier choice).
  */
 void obd_diag_apply_make(obd_diag_t *d, const char *make_name);
+
+/*
+ * Applies the model and year typed in SETUP (model NULL / "" and year 0
+ * for none). The year is used only when no VIN was read; the model when
+ * the VIN gave none (model_make is then the maker, which may be NULL).
+ * model must stay valid while d uses it. Call after obd_diag_apply_make,
+ * after each scan and whenever the entries change (undoes earlier ones).
+ */
+void obd_diag_apply_vehicle(obd_diag_t *d, const char *model, int year);
 
 /* ---------- clearing codes (Mode 04) ---------- */
 

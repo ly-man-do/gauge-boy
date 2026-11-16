@@ -15,6 +15,11 @@
  *
  *   [vehicle]
  *   make = auto            ; or a make name (e.g. Geo) for cars with no VIN over OBD
+ *   model = auto           ; or a model name (e.g. Tracker), typed in SETUP
+ *   year = auto            ; or a model year (1980-2100) for cars with no VIN
+ *
+ *   [display]
+ *   units = us             ; or metric
  *
  *   [live]
  *   pids = 0C 0D 05 0F 11 04 0B 0E 10   ; the Custom view's PIDs, hex
@@ -41,12 +46,17 @@ typedef struct {
     uint16_t adapter_port;
     uint8_t wifi_slot;       /* 0 = any saved connection, 1-3 = that slot only */
     char car_make[24];       /* "" = auto (from the VIN), else a DTC make name */
+    char car_model[24];      /* "" = auto (from the VIN), else typed in SETUP */
+    uint16_t car_year;       /* 0 = auto (from the VIN), else a model year */
+    bool metric;             /* units: false = US, true = metric */
     uint8_t live_pids[CONFIG_LIVE_PIDS_MAX];  /* LIVE screen PIDs, in order */
     uint8_t live_pid_count;
     char live_view[12];      /* LIVE view key ("engine", "custom" ...) */
 } gb_config_t;
 
 #define CONFIG_WIFI_SLOTS 3
+#define CONFIG_YEAR_MIN 1980
+#define CONFIG_YEAR_MAX 2100
 
 void config_defaults(gb_config_t *cfg);
 
@@ -63,6 +73,16 @@ bool config_save(const gb_config_t *cfg, const char *path);
 
 /* Write a commented default config file. Returns false on error. */
 bool config_write_default(const char *path);
+
+/* Typed text for config.ini (e.g. the model): drops characters that
+ * aren't printable or that start a comment (; #), trims spaces; "auto"
+ * (any case) becomes "". In place. */
+void config_clean_text(char *s);
+
+/* The SETUP year stepper: 0 (auto), then 1996 ... last, then auto again;
+ * dir +1 or -1. A year below 1996 from config.ini steps normally. */
+#define CONFIG_YEAR_STEP_FIRST 1996
+int config_year_step(int year, int dir, int last);
 
 /* True for a dotted-quad IPv4 address such as "192.168.0.10". */
 bool config_valid_ipv4(const char *s);

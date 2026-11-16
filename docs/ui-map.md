@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-16, DIAG shows the model from the VIN (gauge-boy-1hi; M2 in progress)
+**As of:** 2026-11-16, SETUP split into TESTS, WI-FI, VEHICLE and OTHER (gauge-boy-cib; M2 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -54,33 +54,45 @@ GaugeBoy
         │   │   └── [CLEAR CODES]    clears (refused if moving), then rescans
         │   └── [SCAN]               reads CEL, readiness, codes, VIN (and model)  [X]
         │
-        ├── SETUP                    (top: session log)                     [L/R scroll log]
-        │   ├── [Wi-Fi slot   Any/1/2/3]          cycles the slot, saved
-        │   ├── [Check the slot's IP and DNS]     → Slot check screen
-        │   │   └── [OK]             → SETUP
-        │   ├── [Car make     Auto/<make>]        → Car make picker
-        │   │   ├── [Auto] [Acura] [Audi] …       12 per page, 3 pages; tap saves → SETUP
-        │   │   ├── [BACK]           → SETUP                                      [B]
-        │   │   └── [<] page n/3 [>]                                              [L/R]
-        │   ├── [Save this session's log]         → logs/gaugeboy-log-<date>.txt
-        │   ├── [BACK]               → HOME                                       [B]
-        │   ├── [ADAPTER]            → Adapter test
-        │   │   ├── [CONNECT] [ATZ] [ATSP0+0100]
-        │   │   ├── [ATDPN]   [ATRV] [0902 VIN]
-        │   │   ├── [SLOT ANY/n] [SPEED TEST] [BACK → SETUP]
-        │   │   └── [OLDER ^] [SAVE LOG] [NEWER v]   (scroll / save the log) [Up/Down, L/R]
-        │   └── [WI-FI GUIDE]        → Wi-Fi guide
+        ├── SETUP                    (top: session log on every SETUP page but About)  [L/R scroll log]
+        │   ├── [TESTS]              → SETUP > TESTS
+        │   │   ├── [ATZ] [ATSP0+0100] [ATDPN]
+        │   │   ├── [ATRV] [0902 VIN] [SPEED TEST]
+        │   │   ├── [LIVE TEST]      every supported PID once, then 10 s of the Engine view
+        │   │   ├── [SAVE LOG]       → logs/gaugeboy-log-<date>.txt
+        │   │   └── [BACK → SETUP] [OLDER ^] [NEWER v]   (scroll the log)  [B, Up/Down, L/R]
+        │   ├── [WI-FI]              → SETUP > WI-FI
+        │   │   ├── [Connect to the adapter      Connected/Not connected]
+        │   │   ├── [Wi-Fi slot                  Any/1/2/3]   cycles the slot, saved
+        │   │   ├── [Check the slot's IP and DNS >]  → Slot check screen
+        │   │   │   └── [OK]         → SETUP > WI-FI
+        │   │   ├── [Wi-Fi setup guide >]        → Wi-Fi guide
+        │   │   └── [BACK]           → SETUP                                      [B]
+        │   ├── [VEHICLE]            → SETUP > VEHICLE  (VIN values win, marked "(VIN)")
+        │   │   ├── [Make         Auto/<make>]   → Car make picker
+        │   │   │   ├── [Auto] [Acura] [Audi] …   12 per page, 3 pages; tap saves → VEHICLE
+        │   │   │   ├── [BACK]       → SETUP > VEHICLE                            [B]
+        │   │   │   └── [<] page n/3 [>]                                          [L/R]
+        │   │   ├── [Model        Auto/<model>]  → 3DS keyboard; empty = Auto; saved
+        │   │   ├── [Year  Auto/<year>] [<] [>]  steps Auto, 1996 ... next year; saved
+        │   │   ├── [VIN (tap to read)  <VIN>/not read]  runs a DIAG scan
+        │   │   └── [BACK]           → SETUP                                      [B]
+        │   ├── [OTHER]              → SETUP > OTHER
+        │   │   ├── [Units        US/Metric]     toggles, saved (LIVE and the log use it)
+        │   │   ├── [About GaugeBoy >]           → About (top: version, license, sources)
+        │   │   │   └── [BACK]       → SETUP > OTHER                              [B]
+        │   │   └── [BACK]           → SETUP                                      [B]
+        │   └── [BACK]               → HOME                                       [B]
         │
         └── Wi-Fi guide              (top: step text; 5 steps)
-            ├── [BACK]               → SETUP, or HOME if opened from the Adapter card  [B]
+            ├── [BACK]               → SETUP > WI-FI, or HOME if opened from the Adapter card  [B]
             ├── [<] step n/5 [>]                                                  [L/R]
             └── [CHECK]              slot, IP/DNS, Wi-Fi, adapter → results on bottom
 ```
 
 ## Notes
 
-- The adapter test screen and Car make are both under SETUP. SETUP's bottom row is BACK, ADAPTER and WI-FI GUIDE.
-- **SLOT** on the adapter test screen does the same thing as SETUP's **Wi-Fi slot** row.
+- SETUP is a menu of four pages (owner layout, gauge-boy-cib): TESTS (adapter and car tests, the log's buttons), WI-FI (connection), VEHICLE (make, model, year, VIN) and OTHER (units, About).
 - LIVE views and the PIDs in each: Engine (RPM, speed, coolant, throttle, load), Idle & vacuum (RPM, MAP (PID 0B or 87) + vacuum or boost, short-term trims, timing, baro), Air & fuel (MAF, MAP (0B or 87), intake air, throttle, short- and long-term trims, baro), Warm-up (coolant, intake air, oil, outside air, run time, RPM), Drive (RPM, speed, throttle, load, timing), All (every supported PID), Custom (your pick). Each view only shows what the car supports.
 - Only HOME is drawn with graphics (citro2d). Every other screen is still the text console until M3.
 - The code for these screens is in `source/spike_ui.c` (screens, buttons, actions) and `source/ui/` (HOME layout and drawing).

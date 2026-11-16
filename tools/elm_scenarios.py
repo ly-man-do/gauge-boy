@@ -200,6 +200,10 @@ def ascent():
         replies = [can(r) for r in reply] if isinstance(reply, list) else can(reply)
         s[car_key(s, req)] = {"Request": "^" + req + "[0-9]?$", "Descr": "Mode 01 " + req,
                               "Header": "7E0", "Response": replies}
+    # A made-up Ascent VIN (not the owner's), so the vPIC model decodes.
+    vin = "4S4WMAHD0P3000001"
+    s["VIN"] = {"Request": "^0902[0-9]?$", "Descr": "VIN", "Header": "7E0",
+                "Response": "<pos_answer>01 %s</pos_answer>" % " ".join("%02X" % ord(c) for c in vin)}
     # No MAP in PID 0B on this car.
     s[car_key(s, "010B")] = {"Request": "^010B[0-9]?$", "Descr": "Not supported",
                              "Header": "7E0", "Response": NO_DATA}

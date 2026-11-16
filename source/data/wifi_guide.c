@@ -91,7 +91,7 @@ int wifi_guide_lines(int step, const char *adapter_host, int cols,
         break;
     default:
         snprintf(text, sizeof text,
-                 "Open GaugeBoy, SETUP > Wi-Fi slot: tap until it shows the adapter's slot. "
+                 "Open GaugeBoy, SETUP > WI-FI > Wi-Fi slot: tap until it shows the adapter's slot. "
                  "Then come back here and tap CHECK: it reads the slot's settings and tries the "
                  "adapter. When all is OK, go to DIAG and tap SCAN with the engine running.");
         break;

@@ -63,6 +63,62 @@ static void test_config_car_make(void)
     remove(path);
 }
 
+static void test_config_vehicle_and_units(void)
+{
+    gb_config_t c;
+    config_defaults(&c);
+    CHECK_EQ_STR(c.car_model, "");
+    CHECK_EQ_INT(c.car_year, 0);
+    CHECK(!c.metric);
+    CHECK_EQ_INT(config_parse(&c, "[vehicle]\nmodel = Tracker\nyear = 1996\n"
+                                  "[display]\nunits = metric\n"), 0);
+    CHECK_EQ_STR(c.car_model, "Tracker");
+    CHECK_EQ_INT(c.car_year, 1996);
+    CHECK(c.metric);
+    CHECK_EQ_INT(config_parse(&c, "[vehicle]\nmodel = auto\nyear = Auto\n"
+                                  "[display]\nunits = us\n"), 0);
+    CHECK_EQ_STR(c.car_model, "");
+    CHECK_EQ_INT(c.car_year, 0);
+    CHECK(!c.metric);
+    /* bad values: warnings, old values kept */
+    CHECK_EQ_INT(config_parse(&c, "[vehicle]\nyear = 1979\nyear = 20x5\n"
+                                  "model = ABCDEFGHIJKLMNOPQRSTUVWXYZ\n"
+                                  "[display]\nunits = imperial\n"), 4);
+    CHECK_EQ_INT(c.car_year, 0);
+    CHECK(!c.metric);
+
+    char path[] = "gaugeboy_test_vehicle.tmp.ini";
+    strcpy(c.car_model, "Sidekick JX");
+    c.car_year = 1995;
+    c.metric = true;
+    CHECK(config_save(&c, path));
+    gb_config_t back;
+    int w = -1;
+    CHECK(config_load(&back, path, &w));
+    CHECK_EQ_INT(w, 0);
+    CHECK_EQ_STR(back.car_model, "Sidekick JX");
+    CHECK_EQ_INT(back.car_year, 1995);
+    CHECK(back.metric);
+    remove(path);
+
+    char t[24] = "  Sidekick; JX#  ";
+    config_clean_text(t);
+    CHECK_EQ_STR(t, "Sidekick JX");
+    strcpy(t, "AUTO");
+    config_clean_text(t);
+    CHECK_EQ_STR(t, "");
+    strcpy(t, "Tab\there");
+    config_clean_text(t);
+    CHECK_EQ_STR(t, "Tabhere");
+
+    CHECK_EQ_INT(config_year_step(0, 1, 2027), 1996);
+    CHECK_EQ_INT(config_year_step(0, -1, 2027), 2027);
+    CHECK_EQ_INT(config_year_step(2008, 1, 2027), 2009);
+    CHECK_EQ_INT(config_year_step(2027, 1, 2027), 0);
+    CHECK_EQ_INT(config_year_step(1996, -1, 2027), 0);
+    CHECK_EQ_INT(config_year_step(1990, 1, 2027), 1991);
+}
+
 /* Keys this version doesn't know (e.g. keep_awake from 0.1.0+446ee76) are
  * ignored without a warning. */
 static void test_config_live_view(void)
@@ -363,6 +419,7 @@ void suite_data(void)
     RUN_TEST(test_config_defaults);
     RUN_TEST(test_config_wifi_slot);
     RUN_TEST(test_config_car_make);
+    RUN_TEST(test_config_vehicle_and_units);
     RUN_TEST(test_config_live_pids);
     RUN_TEST(test_config_unknown_key_ignored);
     RUN_TEST(test_config_live_view);

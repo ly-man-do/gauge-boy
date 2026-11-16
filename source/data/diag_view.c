@@ -115,6 +115,32 @@ static void readiness_tab(view_t *v, const obd_diag_t *d)
     }
 }
 
+/* "2008 Honda Ridgeline", "1996 Geo Tracker (set in SETUP)", "Model year
+ * 2008", or "" when nothing is known. setup: the suffix for SETUP values. */
+static void car_text(const obd_diag_t *d, const char *setup, char *out, size_t len)
+{
+    const char *make = d->model != NULL && d->model_make != NULL ? d->model_make : d->maker;
+    out[0] = '\0';
+    if (make == NULL && d->model == NULL) {
+        if (d->model_year > 0) {
+            snprintf(out, len, "Model year %d", d->model_year);
+        }
+        return;
+    }
+    if (d->model_year > 0) {
+        snprintf(out, len, "%d", d->model_year);
+    }
+    if (make != NULL) {
+        snprintf(out + strlen(out), len - strlen(out), "%s%s", out[0] ? " " : "", make);
+    }
+    if (d->model != NULL) {
+        snprintf(out + strlen(out), len - strlen(out), "%s%s", out[0] ? " " : "", d->model);
+    }
+    if (d->make_chosen || d->model_chosen || d->year_chosen) {
+        snprintf(out + strlen(out), len - strlen(out), "%s", setup);
+    }
+}
+
 int diag_view_lines(const obd_diag_t *d, diag_tab_t tab, int cols,
                     char lines[][DIAG_VIEW_COLS + 1], int max)
 {
@@ -124,19 +150,12 @@ int diag_view_lines(const obd_diag_t *d, diag_tab_t tab, int cols,
         return v.count;
     }
 
+    char car[96];
+    car_text(d, " (set in SETUP)", car, sizeof car);
     if (d->have_vin) {
-        if (d->model != NULL) {
-            addf(&v, "%d %s %s  VIN %s", d->model_year, d->model_make, d->model, d->vin);
-        } else if (d->maker != NULL) {
-            addf(&v, "%d %s%s  VIN %s", d->model_year, d->maker,
-                 d->make_chosen ? " (set in SETUP)" : "", d->vin);
-        } else {
-            addf(&v, "Model year %d  VIN %s", d->model_year, d->vin);
-        }
-    } else if (d->make_chosen) {
-        addf(&v, "%s (set in SETUP)  VIN not read", d->maker);
+        addf(&v, "%s%sVIN %s", car, car[0] ? "  " : "", d->vin);
     } else {
-        addf(&v, "VIN not read");
+        addf(&v, "%s%sVIN not read", car, car[0] ? "  " : "");
     }
     addf(&v, "Protocol: %s", elm_protocol_name(d->link.protocol));
     if (d->have_readiness) {
@@ -324,19 +343,11 @@ int diag_facts(const obd_diag_t *d, int cols, char lines[][DIAG_VIEW_COLS + 1], 
         }
         return v.count;
     }
+    car_text(d, d->have_vin ? " (SETUP)" : " (set in SETUP)", buf, sizeof buf);
     if (d->have_vin) {
-        if (d->model != NULL) {
-            snprintf(buf, sizeof buf, "%d %s %s", d->model_year, d->model_make, d->model);
-        } else if (d->maker != NULL) {
-            snprintf(buf, sizeof buf, "%d %s%s", d->model_year, d->maker,
-                     d->make_chosen ? " (SETUP)" : "");
-        } else {
-            snprintf(buf, sizeof buf, "Model year %d", d->model_year);
-        }
         fact(&v, "Car", buf);
         fact(&v, "VIN", d->vin);
-    } else if (d->make_chosen) {
-        snprintf(buf, sizeof buf, "%s (set in SETUP)", d->maker);
+    } else if (buf[0] != '\0') {
         fact(&v, "Car", buf);
         fact(&v, "VIN", "not read");
     } else {

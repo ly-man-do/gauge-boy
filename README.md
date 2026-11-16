@@ -52,7 +52,7 @@ The iCar Pro supports all OBD-II protocols (SAE J1850 PWM and VPW, ISO 9141-2, I
 | Car | Protocol | Result |
 |---|---|---|
 | 2008 Honda Ridgeline | ISO 9141-2 | Works (0.1.0): check engine light, readiness, codes, VIN |
-| 1996 Geo Tracker | ISO 9141-2 | Works (0.1.0): check engine light, readiness, codes. No VIN over OBD (normal for 1996), so choose the make in **SETUP > Car make** |
+| 1996 Geo Tracker | ISO 9141-2 | Works (0.1.0): check engine light, readiness, codes. No VIN over OBD (normal for 1996), so choose the make (and model and year) in **SETUP > VEHICLE** |
 
 More adapters will be tested later; reports are welcome (see [Testing on a real New 3DS](docs/testing-on-3ds.md)).
 
@@ -75,7 +75,7 @@ The adapter's network has no internet, so the 3DS fails its connection test ther
    - **DNS:** Auto-Obtain **No**; Primary DNS `192.168.000.011` (the 3DS's own address), Secondary DNS `000.000.000.000`
 3. In GaugeBoy, open **SETUP**, tap **Wi-Fi slot** until it shows that slot, then **Check the slot's IP and DNS**. Then go to **DIAG** and tap **SCAN** with the engine running.
 
-GaugeBoy has the same steps built in: **SETUP > WI-FI GUIDE**, with a **CHECK** button that tells you which part isn't right yet. This assumes the adapter is at `192.168.0.10`, as most are. [Testing on a real New 3DS](docs/testing-on-3ds.md) has the details, the test steps and how to report results; **SETUP > Save this session's log** saves a log to `sdmc:/3ds/gaugeboy/logs/` to attach.
+GaugeBoy has the same steps built in: **SETUP > WI-FI > Wi-Fi setup guide**, with a **CHECK** button that tells you which part isn't right yet. This assumes the adapter is at `192.168.0.10`, as most are. [Testing on a real New 3DS](docs/testing-on-3ds.md) has the details, the test steps and how to report results; **SETUP > TESTS > SAVE LOG** saves a log to `sdmc:/3ds/gaugeboy/logs/` to attach.
 
 ## Building
 

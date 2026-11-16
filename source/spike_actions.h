@@ -13,6 +13,8 @@
 #include <time.h>
 
 #include "elm327/elm327.h"
+#include "obd/obd_live.h"
+#include "obd/obd_pid.h"
 #include "transport/net.h"
 #include "transport/tcp_transport.h"
 
@@ -24,6 +26,7 @@ typedef enum {
     SPIKE_VOLTAGE,       /* ATRV */
     SPIKE_VIN,           /* 0902 */
     SPIKE_SPEED,         /* time adapter and car requests (spike_speed_test) */
+    SPIKE_LIVE_TEST,     /* every supported PID once, then 10 s of polling */
     SPIKE_ACTION_COUNT
 } spike_action_t;
 
@@ -49,6 +52,7 @@ typedef struct {
                                    before each connect attempt */
     spike_net_info_fn net_info; /* optional, NULL after spike_init; logged
                                    as "Network: ..." before each connect */
+    obd_units_t units;          /* for decoded values in the log (US after init) */
 } spike_t;
 
 void spike_init(spike_t *s, tcp_transport_t *transport, elm_t *elm,
@@ -106,6 +110,17 @@ char *spike_format_header(char *out, size_t out_len, bool connected, int busy);
  * the adapter driver's clock.
  */
 void spike_speed_test(spike_t *s, int n);
+
+/* LIVE TEST: opens the link (reset, protocol, supported PIDs), asks every
+ * supported PID GaugeBoy decodes once and logs reply and value (decode
+ * check), then polls the Engine view's PIDs for poll_ms as LIVE does and
+ * logs spike_live_summary (speed check). */
+void spike_live_test(spike_t *s, unsigned poll_ms);
+#define SPIKE_LIVE_TEST_MS 10000u
+
+/* How fast a LIVE poll went: requests per second, response count and
+ * combined requests, each PID's refresh rate, left-out PIDs (logged). */
+void spike_live_summary(spike_t *s, const obd_live_t *lv);
 #define SPIKE_SPEED_COUNT 10
 
 #endif
