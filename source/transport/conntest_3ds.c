@@ -15,7 +15,12 @@
 #include "conntest.h"
 
 #define CT_STACK        (32 * 1024)
-#define CT_POLL_MS      100
+/* Never poll() with a timeout: on the 3DS every socket call in the process
+ * goes through one session with the network service, so a waiting poll()
+ * here held up the adapter connection's calls by up to that long (~400 ms
+ * a request, gauge-boy-3n6.4). Ask with a zero timeout and sleep instead. */
+#define CT_IDLE_MS      20     /* between checks for DNS / web requests */
+#define CT_HTTP_STEP_MS 5      /* between checks while reading a request */
 #define CT_RETRY_MS     20     /* while the network is down: catch the test's window */
 #define CT_HTTP_WAIT_MS 1000
 #define CT_HTTP_MAX     2048
@@ -112,7 +117,8 @@ static void handle_http(int tcp)
     u64 deadline = osGetTime() + CT_HTTP_WAIT_MS;
     while (got < CT_HTTP_MAX && !ct_http_request_complete(req, got) && osGetTime() < deadline) {
         struct pollfd p = { c, POLLIN, 0 };
-        if (poll(&p, 1, CT_POLL_MS) <= 0) {
+        if (poll(&p, 1, 0) <= 0) {
+            sleep_ms(CT_HTTP_STEP_MS);
             continue;
         }
         ssize_t n = recv(c, req + got, CT_HTTP_MAX - got, 0);
@@ -189,7 +195,11 @@ static void server_main(void *arg)
         }
 
         struct pollfd p[2] = { { udp, POLLIN, 0 }, { tcp, POLLIN, 0 } };
-        int pr = poll(p, 2, CT_POLL_MS);
+        int pr = poll(p, 2, 0);
+        if (pr == 0) {
+            sleep_ms(CT_IDLE_MS);
+            continue;
+        }
         bool broken = pr < 0 || ((p[0].revents | p[1].revents) & (POLLERR | POLLHUP | POLLNVAL));
         if (!broken && pr > 0) {
             if (p[0].revents & POLLIN) {

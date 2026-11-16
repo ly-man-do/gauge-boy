@@ -41,11 +41,6 @@ uint64_t tp_now_ms(void)
 #endif
 }
 
-static int clamp_timeout(unsigned ms)
-{
-    return ms > (unsigned)INT_MAX ? INT_MAX : (int)ms;
-}
-
 static bool parse_ipv4(const char *host, struct in_addr *out)
 {
     return host != NULL && inet_pton(AF_INET, host, out) == 1;
@@ -57,7 +52,6 @@ tp_status_t tcp_transport_init(tcp_transport_t *t, const char *host, uint16_t po
 
     memset(t, 0, sizeof *t);
     t->fd = -1;
-    t->udp_fd = -1;
     t->last_step = "";
     t->backoff_min_ms = TP_BACKOFF_MIN_MS;
     t->backoff_max_ms = TP_BACKOFF_MAX_MS;
@@ -81,37 +75,6 @@ void tcp_transport_close(tcp_transport_t *t)
     if (t->fd >= 0) {
         close(t->fd);
         t->fd = -1;
-    }
-    if (t->udp_fd >= 0) {
-        close(t->udp_fd);
-        t->udp_fd = -1;
-    }
-}
-
-/* One keep-awake packet to the adapter (best effort: errors are ignored). */
-static void keep_awake_ping(tcp_transport_t *t)
-{
-    if (t->udp_fd < 0) {
-        int fd = socket(AF_INET, SOCK_DGRAM, 0);
-        if (fd < 0) {
-            return;
-        }
-        int flags = fcntl(fd, F_GETFL, 0);
-        if (flags >= 0) {
-            fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-        }
-        t->udp_fd = fd;
-    }
-    struct sockaddr_in to;
-    memset(&to, 0, sizeof to);
-    to.sin_family = AF_INET;
-    to.sin_port = htons(TP_KEEP_AWAKE_PORT);
-    if (!parse_ipv4(t->host, &to.sin_addr)) {
-        return;
-    }
-    char byte = 0;
-    if (sendto(t->udp_fd, &byte, 1, 0, (struct sockaddr *)&to, sizeof to) == 1) {
-        t->awake_pings++;
     }
 }
 
@@ -147,6 +110,43 @@ static void tp_sleep_ms(unsigned ms)
     struct timespec ts = { (time_t)(ms / 1000u), (long)(ms % 1000u) * 1000000L };
     nanosleep(&ts, NULL);
 #endif
+}
+
+/*
+ * Waits until fd is ready for events or timeout_ms passes, without ever
+ * waiting inside the network service: poll() is only asked with a zero
+ * timeout, with sleeps between asks (1 ms at first, then 5, then 10). On
+ * the 3DS every socket call in the process goes through one session with
+ * the network service, which handles one request at a time, so a poll()
+ * with a timeout would hold up the other thread's socket calls (and theirs
+ * ours) for as long: that cost ~400 ms a request (gauge-boy-3n6.4).
+ * Returns poll()'s result (1 ready, 0 timed out, -1 error) and the events.
+ */
+static int wait_ready(int fd, short events, unsigned timeout_ms, short *revents)
+{
+    uint64_t start = tp_now_ms();
+    for (;;) {
+        struct pollfd p = { fd, events, 0 };
+        int pr = poll(&p, 1, 0);
+        if (pr < 0 && errno == EINTR) {
+            pr = 0;
+        }
+        if (pr != 0) {
+            if (revents != NULL) {
+                *revents = p.revents;
+            }
+            return pr;
+        }
+        uint64_t waited = tp_now_ms() - start;
+        if (waited >= timeout_ms) {
+            return 0;
+        }
+        unsigned step = waited < 10 ? 1u : waited < 200 ? 5u : 10u;
+        if (step > timeout_ms - waited) {
+            step = (unsigned)(timeout_ms - waited);
+        }
+        tp_sleep_ms(step);
+    }
 }
 
 int tp_3ds_soc_errno(int raw)
@@ -212,15 +212,13 @@ tp_status_t tcp_transport_connect(tcp_transport_t *t, unsigned timeout_ms)
             if (now >= deadline) {
                 return fail_socket(t, fd, TP_ERR_TIMEOUT, "connect()", ETIMEDOUT);
             }
-            /* Short slices: the 3DS's poll() may not wake when the connect
-             * completes, so connect() is asked again after each slice. */
+            /* Short slices: the 3DS's poll() may not report the connect as
+             * done, so connect() is asked again after each slice. */
             unsigned left = (unsigned)(deadline - now);
-            struct pollfd p = { fd, POLLOUT, 0 };
-            int pr = poll(&p, 1, clamp_timeout(left < TP_CONNECT_SLICE_MS ? left : TP_CONNECT_SLICE_MS));
+            short revents = 0;
+            int pr = wait_ready(fd, POLLOUT, left < TP_CONNECT_SLICE_MS ? left : TP_CONNECT_SLICE_MS,
+                                &revents);
             if (pr < 0) {
-                if (errno == EINTR) {
-                    continue;
-                }
                 return fail_socket(t, fd, TP_ERR_SOCKET, "poll()", errno);
             }
             if (pr == 0) {
@@ -236,7 +234,7 @@ tp_status_t tcp_transport_connect(tcp_transport_t *t, unsigned timeout_ms)
             int err = 0;
             socklen_t len = sizeof err;
             if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) != 0) {
-                if (p.revents & (POLLERR | POLLHUP)) {
+                if (revents & (POLLERR | POLLHUP)) {
                     return fail_socket(t, fd, TP_ERR_CONNECT, "connect()", ECONNREFUSED);
                 }
                 break; /* writable and no error to read: connected */
@@ -317,8 +315,7 @@ int tcp_transport_write(tcp_transport_t *t, const char *data, size_t len)
                 drop(t, "send()", ETIMEDOUT);
                 return -1;
             }
-            struct pollfd p = { t->fd, POLLOUT, 0 };
-            (void)poll(&p, 1, clamp_timeout((unsigned)(deadline - now)));
+            (void)wait_ready(t->fd, POLLOUT, (unsigned)(deadline - now), NULL);
             continue;
         }
         drop(t, "send()", n < 0 ? errno : EPIPE);
@@ -339,31 +336,11 @@ int tcp_transport_read(tcp_transport_t *t, char *buf, size_t len, unsigned timeo
         len = (size_t)INT_MAX;
     }
 
-    struct pollfd p = { t->fd, POLLIN, 0 };
-    int pr;
-    if (t->keep_awake_ms == 0 || timeout_ms == 0) {
-        pr = poll(&p, 1, clamp_timeout(timeout_ms));
-    } else {
-        /* Wait in slices, pinging the adapter before each one. */
-        uint64_t deadline = tp_now_ms() + timeout_ms;
-        for (;;) {
-            keep_awake_ping(t);
-            uint64_t now = tp_now_ms();
-            unsigned left = now >= deadline ? 0u : (unsigned)(deadline - now);
-            unsigned slice = left < t->keep_awake_ms ? left : t->keep_awake_ms;
-            pr = poll(&p, 1, clamp_timeout(slice));
-            if (pr != 0 || left <= t->keep_awake_ms) {
-                break;
-            }
-        }
-    }
+    int pr = wait_ready(t->fd, POLLIN, timeout_ms, NULL);
     if (pr == 0) {
         return 0;
     }
     if (pr < 0) {
-        if (errno == EINTR) {
-            return 0;
-        }
         drop(t, "poll()", errno);
         return -1;
     }

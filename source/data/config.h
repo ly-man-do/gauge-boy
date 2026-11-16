@@ -12,7 +12,6 @@
  *   host = 192.168.0.10
  *   port = 35000
  *   wifi_slot = any        ; or 1, 2, 3: the System Settings connection slot
- *   keep_awake = off       ; on: ping the adapter while waiting for replies
  *
  *   [vehicle]
  *   make = auto            ; or a make name (e.g. Geo) for cars with no VIN over OBD
@@ -40,7 +39,6 @@ typedef struct {
     char adapter_host[16];   /* dotted IPv4 */
     uint16_t adapter_port;
     uint8_t wifi_slot;       /* 0 = any saved connection, 1-3 = that slot only */
-    bool keep_awake;         /* keep-awake pings while waiting (experiment, 3n6.4) */
     char car_make[24];       /* "" = auto (from the VIN), else a DTC make name */
     uint8_t live_pids[CONFIG_LIVE_PIDS_MAX];  /* LIVE screen PIDs, in order */
     uint8_t live_pid_count;

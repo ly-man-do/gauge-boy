@@ -5,8 +5,10 @@
  * TCP transport to the Wi-Fi adapter (or, later, an ESP32 bridge).
  *
  * Plain BSD sockets: libctru's soc service on the 3DS, POSIX sockets on the
- * host for tests. Non-blocking socket with poll() timeouts, so no call waits
- * longer than its timeout. On the 3DS, call net_init() (net.h) first.
+ * host for tests. Non-blocking socket; waits ask poll() with a zero timeout
+ * and sleep between asks, because on the 3DS a poll() with a timeout holds
+ * the process's only session with the network service and stalls every
+ * other thread's socket calls. On the 3DS, call net_init() (net.h) first.
  *
  * The ELM327 driver talks to it through tcp_transport_io(). Use from the
  * polling thread only; never from the render loop.
@@ -31,8 +33,6 @@
 #define TP_BACKOFF_MIN_MS      500u
 #define TP_BACKOFF_MAX_MS      8000u
 #define TP_HOST_MAX            16   /* dotted IPv4 "255.255.255.255" + NUL */
-#define TP_KEEP_AWAKE_MS       20u  /* ping interval while waiting, when on */
-#define TP_KEEP_AWAKE_PORT     9    /* UDP discard port: nothing needs to answer */
 
 typedef enum {
     TP_OK = 0,
@@ -55,13 +55,6 @@ typedef struct {
     unsigned backoff_ms;        /* delay after the last failed attempt, 0 after success */
     uint64_t next_attempt_ms;   /* ensure_connected waits until this time */
     unsigned connects;          /* successful connects so far */
-
-    /* Keep-awake experiment (gauge-boy-3n6.4): while a read waits, send a
-     * 1-byte UDP packet to the adapter every keep_awake_ms, in case the
-     * 3DS's Wi-Fi power save is what holds replies back (~400 ms). 0 = off. */
-    unsigned keep_awake_ms;
-    int udp_fd;                 /* -1 until the first ping */
-    uint32_t awake_pings;       /* pings sent */
 } tcp_transport_t;
 
 /* Set address and defaults; does not connect. */
