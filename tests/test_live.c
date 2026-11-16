@@ -5,11 +5,14 @@
 #include "fake_io.h"
 #include "obd/obd_live.h"
 #include "obd/obd_pid.h"
+#include "data/live_view.h"
 
 static fake_io_t f;
 static elm_t elm;
 static obd_link_t link;
 static obd_live_t lv;
+
+#define CONFIG_MAX_TEST 20
 
 #define CHECK_NEAR(actual, expected)                                           \
     CHECK((actual) - (expected) < 0.01f && (expected) - (actual) < 0.01f)
@@ -268,8 +271,83 @@ static void test_live_trace(void)
     CHECK_EQ_INT(traced, 2);
 }
 
+static char lines[LIVE_VIEW_MAX][LIVE_VIEW_COLS + 1];
+
+static bool has_line(int n, const char *text)
+{
+    for (int i = 0; i < n; i++) {
+        if (strcmp(lines[i], text) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void test_live_view_lines(void)
+{
+    int n = live_view_lines(NULL, 0, 0.0f, OBD_UNITS_US, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
+    CHECK_EQ_STR(lines[0], "Not polling");
+    CHECK(has_line(n, "No readings yet."));
+
+    static const uint8_t car[] = { 0x05, 0x0B, 0x0C, 0x0D, 0 };
+    setup(car);
+    static const uint8_t want[] = { 0x0C, 0x0B, 0x0D, 0x05 };
+    obd_live_init(&lv, &link, want, 4);
+    fake_io_reply(&f, "ATRV", "13.2V\r\r>", 10, 0);
+    fake_io_reply(&f, "010C", "41 0C 0A F0\r\r>", 500, 0);
+    fake_io_reply(&f, "010B", "41 0B 1E\r\r>", 500, 0);
+    fake_io_reply(&f, "010D", "NO DATA\r\r>", 500, 0);
+    fake_io_reply(&f, "0105", "41 05 7B\r\r>", 500, 0);
+    fake_io_reply(&f, "010C", "41 0C 0B 18\r\r>", 500, 0);
+    for (int i = 0; i < 6; i++) {
+        obd_live_step(&lv, &elm, NULL, NULL);
+    }
+    lv.pid[2].dropped = true;   /* as after 3 NO DATA */
+    n = live_view_lines(&lv, 3, 1.9f, OBD_UNITS_US, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
+    CHECK_EQ_STR(lines[0], "ISO 9141-2 (5 baud init), 1.9 requests/s");
+    CHECK(has_line(n, "RPM         710 rpm          0.5 Hz"));
+    CHECK(has_line(n, "MAP         8.9 inHg"));
+    CHECK(has_line(n, "Speed       -                no data"));
+    CHECK(has_line(n, "Coolant     181 F"));
+    CHECK(has_line(n, "Battery     13.2 V           adapter"));
+    CHECK(has_line(n, "Vacuum      -                needs engine-off MAP"));
+    for (int i = 0; i < n; i++) {
+        CHECK((int)strlen(lines[i]) <= LIVE_VIEW_COLS);
+    }
+
+    obd_live_init(&lv, &link, want, 0);
+    n = live_view_lines(&lv, 3, 0.0f, OBD_UNITS_US, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
+    CHECK(has_line(n, "No PIDs chosen: tap some below."));
+}
+
+static void test_live_choices_and_toggle(void)
+{
+    static const uint8_t car[] = { 0x0D, 0x0C, 0x05, 0x01, 0x03, 0 };
+    setup(car);
+    uint8_t out[CONFIG_MAX_TEST];
+    int n = live_choices(&link, out, CONFIG_MAX_TEST);
+    CHECK_EQ_INT(n, 3);                          /* 01 and 03 aren't live data */
+    CHECK_EQ_INT(out[0], 0x05);                  /* table order */
+    CHECK_EQ_INT(out[2], 0x0D);
+    CHECK_EQ_INT(live_choices(&link, out, 2), 2);
+
+    uint8_t pids[3] = { 0x0C, 0x0D };
+    int count = 2;
+    CHECK(live_pid_chosen(pids, count, 0x0D) && !live_pid_chosen(pids, count, 0x05));
+    count = live_toggle(pids, count, 3, 0x05);   /* add at the end */
+    CHECK_EQ_INT(count, 3);
+    CHECK_EQ_INT(pids[2], 0x05);
+    CHECK_EQ_INT(live_toggle(pids, count, 3, 0x11), 3);   /* full */
+    count = live_toggle(pids, count, 3, 0x0C);   /* remove, keep order */
+    CHECK_EQ_INT(count, 2);
+    CHECK_EQ_INT(pids[0], 0x0D);
+    CHECK_EQ_INT(pids[1], 0x05);
+}
+
 void suite_live(void)
 {
+    RUN_TEST(test_live_view_lines);
+    RUN_TEST(test_live_choices_and_toggle);
     RUN_TEST(test_live_init_keeps_supported_known_pids);
     RUN_TEST(test_live_round_robin_and_volts);
     RUN_TEST(test_live_volts_again_after_5_s);

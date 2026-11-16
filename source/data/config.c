@@ -14,6 +14,50 @@ void config_defaults(gb_config_t *cfg)
     cfg->adapter_port = CONFIG_DEFAULT_PORT;
     cfg->wifi_slot = 0;
     cfg->car_make[0] = '\0';
+    static const uint8_t live[] = CONFIG_LIVE_DEFAULT_PIDS;
+    memcpy(cfg->live_pids, live, sizeof live);
+    cfg->live_pid_count = (uint8_t)sizeof live;
+}
+
+/* "0C 0D 05" or "0c,0d,5": hex PIDs 01-FF, repeats dropped. False (and
+ * cfg unchanged) on a bad token. */
+static bool parse_pids(gb_config_t *cfg, const char *value)
+{
+    uint8_t pids[CONFIG_LIVE_PIDS_MAX];
+    int count = 0;
+    const char *p = value;
+    while (*p != '\0') {
+        while (*p == ' ' || *p == ',' || *p == '\t') {
+            p++;
+        }
+        if (*p == '\0') {
+            break;
+        }
+        int v = 0, digits = 0;
+        while (isxdigit((unsigned char)*p)) {
+            int c = tolower((unsigned char)*p);
+            v = v * 16 + (c <= '9' ? c - '0' : c - 'a' + 10);
+            digits++;
+            p++;
+        }
+        if (digits == 0 || digits > 2 || v == 0 ||
+            (*p != '\0' && *p != ' ' && *p != ',' && *p != '\t')) {
+            return false;
+        }
+        bool seen = false;
+        for (int i = 0; i < count; i++) {
+            seen = seen || pids[i] == v;
+        }
+        if (!seen) {
+            if (count == CONFIG_LIVE_PIDS_MAX) {
+                return false;
+            }
+            pids[count++] = (uint8_t)v;
+        }
+    }
+    memcpy(cfg->live_pids, pids, (size_t)count);
+    cfg->live_pid_count = (uint8_t)count;
+    return true;
 }
 
 bool config_valid_ipv4(const char *s)
@@ -133,6 +177,12 @@ int config_parse(gb_config_t *cfg, const char *text)
         char *value = trim(eq + 1);
         lower(key);
 
+        if (strcmp(section, "live") == 0) {
+            if (strcmp(key, "pids") == 0 && !parse_pids(cfg, value)) {
+                warnings++;
+            }
+            continue;
+        }
         if (strcmp(section, "vehicle") == 0) {
             if (strcmp(key, "make") == 0) {
                 size_t n = strlen(value);
@@ -214,6 +264,11 @@ bool config_save(const gb_config_t *cfg, const char *path)
     if (f == NULL) {
         return false;
     }
+    char pids[3 * CONFIG_LIVE_PIDS_MAX + 1] = "";
+    for (int i = 0; i < cfg->live_pid_count && i < CONFIG_LIVE_PIDS_MAX; i++) {
+        snprintf(pids + strlen(pids), sizeof pids - strlen(pids), "%s%02X", i ? " " : "",
+                 (unsigned)cfg->live_pids[i]);
+    }
     char slot[8];
     if (cfg->wifi_slot >= 1 && cfg->wifi_slot <= CONFIG_WIFI_SLOTS) {
         snprintf(slot, sizeof slot, "%u", (unsigned)cfg->wifi_slot);
@@ -238,9 +293,15 @@ bool config_save(const gb_config_t *cfg, const char *path)
         "; that don't report a VIN, so DIAG shows that make's own code meanings.\n"
         "\n"
         "[vehicle]\n"
-        "make = %s\n",
+        "make = %s\n"
+        "\n"
+        "; pids: the Mode 01 PIDs the LIVE screen polls, in hex (chosen on the LIVE\n"
+        "; screen). Fewer PIDs refresh faster.\n"
+        "\n"
+        "[live]\n"
+        "pids = %s\n",
         cfg->adapter_host, (unsigned)cfg->adapter_port, slot,
-        cfg->car_make[0] != '\0' ? cfg->car_make : "auto");
+        cfg->car_make[0] != '\0' ? cfg->car_make : "auto", pids);
     bool ok = rc > 0;
     if (fclose(f) != 0) {
         ok = false;

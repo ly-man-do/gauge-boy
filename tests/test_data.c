@@ -63,6 +63,34 @@ static void test_config_car_make(void)
     remove(path);
 }
 
+static void test_config_live_pids(void)
+{
+    gb_config_t c;
+    config_defaults(&c);
+    CHECK_EQ_INT(c.live_pid_count, 9);
+    CHECK_EQ_INT(c.live_pids[0], 0x0C);
+    CHECK_EQ_INT(config_parse(&c, "[live]\npids = 0c, 0D 05,06 0c\n"), 0);
+    CHECK_EQ_INT(c.live_pid_count, 4);                 /* the repeated 0C dropped */
+    CHECK_EQ_INT(c.live_pids[0], 0x0C);
+    CHECK_EQ_INT(c.live_pids[3], 0x06);
+    CHECK_EQ_INT(config_parse(&c, "[live]\npids =\n"), 0);   /* none: LIVE polls nothing */
+    CHECK_EQ_INT(c.live_pid_count, 0);
+    /* Bad tokens keep the old list. */
+    config_parse(&c, "[live]\npids = 0C 0D\n");
+    CHECK_EQ_INT(config_parse(&c, "[live]\npids = 0C xyz\npids = 100\npids = 00\npids = 0C;0D\n"), 4);
+    CHECK_EQ_INT(c.live_pid_count, 2);
+
+    char path[] = "gaugeboy_test_live.tmp.ini";
+    CHECK(config_save(&c, path));
+    gb_config_t back;
+    int w = -1;
+    CHECK(config_load(&back, path, &w));
+    CHECK_EQ_INT(w, 0);
+    CHECK_EQ_INT(back.live_pid_count, 2);
+    CHECK_EQ_INT(back.live_pids[1], 0x0D);
+    remove(path);
+}
+
 static void test_config_parse_adapter_section(void)
 {
     gb_config_t c;
@@ -306,6 +334,7 @@ void suite_data(void)
     RUN_TEST(test_config_defaults);
     RUN_TEST(test_config_wifi_slot);
     RUN_TEST(test_config_car_make);
+    RUN_TEST(test_config_live_pids);
     RUN_TEST(test_config_parse_adapter_section);
     RUN_TEST(test_config_ignores_other_sections_and_keys);
     RUN_TEST(test_config_bad_values_keep_defaults);

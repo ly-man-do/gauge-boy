@@ -20,6 +20,7 @@
 #include "data/code_history.h"
 #include "data/config.h"
 #include "data/diag_view.h"
+#include "data/live_view.h"
 #include "data/wifi_guide.h"
 #include "data/textlog.h"
 #include "spike_actions.h"
@@ -29,6 +30,7 @@
 #include "ui/home_draw.h"
 #include "obd/dtc.h"
 #include "obd/obd_diag.h"
+#include "obd/obd_live.h"
 #include "version.h"
 
 #define LOG_PATH      CONFIG_DIR "/spike-log.txt"
@@ -53,6 +55,9 @@
 #define BTN_CLEAR_CODES  105   /* worker: clear codes (only from the dialog), then rescan */
 #define BTN_GUIDE_CHECK  106   /* worker: Wi-Fi guide check */
 #define BTN_SET_MAKE     107   /* worker: save the car make, apply it to DIAG */
+#define BTN_LIVE_SAVE    108   /* worker: save the LIVE PIDs to config.ini */
+#define BTN_LIVE_TOGGLE  (-33) /* UI: LIVE START / STOP */
+#define BTN_LIVE_PICK    (-80) /* UI: LIVE PID toggle (-80 - slot on the page) */
 #define BTN_GUIDE        (-8)  /* UI: SETUP -> Wi-Fi guide */
 #define BTN_CLEAR_ASK    (-5)  /* UI: open the clear-codes dialog */
 #define BTN_CLEAR_CANCEL (-6)
@@ -153,8 +158,24 @@ static const button_t setup_buttons[] = {
 #define SETUP_BUTTON_COUNT ((int)(sizeof setup_buttons / sizeof setup_buttons[0]))
 
 typedef enum {
-    SCREEN_HOME, SCREEN_DIAG, SCREEN_SETUP, SCREEN_TEST, SCREEN_GUIDE, SCREEN_MAKE
+    SCREEN_HOME, SCREEN_DIAG, SCREEN_SETUP, SCREEN_TEST, SCREEN_GUIDE, SCREEN_MAKE, SCREEN_LIVE
 } screen_t;
+
+/* LIVE: PID toggles (2 columns x 3 rows a page), then BACK < page > START. */
+#define LIVE_PAGE_SLOTS 6
+static const button_t live_buttons[] = {
+    { "BACK", BTN_BACK,        0,  25, 8, 5 },
+    { "<",    BTN_PAGE_PREV,   9,  25, 5, 5 },
+    { ">",    BTN_PAGE_NEXT,   17, 25, 5, 5 },
+    { NULL,   BTN_LIVE_TOGGLE, 26, 25, 13, 5 },   /* START / STOP */
+};
+#define LIVE_BUTTON_COUNT ((int)(sizeof live_buttons / sizeof live_buttons[0]))
+
+static button_t live_slot(int slot)
+{
+    button_t b = { NULL, BTN_LIVE_PICK - slot, (slot % 2) * 20, 2 + (slot / 2) * 6, 19, 5 };
+    return b;
+}
 
 /* Car make picker: "Auto" then every make with its own code meanings,
  * 3 x 4 buttons (12-13 x 5 cells) a page, then BACK < page >. */
@@ -267,6 +288,20 @@ static struct {
     char diag_msg[40];         /* last DIAG result line (clear codes), or "" */
     char guide_check[GUIDE_CHECK_LINES][40]; /* last Wi-Fi guide CHECK result */
     bool guide_checking;
+
+    /* LIVE screen. The UI sets live_on and live_gen (PIDs changed); the
+     * worker polls and publishes. */
+    bool live_on;
+    unsigned live_gen;
+    obd_live_t live;           /* latest values (copy of the worker's poller) */
+    bool live_have;            /* live holds a poller that was started */
+    int live_protocol;
+    float live_rate;
+    unsigned live_version;     /* bumped on every published step */
+    obd_link_t live_link;      /* supported PIDs, for the toggles */
+    bool live_link_ok;
+    char live_msg[48];         /* status line, "" while polling fine */
+    unsigned live_ui_version;  /* bumped when the bottom screen must change */
 
     volatile bool quit;
 } shared;
@@ -486,12 +521,17 @@ static void scan_progress(void *ctx, obd_diag_step_t step)
     LightLock_Unlock(&shared.lock);
 }
 
+/* Worker: the adapter is reset (ATZ ...) once per connection, and the
+ * protocol search result is reused while the connection lasts. */
+static unsigned reset_at_connect = ~0u;
+static obd_link_t last_link;
+static unsigned last_link_connects = ~0u;
+
 /* SCAN (worker): connect if needed, then the full DIAG scan. The adapter
  * is reset (ATZ ...) on the first scan after each new connection. */
 static void diag_scan(spike_t *s)
 {
     static obd_diag_t d;
-    static unsigned reset_at_connect = ~0u;
 
     LightLock_Lock(&shared.lock);
     shared.scanning = true;
@@ -514,6 +554,10 @@ static void diag_scan(spike_t *s)
         obd_diag_apply_make(&d, car_make);
         if (d.result != OBD_LINK_LOST) {
             reset_at_connect = s->transport->connects;
+        }
+        if (d.result == OBD_LINK_OK) {
+            last_link = d.link;
+            last_link_connects = s->transport->connects;
         }
         static char rows[4096];
         char when[24];
@@ -649,12 +693,159 @@ static void guide_check(spike_t *s)
     LightLock_Unlock(&shared.lock);
 }
 
+/* LIVE (worker): publish the poller and a status line. */
+static void live_publish(const obd_live_t *lv, bool have, int protocol, uint64_t now,
+                         const char *msg, bool ui_changed)
+{
+    LightLock_Lock(&shared.lock);
+    if (lv != NULL) {
+        shared.live = *lv;
+        shared.live_rate = obd_live_rate(lv, now);
+    }
+    shared.live_have = have;
+    shared.live_protocol = protocol;
+    if (msg != NULL && strcmp(msg, shared.live_msg) != 0) {
+        snprintf(shared.live_msg, sizeof shared.live_msg, "%s", msg);
+        ui_changed = true;
+    }
+    if (ui_changed) {
+        shared.live_ui_version++;
+    }
+    shared.live_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
+static void live_stop(const char *msg)
+{
+    LightLock_Lock(&shared.lock);
+    shared.live_on = false;
+    LightLock_Unlock(&shared.lock);
+    live_publish(NULL, false, 0, 0, msg, true);
+}
+
+typedef enum { LIVE_OPEN_OK, LIVE_OPEN_RETRY, LIVE_OPEN_STOP } live_open_t;
+
+/* Connect and find the protocol (or reuse this connection's DIAG scan). */
+static live_open_t live_open(spike_t *s, obd_link_t *link)
+{
+    if (!spike_connect_if_needed(s)) {
+        live_publish(NULL, false, 0, 0, "Can't reach the adapter; retrying", false);
+        return LIVE_OPEN_RETRY;
+    }
+    unsigned connects = s->transport->connects;
+    if (last_link.protocol != 0 && last_link_connects == connects) {
+        *link = last_link;
+        return LIVE_OPEN_OK;
+    }
+    live_publish(NULL, false, 0, 0, "Looking for the car...", false);
+    bool reset = connects != reset_at_connect;
+    obd_link_result_t r = obd_link_open_traced(s->elm, reset, link, spike_trace_command, s);
+    if (r == OBD_LINK_LOST) {
+        tcp_transport_close(s->transport);
+        return LIVE_OPEN_RETRY;
+    }
+    reset_at_connect = connects;
+    if (r != OBD_LINK_OK) {
+        spike_logf(s, "! LIVE: %s", obd_link_result_str(r));
+        return LIVE_OPEN_STOP;
+    }
+    last_link = *link;
+    last_link_connects = connects;
+    return LIVE_OPEN_OK;
+}
+
+/* LIVE (worker): one poll while the LIVE screen polls. */
+static void live_poll(spike_t *s)
+{
+    static obd_live_t lv;
+    static obd_link_t link;
+    static bool ready;
+    static unsigned gen_seen;
+
+    LightLock_Lock(&shared.lock);
+    bool on = shared.live_on;
+    unsigned gen = shared.live_gen;
+    uint8_t pids[CONFIG_LIVE_PIDS_MAX];
+    int n = app_cfg->live_pid_count;
+    memcpy(pids, app_cfg->live_pids, sizeof pids);
+    LightLock_Unlock(&shared.lock);
+
+    if (!on) {
+        ready = false;   /* start again from the link next time */
+        return;
+    }
+    if (!ready) {
+        live_open_t o = live_open(s, &link);
+        if (o == LIVE_OPEN_RETRY) {
+            svcSleepThread(1000LL * 1000 * 1000);
+            return;
+        }
+        if (o == LIVE_OPEN_STOP) {
+            live_stop("Car not answering (is the engine running?)");
+            return;
+        }
+        LightLock_Lock(&shared.lock);
+        shared.live_link = link;
+        shared.live_link_ok = true;
+        LightLock_Unlock(&shared.lock);
+    }
+    if (!ready || gen != gen_seen) {
+        int count = obd_live_init(&lv, &link, pids, n);
+        char list[3 * OBD_LIVE_MAX + 1] = "";
+        for (int i = 0; i < count; i++) {
+            snprintf(list + strlen(list), sizeof list - strlen(list), " %02X",
+                     (unsigned)lv.pid[i].pid);
+        }
+        spike_logf(s, "LIVE: polling %d PID%s:%s", count, count == 1 ? "" : "s", list);
+        ready = true;
+        gen_seen = gen;
+        live_publish(&lv, true, link.protocol, tp_now_ms(), "", true);
+    }
+
+    obd_live_step_t st = obd_live_step(&lv, s->elm, NULL, NULL);
+    if (st == OBD_LIVE_LOST) {
+        spike_logf(s, "! LIVE: the adapter stopped answering; reconnecting");
+        tcp_transport_close(s->transport);
+        ready = false;
+        live_publish(&lv, true, link.protocol, tp_now_ms(), "Connection lost; reconnecting", false);
+        return;
+    }
+    if (st == OBD_LIVE_IDLE) {
+        if (lv.count == 0) {
+            live_publish(&lv, true, link.protocol, tp_now_ms(), "No PIDs chosen", false);
+            svcSleepThread(200LL * 1000 * 1000);
+            return;
+        }
+        spike_logf(s, "! LIVE: every PID stopped answering");
+        live_publish(&lv, true, link.protocol, tp_now_ms(), "", false);
+        live_stop("The car stopped answering");
+        return;
+    }
+    live_publish(&lv, true, link.protocol, tp_now_ms(), "", false);
+}
+
+/* LIVE PIDs to config.ini (worker). */
+static void live_save(spike_t *s)
+{
+    LightLock_Lock(&shared.lock);
+    gb_config_t copy = *app_cfg;
+    LightLock_Unlock(&shared.lock);
+    bool saved = config_save(&copy, CONFIG_PATH);
+    spike_logf(s, "LIVE: %d PIDs chosen%s", copy.live_pid_count,
+               saved ? ", saved" : " (! not saved to config.ini)");
+}
+
 static void worker_main(void *arg)
 {
     spike_t *spike = arg;
 
     while (!shared.quit) {
-        LightEvent_WaitTimeout(&shared.wake, 200LL * 1000 * 1000);
+        LightLock_Lock(&shared.lock);
+        bool polling = shared.live_on;
+        LightLock_Unlock(&shared.lock);
+        if (!polling) {
+            LightEvent_WaitTimeout(&shared.wake, 200LL * 1000 * 1000);
+        }
         for (;;) {
             int action = -1;
             LightLock_Lock(&shared.lock);
@@ -683,12 +874,20 @@ static void worker_main(void *arg)
                 guide_check(spike);
             } else if (action == BTN_SET_MAKE) {
                 set_car_make(spike);
+            } else if (action == BTN_LIVE_SAVE) {
+                live_save(spike);
             } else {
                 spike_run(spike, (spike_action_t)action);
             }
 
             LightLock_Lock(&shared.lock);
             shared.busy = -1;
+            shared.connected = tcp_transport_connected(spike->transport);
+            LightLock_Unlock(&shared.lock);
+        }
+        if (polling) {
+            live_poll(spike);
+            LightLock_Lock(&shared.lock);
             shared.connected = tcp_transport_connected(spike->transport);
             LightLock_Unlock(&shared.lock);
         }
@@ -889,6 +1088,7 @@ typedef struct {
     bool clear_dialog;         /* clear-codes question showing */
     int home_selected;         /* HOME card tapped last (home_item_t), -1 = none */
     screen_t guide_back;       /* where BACK goes from the Wi-Fi guide */
+    bool live_dirty;           /* LIVE PIDs changed: save on BACK */
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
@@ -975,6 +1175,59 @@ static void draw_list_row(int slot, const char *text, bool selected)
 static int page_count(int n)
 {
     return n == 0 ? 1 : (n + LIST_PAGE_ROWS - 1) / LIST_PAGE_ROWS;
+}
+
+/* LIVE: the PIDs the car offers (empty until the protocol is known) and
+ * how many toggle pages they take. */
+static int live_choices_now(uint8_t *out)
+{
+    LightLock_Lock(&shared.lock);
+    static obd_link_t link;
+    bool ok = shared.live_link_ok;
+    link = shared.live_link;
+    LightLock_Unlock(&shared.lock);
+    return ok ? live_choices(&link, out, OBD_LIVE_MAX) : 0;
+}
+
+static int live_page_count(void)
+{
+    uint8_t choices[OBD_LIVE_MAX];
+    int n = live_choices_now(choices);
+    return n == 0 ? 1 : (n + LIVE_PAGE_SLOTS - 1) / LIVE_PAGE_SLOTS;
+}
+
+/* LIVE top screen: the values, refresh rates and a status line. */
+static void draw_live_top(int busy, bool connected)
+{
+    static obd_live_t lv;
+    static char lines[LIVE_VIEW_MAX][LIVE_VIEW_COLS + 1];
+    char header[TOP_COLS + 1];
+    char title[TOP_COLS + 8];   /* print_row cuts it to the width */
+    char msg[sizeof shared.live_msg];
+    LightLock_Lock(&shared.lock);
+    lv = shared.live;
+    bool have = shared.live_have;
+    int protocol = shared.live_protocol;
+    float rate = shared.live_rate;
+    bool on = shared.live_on;
+    memcpy(msg, shared.live_msg, sizeof msg);
+    LightLock_Unlock(&shared.lock);
+
+    int n = live_view_lines(have ? &lv : NULL, have ? protocol : 0, rate, OBD_UNITS_US, TOP_COLS,
+                            lines, LIVE_VIEW_MAX);
+    spike_format_header(header, sizeof header, connected, busy);
+    snprintf(title, sizeof title, "LIVE  %s", lines[0]);
+    consoleSelect(&top_console);
+    printf("\x1b[0m");
+    print_row(0, TOP_COLS, header);
+    print_row(1, TOP_COLS, "-------------------------------------------------");
+    print_row(2, TOP_COLS, title);
+    for (int i = 1; i < TOP_ROWS - 3; i++) {
+        print_row(2 + i, TOP_COLS, i < n ? lines[i] : "");
+    }
+    print_row(TOP_ROWS - 1, TOP_COLS, msg[0] != '\0' ? msg
+                                      : on ? "Polling. Fewer PIDs refresh faster."
+                                           : "Stopped. Tap START to poll.");
 }
 
 /* Wi-Fi guide top screen: step title and text. */
@@ -1184,6 +1437,49 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         return;
     }
 
+    if (ui->screen == SCREEN_LIVE) {
+        uint8_t choices[OBD_LIVE_MAX];
+        int nc = live_choices_now(choices);
+        uint8_t pids[CONFIG_LIVE_PIDS_MAX];
+        char msg[sizeof shared.live_msg];
+        LightLock_Lock(&shared.lock);
+        int np = cfg->live_pid_count;
+        memcpy(pids, cfg->live_pids, sizeof pids);
+        bool on = shared.live_on;
+        memcpy(msg, shared.live_msg, sizeof msg);
+        LightLock_Unlock(&shared.lock);
+
+        print_row(1, BOTTOM_COLS, "Tap a PID to poll it; fewer = faster");
+        clear_rows(2, 24);   /* the page's toggles change */
+        for (int slot = 0; slot < LIVE_PAGE_SLOTS; slot++) {
+            int k = ui->page * LIVE_PAGE_SLOTS + slot;
+            if (k >= nc) {
+                break;
+            }
+            button_t b = live_slot(slot);
+            b.label = obd_pid_info(choices[k])->label;
+            draw_button_ex(&b, flashing(b.action, now), false,
+                           live_pid_chosen(pids, np, choices[k]));
+        }
+        if (nc == 0) {
+            print_row(12, BOTTOM_COLS, msg[0] != '\0' ? msg
+                                       : on ? "Looking for the car..."
+                                            : "Tap START with the engine running.");
+        }
+        for (int i = 0; i < LIVE_BUTTON_COUNT; i++) {
+            button_t b = live_buttons[i];
+            if (b.action == BTN_LIVE_TOGGLE) {
+                b.label = on ? "STOP" : "START";
+            }
+            draw_button_ex(&b, flashing(b.action, now), false,
+                           b.action == BTN_LIVE_TOGGLE && on);
+        }
+        snprintf(line, sizeof line, "%d/%d", ui->page + 1,
+                 nc == 0 ? 1 : (nc + LIVE_PAGE_SLOTS - 1) / LIVE_PAGE_SLOTS);
+        printf("\x1b[%d;15H%-3.3s", 27 + 1, line);
+        return;
+    }
+
     /* DIAG */
     if (ui->permanent_hidden) {
         for (int r = 1; r < 6; r++) {
@@ -1360,11 +1656,15 @@ void spike_ui_run(void)
         spike_logf(&spike, "! Could not start the worker thread; buttons will not work");
     }
 
-    ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false, -1, SCREEN_SETUP };
+    ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false, -1, SCREEN_SETUP,
+                      false };
     uint64_t notice_until = 0;
     int scroll = 0;                /* log (SETUP, TEST) */
     unsigned drawn_version = ~0u;
     unsigned drawn_diag_version = ~0u;
+    unsigned drawn_live_version = ~0u;
+    unsigned drawn_live_ui_version = ~0u;
+    uint64_t live_drawn_at = 0;
     int drawn_scroll = -1;
     int drawn_busy = -2;
     bool drawn_connected = false;
@@ -1427,6 +1727,7 @@ void spike_ui_run(void)
             case SCREEN_SETUP: list = setup_buttons; count = SETUP_BUTTON_COUNT; break;
             case SCREEN_GUIDE: list = guide_buttons; count = GUIDE_BUTTON_COUNT; break;
             case SCREEN_MAKE:  count = make_screen_buttons(ui.page, &list);   break;
+            case SCREEN_LIVE:  list = live_buttons;  count = LIVE_BUTTON_COUNT;  break;
             case SCREEN_TEST:  break;
             }
             int i = ui.screen == SCREEN_HOME && home_gfx ? -1 : button_at(list, count, tp.px, tp.py);
@@ -1440,6 +1741,14 @@ void spike_ui_run(void)
             } else if (i >= 0 && !(ui.permanent_hidden && list[i].action == BTN_TAB_PERM)) {
                 action = list[i].action;
                 tapped = true;
+            } else if (ui.screen == SCREEN_LIVE) {
+                for (int slot = 0; slot < LIVE_PAGE_SLOTS; slot++) {
+                    button_t b = live_slot(slot);
+                    if (button_at(&b, 1, tp.px, tp.py) == 0) {
+                        action = b.action;
+                        tapped = true;
+                    }
+                }
             } else if (ui.screen == SCREEN_DIAG) {
                 /* A list row? */
                 int row = tp.py / 8;
@@ -1460,8 +1769,8 @@ void spike_ui_run(void)
         } else if (!confirming && !tapped && !ui.clear_dialog) {
             if ((down & KEY_B) && ui.screen != SCREEN_HOME) { action = BTN_BACK; tapped = true; }
             else if ((down & KEY_X) && ui.screen == SCREEN_DIAG) { action = BTN_DIAG_SCAN; tapped = true; }
-            else if ((down & KEY_L) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE)) { action = BTN_PAGE_PREV; tapped = true; }
-            else if ((down & KEY_R) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE)) { action = BTN_PAGE_NEXT; tapped = true; }
+            else if ((down & KEY_L) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE || ui.screen == SCREEN_LIVE)) { action = BTN_PAGE_PREV; tapped = true; }
+            else if ((down & KEY_R) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE || ui.screen == SCREEN_LIVE)) { action = BTN_PAGE_NEXT; tapped = true; }
         }
 
         if (tapped) {
@@ -1488,11 +1797,33 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_MENU_LIVE:
+                ui.screen = SCREEN_LIVE;
+                ui.page = 0;
+                LightLock_Lock(&shared.lock);
+                shared.live_on = true;
+                shared.live_gen++;
+                shared.live_msg[0] = '\0';
+                shared.live_ui_version++;
+                LightLock_Unlock(&shared.lock);
+                LightEvent_Signal(&shared.wake);
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_LIVE_TOGGLE:
+                LightLock_Lock(&shared.lock);
+                shared.live_on = !shared.live_on;
+                if (shared.live_on) {
+                    shared.live_gen++;
+                    shared.live_msg[0] = '\0';
+                }
+                shared.live_ui_version++;
+                LightLock_Unlock(&shared.lock);
+                LightEvent_Signal(&shared.wake);
+                top_dirty = true;
+                break;
             case BTN_MENU_TRIM:
             case BTN_MENU_FUN:
             case BTN_MENU_LOG:
-                ui.notice = action == BTN_MENU_LIVE  ? "LIVE: dash gauges come in version 0.2"
-                          : action == BTN_MENU_TRIM  ? "TRIM: fuel trims come in version 0.2"
+                ui.notice = action == BTN_MENU_TRIM  ? "TRIM: fuel trims come in version 0.2"
                           : action == BTN_MENU_FUN   ? "FUN: fun modes come in version 0.6"
                           :                            "LOG: logging comes in version 0.4";
                 notice_until = now + 3000;
@@ -1513,6 +1844,7 @@ void spike_ui_run(void)
             case BTN_PAGE_NEXT: {
                 int pages = ui.screen == SCREEN_GUIDE ? WIFI_GUIDE_STEPS
                           : ui.screen == SCREEN_MAKE  ? make_page_count()
+                          : ui.screen == SCREEN_LIVE  ? live_page_count()
                           :                             page_count(n);
                 if (ui.page + 1 < pages) { ui.page++; ui.selected = -1; top_dirty = true; }
                 bottom_full |= ui.screen == SCREEN_MAKE;
@@ -1537,6 +1869,17 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
+                if (ui.screen == SCREEN_LIVE) {
+                    LightLock_Lock(&shared.lock);
+                    shared.live_on = false;
+                    shared.live_ui_version++;
+                    LightLock_Unlock(&shared.lock);
+                    if (ui.live_dirty && worker != NULL) {
+                        enqueue(BTN_LIVE_SAVE);
+                    }
+                    ui.live_dirty = false;
+                    ui.page = 0;
+                }
                 if (ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_DIAG ||
                     ui.screen == SCREEN_MAKE) {
                     ui.page = 0;
@@ -1567,7 +1910,21 @@ void spike_ui_run(void)
                 }
                 break;
             default:
-                if (ui.screen == SCREEN_MAKE && action <= BTN_MAKE_PICK &&
+                if (ui.screen == SCREEN_LIVE && action <= BTN_LIVE_PICK &&
+                    action > BTN_LIVE_PICK - LIVE_PAGE_SLOTS) {
+                    uint8_t choices[OBD_LIVE_MAX];
+                    int nc = live_choices_now(choices);
+                    int k = ui.page * LIVE_PAGE_SLOTS + (BTN_LIVE_PICK - action);
+                    if (k < nc) {
+                        LightLock_Lock(&shared.lock);
+                        cfg.live_pid_count = (uint8_t)live_toggle(cfg.live_pids, cfg.live_pid_count,
+                                                                  CONFIG_LIVE_PIDS_MAX, choices[k]);
+                        shared.live_gen++;
+                        LightLock_Unlock(&shared.lock);
+                        ui.live_dirty = true;
+                        LightEvent_Signal(&shared.wake);
+                    }
+                } else if (ui.screen == SCREEN_MAKE && action <= BTN_MAKE_PICK &&
                     action > BTN_MAKE_PICK - MAKE_PAGE_SLOTS) {
                     int k = ui.page * MAKE_PAGE_SLOTS + (BTN_MAKE_PICK - action);
                     if (k < make_choice_count()) {
@@ -1617,6 +1974,8 @@ void spike_ui_run(void)
         LightLock_Lock(&shared.lock);
         unsigned version = shared.log.version;
         unsigned diag_version = shared.diag_version;
+        unsigned live_version = shared.live_version;
+        unsigned live_ui_version = shared.live_ui_version;
         int busy = shared.busy;
         bool connected = shared.connected;
         bool confirm_now = shared.confirm;
@@ -1625,13 +1984,26 @@ void spike_ui_run(void)
             drawn_confirm = confirm_now;
             bottom_dirty = true;
         }
+        if (live_ui_version != drawn_live_ui_version) {
+            drawn_live_ui_version = live_ui_version;
+            if (ui.screen == SCREEN_LIVE) {
+                bottom_dirty = true;
+            }
+        }
+        /* LIVE values change many times a second: redraw at most 10 times. */
+        bool live_due = ui.screen == SCREEN_LIVE && live_version != drawn_live_version &&
+                        now - live_drawn_at >= 100;
 
         bool shows_log = ui.screen == SCREEN_SETUP || ui.screen == SCREEN_TEST ||
                          ui.screen == SCREEN_MAKE;
-        if (top_dirty || busy != drawn_busy || connected != drawn_connected ||
+        if (top_dirty || busy != drawn_busy || connected != drawn_connected || live_due ||
             (shows_log ? (version != drawn_version || scroll != drawn_scroll)
-                       : diag_version != drawn_diag_version)) {
-            if (ui.screen == SCREEN_GUIDE) {
+                       : ui.screen != SCREEN_LIVE && diag_version != drawn_diag_version)) {
+            if (ui.screen == SCREEN_LIVE) {
+                draw_live_top(busy, connected);
+                drawn_live_version = live_version;
+                live_drawn_at = now;
+            } else if (ui.screen == SCREEN_GUIDE) {
                 draw_guide_top(ui.page, cfg.adapter_host, busy, connected);
             } else if (shows_log) {
                 draw_top(scroll, busy, connected);

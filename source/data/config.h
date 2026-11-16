@@ -15,6 +15,9 @@
  *
  *   [vehicle]
  *   make = auto            ; or a make name (e.g. Geo) for cars with no VIN over OBD
+ *
+ *   [live]
+ *   pids = 0C 0D 05 0F 11 04 0B 0E 10   ; Mode 01 PIDs the LIVE screen polls, hex
  */
 
 #include <stdbool.h>
@@ -26,11 +29,19 @@
 #define CONFIG_DEFAULT_HOST "192.168.0.10"
 #define CONFIG_DEFAULT_PORT 35000
 
+#define CONFIG_LIVE_PIDS_MAX 20
+
+/* LIVE's PIDs until the user picks: RPM, speed, coolant, intake air,
+ * throttle, load, MAP, timing, MAF (the car's unsupported ones are skipped). */
+#define CONFIG_LIVE_DEFAULT_PIDS { 0x0C, 0x0D, 0x05, 0x0F, 0x11, 0x04, 0x0B, 0x0E, 0x10 }
+
 typedef struct {
     char adapter_host[16];   /* dotted IPv4 */
     uint16_t adapter_port;
     uint8_t wifi_slot;       /* 0 = any saved connection, 1-3 = that slot only */
     char car_make[24];       /* "" = auto (from the VIN), else a DTC make name */
+    uint8_t live_pids[CONFIG_LIVE_PIDS_MAX];  /* LIVE screen PIDs, in order */
+    uint8_t live_pid_count;
 } gb_config_t;
 
 #define CONFIG_WIFI_SLOTS 3

@@ -151,14 +151,15 @@ Report anything garbled (colors, layout, text running off the screen).
 2. Make sure the 3DS's wireless switch is on and it has joined the adapter's slot.
 3. Launch GaugeBoy (engine running), tap **DIAG**, then **SCAN**. It connects, finds the protocol (about 5 s on ISO 9141-2) and reads the check engine light, readiness, stored / pending / permanent codes and the VIN. The top screen shows the facts (Car, VIN, Protocol, CEL, Readiness, Codes); the bottom screen lists the chosen tab's codes or monitors. Tap a row to see its full description on the top screen; **<** / **>** page through longer lists. PERM disappears if the car doesn't support permanent codes. Cars that don't report a VIN over OBD (for example a 1996 Geo Tracker) show "VIN not read"; choose the make in **SETUP > Car make** (Auto, then 32 makes over three pages; L / R or **<** / **>** to page) and the Car line shows it with "(set in SETUP)", and manufacturer codes (P1xxx and so on) get that make's meanings. A make read from the VIN always wins. The choice is saved as `make` under `[vehicle]` in `config.ini`.
    - **CLEAR** (only if you want the codes gone: it also resets the readiness monitors, so the car needs more driving before an emissions test): opens a question explaining that; **CANCEL** or B backs out, the red **CLEAR CODES** clears. GaugeBoy first checks the speed is 0, then sends the clear and scans again. Parked with the ignition on and the engine off works on most cars; with the engine running some cars refuse.
-4. Then **SETUP > ADAPTER TEST** and tap, in order:
+4. Go back to HOME and tap **LIVE** (engine running). It polls the default PIDs (RPM, speed, coolant, intake air, throttle, load, MAP, timing and MAF, the ones the car supports) and shows them on the top screen with how often each refreshes, the adapter's battery voltage, and manifold vacuum once it has seen MAP with the engine off. The bottom screen has a toggle for every PID the car supports (green = polled; **<** / **>** or L / R for more); fewer PIDs refresh faster. **STOP** / **START** pauses polling, **BACK** returns to HOME and saves your choice as `pids` under `[live]` in `config.ini`. Note the requests per second on the top line: it shows how fast the adapter and car answer.
+5. Then **SETUP > ADAPTER TEST** and tap, in order:
    - **CONNECT**: expect `= Connected (... ms)`.
    - **ATZ** 10 or more times: expect `ELM327 v...` each time.
    - **ATSP0+0100**: expect `SEARCHING...` then a `41 00 ...` reply.
    - **ATDPN**: the 2008 Ridgeline reports `Protocol 3: ISO 9141-2 (5 baud init) (auto)`. Other cars can report any OBD-II protocol (J1850 PWM / VPW, ISO 9141-2, ISO 14230-4 KWP, ISO 15765-4 CAN); with only the ignition on, `0100` may say `UNABLE TO CONNECT` until the engine runs.
    - **ATRV**: expect roughly 12.4 to 14.5 V (higher with the engine running).
    - **0902 VIN**: expect several `0: 49 02 ...` lines.
-5. Transport checks (on the adapter test screen):
+6. Transport checks (on the adapter test screen):
    - **Lid:** close the lid for 10 seconds, open it, tap ATRV. It should reconnect on its own.
    - **Unplug:** unplug the adapter, tap ATRV a few times (retries back off up to 8 s), plug it back in, tap CONNECT.
    - **Wrong IP:** set a wrong `host` in `config.ini`, relaunch, tap ATZ: "Adapter did not answer" within about 3 s and the app stays responsive. Put the right address back afterwards.

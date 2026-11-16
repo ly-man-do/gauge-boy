@@ -4,6 +4,10 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- **LIVE screen** (text dashboard; the toy-like gauges come in M3): the LIVE card on HOME polls the chosen Mode 01 PIDs the car supports and shows each value in US units with its refresh rate, plus the adapter's battery voltage and manifold vacuum (barometric pressure from PID 33, or MAP read with the engine off, minus MAP). Defaults: RPM, speed, coolant, intake air, throttle, load, MAP, timing, MAF. The bottom screen has a toggle for every supported PID (19 decoded, including fuel trims for both banks), START / STOP and BACK; the choice is saved as `pids` under `[live]` in `config.ini`. PIDs that keep answering NO DATA are dropped; a lost connection is reconnected while polling.
+
 ## [0.1.0] - 2026-11-15
 
 M1 release: GaugeBoy now reads the car. DIAG shows the check engine light, readiness monitors, stored / pending / permanent codes with plain-English descriptions (generic codes, plus manufacturer codes for 32 makes) and the VIN, and can clear codes behind a confirmation. Tested on both test cars over ISO 9141-2: a 2008 Honda Ridgeline (VIN read) and a 1996 Geo Tracker (no VIN over OBD, so the make is chosen in SETUP), with the Vgate iCar Pro Wi-Fi adapter (`V-LINK`). The LIVE, TRIM, FUN and LOG screens come in later versions.
