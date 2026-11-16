@@ -23,3 +23,6 @@ tools/.venv/
 elm.log
 # .cia packaging tools downloaded by tools/get-cia-tools.sh
 tools/bin/
+
+# Fonts converted at build time (Makefile, from assets/fonts/)
+romfs/fonts/

@@ -1,6 +1,6 @@
 # Project Brief: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.10.0
+**Version:** 1.11.0
 **Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
 **Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -126,7 +126,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 **Screen layout:**
 - **Top screen (400x240, 3D):** Main gauge cluster on the orange backdrop; selectable layouts (single big tach, 4-gauge grid, data list).
-- **Bottom screen (320x240, touch):** Touch panel of big rounded buttons for METER / DIAG (CEL codes) / TRIM (fuel trims) / FUN (fun modes) / LOG / SETUP, with sub-menus on the same panel. An amber CEL warning lamp on the panel lights when the CEL is on.
+- **Bottom screen (320x240, touch):** Touch panel of big rounded buttons for LIVE (dash gauges) / DIAG (CEL codes) / TRIM (fuel trims) / FUN (fun modes) / LOG / SETUP, with sub-menus on the same panel. An amber CEL warning lamp on the panel lights when the CEL is on.
 
 **Brand and IP rule:** The app looks and feels like a 3DS game. All artwork, models, icons and the app logo are original. Fonts must be open-licensed (e.g. SIL OFL) so they can ship in the open-source repo.
 
@@ -356,6 +356,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.11.0 | 2026-11-15 | The METER menu is renamed LIVE ("Dash gauges"), by owner decision with the new HOME screen (section 5b); `CLAUDE.md` updated to 1.15.0 |
 | 1.10.0 | 2026-11-15 | Owner decision: removed the ban on Nintendo and third-party characters, logos, trademarks, brand names, fonts, UI art, models, textures, music and sounds, and the ripped-asset limit (studied for size and structure, never shipped, traced or converted) (section 5b); `CLAUDE.md` updated to 1.14.0 |
 | 1.9.0 | 2026-11-15 | Second test vehicle: the owner's 1996 Geo Tracker (first OBD-II year, likely ISO 9141-2, VIN probably not readable over OBD) (section 7); `CLAUDE.md` updated to 1.12.0 |
 | 1.8.0 | 2026-11-15 | DTC descriptions: generic plus manufacturer-specific codes for 32 makes from Wal33D/dtc-database (MIT), by owner decision (sections 5a, 5d); `CLAUDE.md` updated to 1.11.0 |

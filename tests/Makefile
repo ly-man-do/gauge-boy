@@ -10,7 +10,8 @@ BUILD   := build
 
 SRCS    := $(wildcard *.c) $(wildcard ../source/elm327/*.c) $(wildcard ../source/obd/*.c) \
            $(wildcard ../source/data/*.c) ../source/transport/tcp_transport.c \
-           ../source/transport/conntest.c ../source/spike_actions.c
+           ../source/transport/conntest.c ../source/spike_actions.c \
+           ../source/ui/home_layout.c
 HDRS    := $(wildcard *.h) $(wildcard ../source/*.h) $(wildcard ../source/elm327/*.h) $(wildcard ../source/obd/*.h) \
            $(wildcard ../source/data/*.h) ../source/transport/tcp_transport.h \
            ../source/transport/conntest.h ../source/spike_actions.h

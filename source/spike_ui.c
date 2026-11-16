@@ -4,7 +4,7 @@
  * Screens: DIAG (default: scan, codes, readiness), SETUP (Wi-Fi slot,
  * SAVE LOG, the adapter test screen) and TEST (the M0 adapter test
  * screen). The bottom screen of DIAG and SETUP has the main menu
- * (METER / DIAG / TRIM / FUN / LOG / SETUP); M1 enables DIAG and SETUP.
+ * (LIVE / DIAG / TRIM / FUN / LOG / SETUP); M1 enables DIAG and SETUP.
  *
  * The UI thread never does network or file I/O after startup; the worker
  * thread runs the button actions and writes the log file.
@@ -26,6 +26,7 @@
 #include "transport/conntest_server.h"
 #include "transport/net.h"
 #include "transport/tcp_transport.h"
+#include "ui/home_draw.h"
 #include "obd/dtc.h"
 #include "obd/obd_diag.h"
 #include "version.h"
@@ -57,12 +58,14 @@
 #define BTN_CLEAR_CANCEL (-6)
 #define BTN_CLEAR_YES    (-7)
 #define BTN_BACK         (-4)  /* UI: TEST screen -> SETUP */
-#define BTN_MENU_METER   (-10) /* UI: main menu */
+#define BTN_MENU_LIVE    (-10) /* UI: main menu */
 #define BTN_MENU_DIAG    (-11)
 #define BTN_MENU_TRIM    (-12)
 #define BTN_MENU_FUN     (-13)
 #define BTN_MENU_LOG     (-14)
 #define BTN_MENU_SETUP   (-15)
+#define BTN_HOME_CEL     (-16) /* UI: HOME status cards */
+#define BTN_HOME_WIFI    (-17)
 #define BTN_TAB_STORED   (-20) /* UI: DIAG tabs (-20 - tab) */
 #define BTN_TAB_PENDING  (-21)
 #define BTN_TAB_PERM     (-22)
@@ -101,7 +104,7 @@ static const button_t buttons[] = {
 
 /* HOME: 3x2 grid of big buttons. */
 static const button_t home_buttons[] = {
-    { "METER", BTN_MENU_METER, 0,  3, 12, 9 },
+    { "LIVE",  BTN_MENU_LIVE,  0,  3, 12, 9 },
     { "DIAG",  BTN_MENU_DIAG,  13, 3, 13, 9 },
     { "TRIM",  BTN_MENU_TRIM,  27, 3, 12, 9 },
     { "FUN",   BTN_MENU_FUN,   0, 14, 12, 9 },
@@ -883,7 +886,27 @@ typedef struct {
     const char *notice;        /* one-line message, or NULL */
     bool permanent_hidden;
     bool clear_dialog;         /* clear-codes question showing */
+    int home_selected;         /* HOME card tapped last (home_item_t), -1 = none */
+    screen_t guide_back;       /* where BACK goes from the Wi-Fi guide */
 } ui_state_t;
+
+static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
+
+/* The action for a HOME card. */
+static int home_item_action(int item)
+{
+    switch (item) {
+    case HOME_CEL:     return BTN_HOME_CEL;
+    case HOME_ADAPTER: return BTN_HOME_WIFI;
+    case HOME_LIVE:    return BTN_MENU_LIVE;
+    case HOME_DIAG:    return BTN_MENU_DIAG;
+    case HOME_TRIM:    return BTN_MENU_TRIM;
+    case HOME_FUN:     return BTN_MENU_FUN;
+    case HOME_LOG:     return BTN_MENU_LOG;
+    case HOME_SETUP:   return BTN_MENU_SETUP;
+    default:           return 0;
+    }
+}
 
 /* Flashing, by button action (UI thread). */
 #define FLASH_SLOTS 8
@@ -1029,11 +1052,29 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         cleared_after_confirm = false;
         return;
     }
+    if (ui->screen == SCREEN_HOME && home_gfx) {
+        home_view_t v;
+        LightLock_Lock(&shared.lock);
+        v.cel_known = shared.diag.have_readiness;
+        v.connected = shared.connected;
+        LightLock_Unlock(&shared.lock);
+        v.cel_on = cel_on;
+        v.selected = ui->home_selected;
+        v.pressed = -1;
+        for (int i = 0; i < HOME_ITEM_COUNT; i++) {
+            if (flashing(home_item_action(i), now)) {
+                v.pressed = i;
+            }
+        }
+        v.notice = ui->notice;
+        home_draw(&v);
+        return;
+    }
 
     consoleSelect(&bottom_console);
     printf("\x1b[0m");
     if (!cleared_after_confirm || full) {
-        clear_rows(0, 29);
+        printf("\x1b[2J");   /* all 40 columns: HOME's graphics reach the last one */
         cleared_after_confirm = true;
     }
 
@@ -1255,6 +1296,10 @@ void spike_ui_run(void)
     open_log_file();
     spike_init(&spike, &transport, &elm, log_sink, NULL);
     spike_logf(&spike, "GaugeBoy %s", GB_VERSION);
+    home_gfx = home_draw_init();
+    if (!home_gfx) {
+        spike_logf(&spike, "! HOME graphics could not start (fonts in romfs); using text HOME");
+    }
     if (log_file == NULL) {
         spike_logf(&spike, "! Could not open %s; log is on screen only", LOG_PATH);
     }
@@ -1313,7 +1358,7 @@ void spike_ui_run(void)
         spike_logf(&spike, "! Could not start the worker thread; buttons will not work");
     }
 
-    ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false };
+    ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false, -1, SCREEN_SETUP };
     uint64_t notice_until = 0;
     int scroll = 0;                /* log (SETUP, TEST) */
     unsigned drawn_version = ~0u;
@@ -1381,8 +1426,13 @@ void spike_ui_run(void)
             case SCREEN_MAKE:  count = make_screen_buttons(ui.page, &list);   break;
             case SCREEN_TEST:  break;
             }
-            int i = button_at(list, count, tp.px, tp.py);
-            if (i >= 0 && !(ui.permanent_hidden && list[i].action == BTN_TAB_PERM)) {
+            int i = ui.screen == SCREEN_HOME && home_gfx ? -1 : button_at(list, count, tp.px, tp.py);
+            int item = ui.screen == SCREEN_HOME && home_gfx ? home_hit(tp.px, tp.py) : -1;
+            if (item >= 0) {
+                action = home_item_action(item);
+                ui.home_selected = item;
+                tapped = true;
+            } else if (i >= 0 && !(ui.permanent_hidden && list[i].action == BTN_TAB_PERM)) {
                 action = list[i].action;
                 tapped = true;
             } else if (ui.screen == SCREEN_DIAG) {
@@ -1420,6 +1470,7 @@ void spike_ui_run(void)
             case BTN_SCROLL_NEWER:
                 scroll = clamp_scroll(scroll - LOG_ROWS / 2);
                 break;
+            case BTN_HOME_CEL:
             case BTN_MENU_DIAG:
                 ui.screen = SCREEN_DIAG;
                 bottom_full = top_dirty = true;
@@ -1428,11 +1479,11 @@ void spike_ui_run(void)
                 ui.screen = SCREEN_SETUP;
                 bottom_full = top_dirty = true;
                 break;
-            case BTN_MENU_METER:
+            case BTN_MENU_LIVE:
             case BTN_MENU_TRIM:
             case BTN_MENU_FUN:
             case BTN_MENU_LOG:
-                ui.notice = action == BTN_MENU_METER ? "METER: live gauges come in version 0.2"
+                ui.notice = action == BTN_MENU_LIVE  ? "LIVE: dash gauges come in version 0.2"
                           : action == BTN_MENU_TRIM  ? "TRIM: fuel trims come in version 0.2"
                           : action == BTN_MENU_FUN   ? "FUN: fun modes come in version 0.6"
                           :                            "LOG: logging comes in version 0.4";
@@ -1460,6 +1511,8 @@ void spike_ui_run(void)
                 break;
             }
             case BTN_GUIDE:
+            case BTN_HOME_WIFI:
+                ui.guide_back = action == BTN_GUIDE ? SCREEN_SETUP : SCREEN_HOME;
                 ui.screen = SCREEN_GUIDE;
                 ui.page = 0;
                 bottom_full = top_dirty = true;
@@ -1480,8 +1533,9 @@ void spike_ui_run(void)
                     ui.screen == SCREEN_MAKE) {
                     ui.page = 0;
                 }
-                ui.screen = (ui.screen == SCREEN_TEST || ui.screen == SCREEN_GUIDE ||
-                             ui.screen == SCREEN_MAKE) ? SCREEN_SETUP : SCREEN_HOME;
+                ui.screen = ui.screen == SCREEN_GUIDE ? ui.guide_back
+                          : (ui.screen == SCREEN_TEST || ui.screen == SCREEN_MAKE) ? SCREEN_SETUP
+                          : SCREEN_HOME;
                 bottom_full = top_dirty = true;
                 break;
             case BTN_CLEAR_ASK: {
@@ -1573,7 +1627,8 @@ void spike_ui_run(void)
             } else {
                 draw_diag_top(ui.screen == SCREEN_HOME, ui.tab, ui.selected, busy, connected);
             }
-            bottom_dirty |= busy != drawn_busy || diag_version != drawn_diag_version;
+            bottom_dirty |= busy != drawn_busy || diag_version != drawn_diag_version ||
+                            connected != drawn_connected;
             drawn_version = version;
             drawn_diag_version = diag_version;
             drawn_scroll = scroll;
@@ -1606,6 +1661,7 @@ void spike_ui_run(void)
     if (net_ok) {
         net_exit();
     }
+    home_draw_exit();
     spike_logf(&spike, "Session end");
     if (log_file != NULL) {
         fclose(log_file);

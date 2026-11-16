@@ -9,6 +9,8 @@ Every asset and borrowed file in GaugeBoy, with its source and license. GaugeBoy
 | `meta/icon.png` | HOME menu icon (tachometer) | Original, drawn by `tools/make_meta_assets.py` | MIT (this project) |
 | `meta/banner.png` | HOME menu banner | Original, drawn by `tools/make_meta_assets.py`; lettering is an original block font defined in that script | MIT (this project) |
 | `meta/banner.wav` | Banner chime | Original, synthesized by `tools/make_meta_assets.py` | MIT (this project) |
+| `assets/fonts/Nunito-Bold.ttf` | HOME screen font (Nunito, Bold weight cut from the variable font with fonttools); converted at build time to `romfs/fonts/nunito-13.bcfnt` and `nunito-8.bcfnt` (ASCII only) | [google/fonts](https://github.com/google/fonts/tree/main/ofl/nunito) `ofl/nunito/Nunito[wght].ttf` (upstream [googlefonts/nunito](https://github.com/googlefonts/nunito)). Copyright 2014 The Nunito Project Authors. | SIL OFL 1.1 ([license text](assets/fonts/OFL.txt)) |
+| HOME screen icons | Gauge, magnifier, sliders, flag, document, gear, lamp and Wi-Fi icons | Original, drawn in code in `source/ui/home_draw.c` | MIT (this project) |
 
 ## Data
 
@@ -28,7 +30,9 @@ These run at build time only; nothing from them is included in GaugeBoy's source
 
 | Tool | Version | Source | License |
 |---|---|---|---|
-| devkitARM, libctru | latest `devkitpro/devkitarm` image | [devkitPro](https://devkitpro.org/) | libctru: zlib |
+| devkitARM, libctru, citro2d, citro3d | latest `devkitpro/devkitarm` image | [devkitPro](https://devkitpro.org/) | libctru, citro2d, citro3d: zlib |
+| mkbcfnt (font conversion) | 2.3.0, in the devkitPro image | [devkitPro/3dstools](https://github.com/devkitPro/3dstools) | GPL-3.0 (the tool only; its output is the font's) |
+| fonttools (used once to make `Nunito-Bold.ttf`) | 4.62.1 | [fonttools/fonttools](https://github.com/fonttools/fonttools) | MIT |
 | makerom | v0.18.4 | [3DSGuy/Project_CTR](https://github.com/3DSGuy/Project_CTR) | MIT |
 | bannertool | v1.2.2 | [Epicpkmn11/bannertool](https://github.com/Epicpkmn11/bannertool) | MIT |
 | segno (release QR codes) | 1.6.6 | [heuer/segno](https://github.com/heuer/segno) | BSD-3-Clause |

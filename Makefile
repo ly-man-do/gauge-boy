@@ -83,6 +83,13 @@ GRAPHICS	:=	gfx
 GFXBUILD	:=	$(BUILD)
 ROMFS		:=	romfs
 
+# Fonts: Nunito Bold (SIL OFL, assets/fonts/) converted for citro2d at
+# build time, ASCII only, one file per size in points (romfs/fonts/nunito-<pt>.bcfnt;
+# mkbcfnt points are about 1.33 px).
+FONT_TTF	:=	assets/fonts/Nunito-Bold.ttf
+FONT_CHARS	:=	assets/fonts/ascii.txt
+FONT_SIZES	:=	13 8
+
 APP_TITLE		:=	GaugeBoy
 APP_DESCRIPTION	:=	OBD-II Deluxe
 APP_AUTHOR		:=	ly-man-do
@@ -122,7 +129,7 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS	:= -lctru -lm
+LIBS	:= -lcitro2d -lcitro3d -lctru -lm
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
@@ -226,7 +233,9 @@ endif
 .PHONY: all clean cia
 
 #---------------------------------------------------------------------------------
-all: $(BUILD) $(GFXBUILD) $(DEPSDIR) $(ROMFS_T3XFILES) $(T3XHFILES)
+FONT_FILES	:=	$(foreach size,$(FONT_SIZES),$(ROMFS)/fonts/nunito-$(size).bcfnt)
+
+all: $(BUILD) $(GFXBUILD) $(DEPSDIR) $(ROMFS_T3XFILES) $(T3XHFILES) $(FONT_FILES)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 $(BUILD):
@@ -267,8 +276,13 @@ cia: all
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).3dsx $(TARGET).cia $(OUTPUT).smdh $(TARGET).elf $(GFXBUILD)
+	@rm -fr $(BUILD) $(TARGET).3dsx $(TARGET).cia $(OUTPUT).smdh $(TARGET).elf $(GFXBUILD) $(FONT_FILES)
 	@$(MAKE) --no-print-directory -C tests clean
+
+$(ROMFS)/fonts/nunito-%.bcfnt: $(FONT_TTF) $(FONT_CHARS)
+	@mkdir -p $(dir $@)
+	@echo $(notdir $@)
+	@mkbcfnt -s $* -w $(FONT_CHARS) -o $@ $(FONT_TTF)
 
 #---------------------------------------------------------------------------------
 $(GFXBUILD)/%.t3x	$(BUILD)/%.h	:	%.t3s
