@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <string.h>
 
 #include "harness.h"
 #include "version.h"
@@ -32,9 +33,17 @@ static void test_version_matches_parts(void)
     CHECK_EQ_STR(GB_VERSION, expected);
 }
 
+static void test_version_text(void)
+{
+    /* The app shows GB_VERSION_TEXT; host tests have no build commit. */
+    CHECK(strncmp(GB_VERSION_TEXT, GB_VERSION, strlen(GB_VERSION)) == 0);
+    CHECK_EQ_STR(GB_VERSION_SUFFIX, "");
+}
+
 void suite_version(void)
 {
     gb_suite("version");
     RUN_TEST(test_version_is_semver);
     RUN_TEST(test_version_matches_parts);
+    RUN_TEST(test_version_text);
 }

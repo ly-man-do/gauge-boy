@@ -226,10 +226,10 @@ static void test_spike_header_text(void)
     char out[128];
     char expected[128];
 
-    snprintf(expected, sizeof expected, "GaugeBoy %s  [offline]", GB_VERSION);
+    snprintf(expected, sizeof expected, "GaugeBoy %s  [offline]", GB_VERSION_TEXT);
     CHECK_EQ_STR(spike_format_header(out, sizeof out, false, -1), expected);
 
-    snprintf(expected, sizeof expected, "GaugeBoy %s  [CONNECTED]  BUSY: ATSP0+0100", GB_VERSION);
+    snprintf(expected, sizeof expected, "GaugeBoy %s  [CONNECTED]  BUSY: ATSP0+0100", GB_VERSION_TEXT);
     CHECK_EQ_STR(spike_format_header(out, sizeof out, true, SPIKE_SEARCH), expected);
 
     /* Out-of-range busy values show no BUSY label. */

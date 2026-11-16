@@ -43,7 +43,7 @@ int main(void)
     consoleInit(GFX_TOP, &top);
 
     if (!is_new_3ds()) {
-        printf("GaugeBoy %s\n\n", GB_VERSION);
+        printf("GaugeBoy %s\n\n", GB_VERSION_TEXT);
         printf("Unsupported device.\n\n");
         printf("GaugeBoy needs a New 3DS,\n");
         printf("New 3DS XL or New 2DS XL.\n\n");
@@ -56,7 +56,7 @@ int main(void)
 
     osSetSpeedupEnable(true);
 
-    printf("GaugeBoy: OBD-II Deluxe %s\n\n", GB_VERSION);
+    printf("GaugeBoy: OBD-II Deluxe %s\n\n", GB_VERSION_TEXT);
     printf("SAFETY NOTICE\n");
     printf("Not for use by the driver while\n");
     printf("driving. Use it parked, or let a\n");

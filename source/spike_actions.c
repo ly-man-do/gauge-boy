@@ -61,7 +61,7 @@ const char *spike_action_label(spike_action_t action)
 char *spike_format_header(char *out, size_t out_len, bool connected, int busy)
 {
     bool is_busy = busy >= 0 && busy < SPIKE_ACTION_COUNT;
-    snprintf(out, out_len, "GaugeBoy %s  %s%s%s", GB_VERSION,
+    snprintf(out, out_len, "GaugeBoy %s  %s%s%s", GB_VERSION_TEXT,
              connected ? "[CONNECTED]" : "[offline]",
              is_busy ? "  BUSY: " : "",
              is_busy ? spike_action_label((spike_action_t)busy) : "");

@@ -1555,7 +1555,7 @@ static void open_log_file(void)
         if (tm != NULL) {
             strftime(when, sizeof when, "%Y-%m-%d %H:%M:%S", tm);
         }
-        fprintf(log_file, "\n=== GaugeBoy %s session, %s ===\n", GB_VERSION, when);
+        fprintf(log_file, "\n=== GaugeBoy %s session, %s ===\n", GB_VERSION_TEXT, when);
         fflush(log_file);
     }
 }
@@ -1593,7 +1593,7 @@ void spike_ui_run(void)
 
     open_log_file();
     spike_init(&spike, &transport, &elm, log_sink, NULL);
-    spike_logf(&spike, "GaugeBoy %s", GB_VERSION);
+    spike_logf(&spike, "GaugeBoy %s", GB_VERSION_TEXT);
     home_gfx = home_draw_init();
     if (!home_gfx) {
         spike_logf(&spike, "! HOME graphics could not start (fonts in romfs); using text HOME");
