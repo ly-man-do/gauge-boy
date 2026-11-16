@@ -266,6 +266,22 @@ int diag_items(const obd_diag_t *d, diag_tab_t tab, diag_item_t *items, int max)
     return n;
 }
 
+bool diag_has_trim_codes(const obd_diag_t *d)
+{
+    static const char *const codes[] = { "P0171", "P0172", "P0174", "P0175" };
+    const obd_code_list_t *lists[2] = { &d->stored, &d->pending };
+    for (int l = 0; l < 2; l++) {
+        for (int i = 0; i < lists[l]->count; i++) {
+            for (size_t c = 0; c < sizeof codes / sizeof codes[0]; c++) {
+                if (strcmp(lists[l]->code[i].code, codes[c]) == 0) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 const char *diag_empty_text(const obd_diag_t *d, diag_tab_t tab)
 {
     if (d->link.protocol == 0) {

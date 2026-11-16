@@ -217,6 +217,27 @@ static void test_scan_lost_midway(void)
     CHECK_VIEW(n, "Scan stopped");
 }
 
+static void test_trim_codes(void)
+{
+    static obd_diag_t d;
+    memset(&d, 0, sizeof d);
+    CHECK(!diag_has_trim_codes(&d));
+    snprintf(d.stored.code[0].code, sizeof d.stored.code[0].code, "P0300");
+    d.stored.count = 1;
+    CHECK(!diag_has_trim_codes(&d));
+    snprintf(d.pending.code[0].code, sizeof d.pending.code[0].code, "P0174");
+    d.pending.count = 1;
+    CHECK(diag_has_trim_codes(&d));                /* pending counts too */
+    d.pending.count = 0;
+    snprintf(d.stored.code[1].code, sizeof d.stored.code[1].code, "P0171");
+    d.stored.count = 2;
+    CHECK(diag_has_trim_codes(&d));
+    snprintf(d.permanent.code[0].code, sizeof d.permanent.code[0].code, "P0172");
+    d.permanent.count = 1;
+    d.stored.count = 1;
+    CHECK(!diag_has_trim_codes(&d));               /* permanent alone: no */
+}
+
 static void test_paged_pieces(void)
 {
     /* The scan from test_scan_ridgeline is gone (later tests replaced it):
@@ -390,6 +411,7 @@ void suite_diag(void)
     RUN_TEST(test_scan_engine_off);
     RUN_TEST(test_scan_lost_midway);
     RUN_TEST(test_paged_pieces);
+    RUN_TEST(test_trim_codes);
     RUN_TEST(test_clear_codes);
     RUN_TEST(test_code_history);
     RUN_TEST(test_wifi_guide);

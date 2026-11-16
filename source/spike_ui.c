@@ -61,6 +61,7 @@
 #define BTN_LIVE_TOGGLE  (-33) /* UI: LIVE START / STOP */
 #define BTN_LIVE_PICK    (-80) /* UI: Custom PID toggle (-80 - slot on the page) */
 #define BTN_LIVE_EDIT    (-34) /* UI: LIVE Custom view -> PID toggles */
+#define BTN_DIAG_TRIM    (-35) /* UI: DIAG -> TRIM (lean / rich codes stored) */
 #define BTN_LIVE_VIEW    (-90) /* UI: LIVE view list (-90 - view) */
 #define BTN_GUIDE        (-8)  /* UI: SETUP -> Wi-Fi guide */
 #define BTN_CLEAR_ASK    (-5)  /* UI: open the clear-codes dialog */
@@ -145,6 +146,23 @@ static const button_t diag_buttons[] = {
     { "SCAN",    BTN_DIAG_SCAN,   31, 25, 8, 5 },
 };
 #define DIAG_BUTTON_COUNT ((int)(sizeof diag_buttons / sizeof diag_buttons[0]))
+
+/* The same with a TRIM button, when a lean or rich code is stored or
+ * pending: the bottom row narrows (every button still 5 cells, 40 px). */
+#define DIAG_PAGE_COL_TRIM 13   /* "n/m" between < and > (1-based column) */
+static const button_t diag_trim_buttons[] = {
+    { "STORED",  BTN_TAB_STORED,  0,  1, 9, 5 },
+    { "PENDING", BTN_TAB_PENDING, 10, 1, 9, 5 },
+    { "PERM",    BTN_TAB_PERM,    20, 1, 9, 5 },
+    { "READY",   BTN_TAB_READY,   30, 1, 9, 5 },
+    { "BACK",    BTN_BACK,        0,  25, 6, 5 },
+    { "<",       BTN_PAGE_PREV,   7,  25, 5, 5 },
+    { ">",       BTN_PAGE_NEXT,   15, 25, 5, 5 },
+    { "TRIM",    BTN_DIAG_TRIM,   21, 25, 5, 5 },
+    { "CLEAR",   BTN_CLEAR_ASK,   27, 25, 6, 5 },
+    { "SCAN",    BTN_DIAG_SCAN,   34, 25, 5, 5 },
+};
+#define DIAG_TRIM_BUTTON_COUNT ((int)(sizeof diag_trim_buttons / sizeof diag_trim_buttons[0]))
 
 /* SETUP: full-width list rows like DIAG's list, then BACK ADAPTER ...
  * WI-FI GUIDE. The rows (w 39) are drawn as list bars; the bottom row
@@ -1193,6 +1211,7 @@ typedef struct {
     screen_t guide_back;       /* where BACK goes from the Wi-Fi guide */
     bool live_dirty;           /* Custom PIDs or the view changed: save */
     int live_view;             /* live_view_id_t shown on SCREEN_LIVE */
+    screen_t trim_back;        /* where BACK goes from TRIM (HOME or DIAG) */
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
@@ -1279,6 +1298,15 @@ static void draw_list_row(int slot, const char *text, bool selected)
 static int page_count(int n)
 {
     return n == 0 ? 1 : (n + LIST_PAGE_ROWS - 1) / LIST_PAGE_ROWS;
+}
+
+/* DIAG offers TRIM when the last scan found a lean or rich code. */
+static bool diag_trim_offered(void)
+{
+    LightLock_Lock(&shared.lock);
+    bool offered = diag_has_trim_codes(&shared.diag);
+    LightLock_Unlock(&shared.lock);
+    return offered;
 }
 
 /* LIVE: the PIDs the car offers (empty until the protocol is known) and
@@ -1801,8 +1829,10 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
             printf("\x1b[%d;21H%-9s", r + 1, "");
         }
     }
-    draw_list(diag_buttons, DIAG_BUTTON_COUNT, now, busy, BTN_TAB_STORED - (int)ui->tab,
-              ui->permanent_hidden);
+    bool trim = diag_trim_offered();
+    clear_rows(25, 29);   /* the row's layout changes with the TRIM button */
+    draw_list(trim ? diag_trim_buttons : diag_buttons, trim ? DIAG_TRIM_BUTTON_COUNT : DIAG_BUTTON_COUNT,
+              now, busy, BTN_TAB_STORED - (int)ui->tab, ui->permanent_hidden);
     int n = diag_item_count(ui->tab);
     for (int slot = 0; slot < LIST_PAGE_ROWS; slot++) {
         int k = ui->page * LIST_PAGE_ROWS + slot;
@@ -1822,7 +1852,7 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         }
     }
     snprintf(line, sizeof line, "%d/%d", ui->page + 1, page_count(n));
-    printf("\x1b[%d;15H%-3.3s", 27 + 1, line);
+    printf("\x1b[%d;%dH%-3.3s", 27 + 1, trim ? DIAG_PAGE_COL_TRIM : 15, line);
     char msg[sizeof shared.diag_msg];
     LightLock_Lock(&shared.lock);
     memcpy(msg, shared.diag_msg, sizeof msg);
@@ -1972,7 +2002,7 @@ void spike_ui_run(void)
     }
 
     ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false, -1, SCREEN_SETUP,
-                      false, LIVE_VIEW_ENGINE };
+                      false, LIVE_VIEW_ENGINE, SCREEN_HOME };
     live_menu_count();
     uint64_t notice_until = 0;
     int scroll = 0;                /* log (SETUP, TEST) */
@@ -2039,7 +2069,15 @@ void spike_ui_run(void)
             int count = BUTTON_COUNT;
             switch (ui.screen) {
             case SCREEN_HOME:  list = home_buttons;  count = HOME_BUTTON_COUNT;  break;
-            case SCREEN_DIAG:  list = diag_buttons;  count = DIAG_BUTTON_COUNT;  break;
+            case SCREEN_DIAG:
+                if (diag_trim_offered()) {
+                    list = diag_trim_buttons;
+                    count = DIAG_TRIM_BUTTON_COUNT;
+                } else {
+                    list = diag_buttons;
+                    count = DIAG_BUTTON_COUNT;
+                }
+                break;
             case SCREEN_SETUP: list = setup_buttons; count = SETUP_BUTTON_COUNT; break;
             case SCREEN_GUIDE: list = guide_buttons; count = GUIDE_BUTTON_COUNT; break;
             case SCREEN_MAKE:  count = make_screen_buttons(ui.page, &list);   break;
@@ -2151,6 +2189,8 @@ void spike_ui_run(void)
                 top_dirty = true;
                 break;
             case BTN_MENU_TRIM:
+            case BTN_DIAG_TRIM:
+                ui.trim_back = action == BTN_DIAG_TRIM ? SCREEN_DIAG : SCREEN_HOME;
                 ui.screen = SCREEN_TRIM;
                 trim_start();
                 bottom_full = top_dirty = true;
@@ -2239,6 +2279,7 @@ void spike_ui_run(void)
                     ui.page = 0;
                 }
                 ui.screen = ui.screen == SCREEN_GUIDE ? ui.guide_back
+                          : ui.screen == SCREEN_TRIM ? ui.trim_back
                           : (ui.screen == SCREEN_TEST || ui.screen == SCREEN_MAKE) ? SCREEN_SETUP
                           : SCREEN_HOME;
                 bottom_full = top_dirty = true;

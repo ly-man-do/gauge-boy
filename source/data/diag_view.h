@@ -46,6 +46,10 @@ int diag_items(const obd_diag_t *d, diag_tab_t tab, diag_item_t *items, int max)
  * "Not supported by this car (normal before 2010)."). */
 const char *diag_empty_text(const obd_diag_t *d, diag_tab_t tab);
 
+/* True if a lean or rich code (P0171, P0172, P0174, P0175) is stored or
+ * pending: DIAG then offers a TRIM button (brief section 5d). */
+bool diag_has_trim_codes(const obd_diag_t *d);
+
 /* Fact rows for the top screen: label column then value, e.g.
  * "Car       2008 Honda", "CEL       ON (2 stored codes)". */
 int diag_facts(const obd_diag_t *d, int cols, char lines[][DIAG_VIEW_COLS + 1], int max);

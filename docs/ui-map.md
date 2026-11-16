@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-16, TRIM screen (gauge-boy-3n6.6; M2 in progress)
+**As of:** 2026-11-16, DIAG → TRIM button (gauge-boy-3n6.7; M2 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -39,7 +39,7 @@ GaugeBoy
         ├── TRIM                     (top: short / long / total trim per bank as
         │   │                        colored center-zero bars, engine state, hints)
         │   ├── (bottom: what trims mean, the color zones, how to check them)
-        │   ├── [BACK]               → HOME, stops polling                        [B]
+        │   ├── [BACK]               → HOME (or DIAG, if opened from there), stops polling [B]
         │   └── [START / STOP]       pauses or resumes polling
         │
         ├── DIAG                     (top: car facts or the selected code's text)
@@ -47,6 +47,8 @@ GaugeBoy
         │   ├── [list rows]          3 per page, tap → full description on top
         │   ├── [BACK]               → HOME                                       [B]
         │   ├── [<] page n/m [>]                                                  [L/R]
+        │   ├── [TRIM]               → TRIM (only when P0171 / P0172 / P0174 / P0175 is
+        │   │                        stored or pending; the bottom row narrows to fit it)
         │   ├── [CLEAR]              → Clear codes dialog (needs a scan first)
         │   │   ├── [CANCEL]         → DIAG                                       [B]
         │   │   └── [CLEAR CODES]    clears (refused if moving), then rescans
