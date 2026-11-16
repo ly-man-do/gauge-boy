@@ -18,6 +18,54 @@ static bool lost(elm_status_t st)
     return st == ELM_ERR_IO || st == ELM_ERR_TIMEOUT;
 }
 
+/* The engine ECU's (physical) and every ECU's (functional) request address
+ * on the OBD CAN protocols; NULL for the others. */
+static const char *engine_header(int protocol)
+{
+    return protocol == 6 || protocol == 8 ? "ATSH7E0"
+         : protocol == 7 || protocol == 9 ? "ATSHDA10F1" : NULL;
+}
+
+static const char *functional_header(int protocol)
+{
+    return protocol == 6 || protocol == 8 ? "ATSH7DF"
+         : protocol == 7 || protocol == 9 ? "ATSHDB33F1" : NULL;
+}
+
+static elm_status_t send_header(obd_live_t *lv, elm_t *elm, const char *cmd,
+                                obd_link_trace_fn trace, void *ctx)
+{
+    static elm_response_t r;
+    uint64_t t0 = clock_ms(elm);
+    elm_status_t st = elm_command(elm, cmd, OBD_LIVE_TIMEOUT_MS, &r);
+    lv->requests++;
+    if (trace != NULL) {
+        trace(ctx, cmd, &r, (unsigned)(clock_ms(elm) - t0));
+    }
+    return st;
+}
+
+elm_status_t obd_live_restore_header(obd_live_t *lv, elm_t *elm)
+{
+    const char *cmd = functional_header(lv->protocol);
+    if (!lv->header_set || cmd == NULL) {
+        return ELM_OK;
+    }
+    lv->header_set = false;
+    return send_header(lv, elm, cmd, NULL, NULL);
+}
+
+/* The first request with the engine ECU's address got no answer: ask every
+ * ECU again (not a miss for any PID). */
+static obd_live_step_t header_unanswered(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trace,
+                                         void *ctx)
+{
+    lv->header_set = false;
+    lv->header_refused = true;
+    elm_status_t st = send_header(lv, elm, functional_header(lv->protocol), trace, ctx);
+    return lost(st) ? OBD_LIVE_LOST : OBD_LIVE_MISSED;
+}
+
 static obd_live_pid_t *find(obd_live_t *lv, uint8_t pid)
 {
     for (int i = 0; i < lv->count; i++) {
@@ -172,10 +220,15 @@ static obd_live_step_t multi_step(obd_live_t *lv, elm_t *elm, int first, uint64_
         return OBD_LIVE_IDLE;
     }
 
-    char cmd[2 + 2 * OBD_LIVE_MULTI_MAX + 1] = "01";
+    char cmd[2 + 2 * OBD_LIVE_MULTI_MAX + 2] = "01";
     for (int k = 0; k < np; k++) {
         snprintf(cmd + 2 + 2 * k, sizeof cmd - 2 - 2 * (size_t)k, "%02X",
                  (unsigned)lv->pid[pick[k]].pid);
+    }
+    /* One ECU answers: the adapter can return on its reply ("...1"). */
+    bool count = lv->header_set && lv->use_count && !lv->count_refused && !lv->multi_count_off;
+    if (count) {
+        strcat(cmd, "1");
     }
     elm_status_t st = elm_command(elm, cmd, OBD_LIVE_TIMEOUT_MS, &r);
     uint64_t t1 = clock_ms(elm);
@@ -186,6 +239,10 @@ static obd_live_step_t multi_step(obd_live_t *lv, elm_t *elm, int first, uint64_
     }
     if (lost(st)) {
         return OBD_LIVE_LOST;
+    }
+    if (count && st == ELM_ERR_UNKNOWN_COMMAND) {
+        lv->multi_count_off = true;   /* no count on combined requests; nobody's miss */
+        return OBD_LIVE_MISSED;
     }
 
     /* Every PID found in any ECU's reply. */
@@ -210,7 +267,25 @@ static obd_live_step_t multi_step(obd_live_t *lv, elm_t *elm, int first, uint64_
             }
         }
     }
-    if (nfound == 0 || (nfound == 1 && found[0])) {
+    if (count && nfound == 0) {
+        /* Nothing with the count: drop the count first (nobody's miss);
+         * only an uncounted request decides the rest. */
+        lv->multi_count_off = true;
+        return OBD_LIVE_MISSED;
+    }
+    if (lv->header_set && !lv->header_checked) {
+        if (nfound == 0) {
+            return header_unanswered(lv, elm, trace, ctx);
+        }
+        lv->header_checked = true;
+    }
+    if (count && nfound < np) {
+        lv->multi_count_off = true;   /* the count may cut a reply short: stop using it */
+    }
+    if (nfound >= 2) {
+        lv->multi_worked = true;
+    }
+    if (!lv->multi_worked && (nfound == 0 || (nfound == 1 && found[0]))) {
         /* No answer, or only to the first PID: this car takes one PID a
          * request. Nothing counts as a miss; singles from the next step. */
         lv->multi_refused = true;
@@ -267,6 +342,22 @@ obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trac
     }
     obd_live_pid_t *p = &lv->pid[idx];
 
+    if (lv->use_engine_header && !lv->header_set && !lv->header_refused) {
+        const char *cmd = engine_header(lv->protocol);
+        if (cmd == NULL) {
+            lv->header_refused = true;   /* not an OBD CAN protocol */
+        } else {
+            elm_status_t hs = send_header(lv, elm, cmd, trace, ctx);
+            if (lost(hs)) {
+                return OBD_LIVE_LOST;
+            }
+            lv->header_set = hs == ELM_OK;
+            lv->header_refused = hs != ELM_OK;
+            lv->header_checked = false;
+            return OBD_LIVE_READ;
+        }
+    }
+
     bool single = p->single_next;
     p->single_next = false;
     if (!single && lv->use_multi && !lv->multi_refused &&
@@ -308,7 +399,12 @@ obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trac
     if (st == ELM_OK && obd_assemble(&r, lv->protocol, false, &reply) == OBD_OK &&
         obd_pid_from_reply(&reply, p->pid, &v) == OBD_PID_OK) {
         record(lv, p, v, t1);
+        lv->header_checked = lv->header_checked || lv->header_set;
         return OBD_LIVE_READ;
+    }
+    if (lv->header_set && !lv->header_checked) {
+        p->due_ms = 0;   /* ask it again with every ECU listening */
+        return header_unanswered(lv, elm, trace, ctx);
     }
     miss(lv, p);
     return OBD_LIVE_MISSED;

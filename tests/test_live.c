@@ -393,6 +393,103 @@ static void test_live_multi_pid_on_can(void)
     CHECK_EQ_INT(f.unexpected_writes, 0);
 }
 
+static void engine_header_setup(void)
+{
+    static const uint8_t car[] = { 0x05, 0x0C, 0x0D, 0 };
+    static const uint8_t want[] = { 0x0C, 0x0D, 0x05 };
+    setup(car);
+    link.protocol = 6;
+    obd_live_init(&lv, &link, want, 3);
+    lv.use_multi = true;
+    lv.use_count = true;
+    lv.use_engine_header = true;
+    lv.volts_failed = true;
+}
+
+static void test_live_engine_header(void)
+{
+    /* The engine ECU only, and the response count on combined requests. */
+    engine_header_setup();
+    fake_io_reply(&f, "ATSH7E0", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "010C0D051", "008\r0: 41 0C 1A F8 0D 00 \r1: 05 7B \r\r>", 40, 0);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);   /* the header */
+    CHECK(lv.header_set);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    CHECK(lv.header_checked);
+    float v = 0.0f;
+    CHECK(obd_live_value(&lv, 0x05, &v) && v == 83.0f);
+    fake_io_reply(&f, "ATSH7DF", "OK\r\r>", 10, 0);
+    CHECK_EQ_INT(obd_live_restore_header(&lv, &elm), ELM_OK);
+    CHECK(!lv.header_set);
+    CHECK_EQ_INT(obd_live_restore_header(&lv, &elm), ELM_OK);   /* nothing to do */
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* No answer with the count: drop the count. No answer without it
+     * either: every ECU again. Nobody's miss. */
+    engine_header_setup();
+    fake_io_reply(&f, "ATSH7E0", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "010C0D051", "NO DATA\r\r>", 40, 0);
+    fake_io_reply(&f, "010C0D05", "NO DATA\r\r>", 40, 0);
+    fake_io_reply(&f, "ATSH7DF", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "010C0D05", "41 0C 1A F8 0D 00 05 7B \r\r>", 40, 0);
+    obd_live_step(&lv, &elm, NULL, NULL);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_MISSED);
+    CHECK(lv.multi_count_off && lv.header_set);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_MISSED);
+    CHECK(lv.header_refused && !lv.header_set && !lv.multi_refused);
+    CHECK_EQ_INT(obd_live_get(&lv, 0x0C)->misses, 0);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    CHECK(obd_live_value(&lv, 0x0D, &v));
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* The adapter refuses ATSH: every ECU, no count on combined requests. */
+    engine_header_setup();
+    fake_io_reply(&f, "ATSH7E0", "?\r\r>", 10, 0);
+    fake_io_reply(&f, "010C0D05", "41 0C 1A F8 0D 00 05 7B \r\r>", 40, 0);
+    obd_live_step(&lv, &elm, NULL, NULL);
+    CHECK(lv.header_refused);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* A counted combined reply that leaves PIDs out: no count on them. */
+    engine_header_setup();
+    fake_io_reply(&f, "ATSH7E0", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "010C0D051", "41 0C 1A F8 0D 00 \r\r>", 40, 0);
+    obd_live_step(&lv, &elm, NULL, NULL);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    CHECK(lv.multi_count_off && lv.header_checked);
+    CHECK_EQ_INT((int)lv.left_out, 1);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* After combined requests have worked, a reply with only the first
+     * PID is a glitch: re-ask the others alone, don't give up on them. */
+    setup((const uint8_t[]){ 0x05, 0x0C, 0x0D, 0 });
+    link.protocol = 6;
+    obd_live_init(&lv, &link, (const uint8_t[]){ 0x0C, 0x0D, 0x05 }, 3);
+    lv.use_multi = true;
+    lv.volts_failed = true;
+    fake_io_reply(&f, "010C0D05", "41 0C 1A F8 0D 00 05 7B \r\r>", 40, 0);
+    fake_io_reply(&f, "010C0D05", "41 0C 1A F8 \r\r>", 40, 0);
+    obd_live_step(&lv, &elm, NULL, NULL);
+    lv.pid[0].due_ms = lv.pid[1].due_ms = lv.pid[2].due_ms = 0;
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    CHECK(lv.multi_worked && !lv.multi_refused);
+    CHECK(obd_live_get(&lv, 0x0D)->single_next);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* ISO 9141-2: no header change at all. */
+    static const uint8_t car[] = { 0x0C, 0x0D, 0 };
+    static const uint8_t want[] = { 0x0C, 0x0D };
+    setup(car);
+    obd_live_init(&lv, &link, want, 2);
+    lv.use_engine_header = true;
+    lv.volts_failed = true;
+    fake_io_reply(&f, "010C", "41 0C 0B B8 \r\r>", 40, 0);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    CHECK(obd_live_value(&lv, 0x0C, &v));
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+}
+
 static void test_live_multi_pid_refused(void)
 {
     static const uint8_t car[] = { 0x05, 0x0C, 0x0D, 0 };
@@ -630,4 +727,5 @@ void suite_live(void)
     RUN_TEST(test_live_priority_refresh_times);
     RUN_TEST(test_live_multi_pid_on_can);
     RUN_TEST(test_live_multi_pid_refused);
+    RUN_TEST(test_live_engine_header);
 }

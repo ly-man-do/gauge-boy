@@ -52,7 +52,7 @@ typedef struct {
 
 /* A combined request whose reply left PIDs out (for the log). */
 typedef struct {
-    char cmd[2 + 2 * OBD_LIVE_MULTI_MAX + 1];
+    char cmd[2 + 2 * OBD_LIVE_MULTI_MAX + 2];   /* with the response count */
     uint8_t missing[OBD_LIVE_MULTI_MAX];
     int missing_count;
     char reply[OBD_LIVE_LEFT_OUT_RAW];   /* raw reply, escaped ("\r") */
@@ -77,7 +77,13 @@ typedef struct {
     bool count_refused;      /* the adapter answered "?" to it: plain requests */
     bool use_multi;          /* CAN: several PIDs per request: set after init */
     bool multi_refused;      /* the car didn't answer them: one PID at a time */
+    bool multi_worked;       /* a combined request got 2+ PIDs back: never refuse after */
     uint32_t multi_requests; /* requests that carried several PIDs */
+    bool use_engine_header;  /* CAN: ask the engine ECU only (ATSH 7E0): set after init */
+    bool header_set;         /* the engine ECU's address is set in the adapter */
+    bool header_checked;     /* and a reply came back with it */
+    bool header_refused;     /* refused or unanswered: every ECU again */
+    bool multi_count_off;    /* combined requests with a response count left PIDs out */
     uint32_t left_out;       /* PIDs left out of combined replies (asked again alone) */
     obd_live_left_out_t left_out_log[OBD_LIVE_LEFT_OUT_LOG];   /* the first few */
     int left_out_logged;
@@ -109,8 +115,20 @@ int obd_live_init(obd_live_t *lv, const obd_link_t *link, const uint8_t *wanted,
  * ("010C0D05"); a car that answers with none or only the first of them
  * gets one PID per request from then on. A PID left out of a combined
  * reply isn't a miss: it is asked alone next, where NO DATA does count
- * (left_out, and the first few such replies in left_out_log). */
+ * (left_out, and the first few such replies in left_out_log).
+ * With use_engine_header set and an OBD CAN protocol (6-9), the first step
+ * sends "ATSH 7E0" (29-bit: "ATSH DA10F1") so only the engine ECU answers:
+ * other ECUs' multi-frame replies can't interleave with its own (headers
+ * are off). Combined requests then carry the response count too. If the
+ * adapter refuses it, or the first request with it gets no answer, every
+ * ECU is asked again (header_refused). Call obd_live_restore_header()
+ * when polling stops. */
 obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trace, void *ctx);
+
+/* Puts back the all-ECU (functional) request address if the engine ECU's
+ * was set, so DIAG hears every ECU again. Returns the adapter's status
+ * (ELM_OK if there was nothing to do). */
+elm_status_t obd_live_restore_header(obd_live_t *lv, elm_t *elm);
 
 /* Change a PID's desired refresh time (0 = as often as possible). */
 void obd_live_set_period(obd_live_t *lv, uint8_t pid, uint32_t period_ms);

@@ -150,6 +150,7 @@ int main(int argc, char **argv)
     int polled = obd_live_init(&lv, &d.link, wanted, (int)sizeof wanted);
     lv.use_count = true;   /* as the app polls */
     lv.use_multi = true;
+    lv.use_engine_header = true;
     snprintf(detail, sizeof detail, "%d of %d", polled, (int)sizeof wanted);
     check(polled > 0, "PIDs to poll (supported and known)", detail);
     bool lost_live = false;
@@ -185,6 +186,10 @@ int main(int argc, char **argv)
                lv.left_out_log[i].missing_count, lv.left_out_log[i].reply);
     }
     check(lv.have_volts || lv.volts_failed, "ATRV read while polling", NULL);
+    if (lv.header_checked || lv.header_refused) {
+        printf("    %s\n", lv.header_checked ? "engine ECU only (ATSH)" : "all ECUs (no engine header)");
+    }
+    check(obd_live_restore_header(&lv, &elm) == ELM_OK, "all-ECU address restored", NULL);
 
     printf("\nSpike actions (as the 3DS app runs them):\n");
     spike_t spike;

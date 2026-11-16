@@ -442,13 +442,18 @@ void spike_live_summary(spike_t *s, const obd_live_t *lv)
         now = lv->pid[i].at_ms > now ? lv->pid[i].at_ms : now;
     }
     unsigned secs = now > lv->started_ms ? (unsigned)((now - lv->started_ms) / 1000u) : 0;
-    spike_logf(s, "LIVE: %u requests in %u s, %.1f/s, %u failed%s%s", (unsigned)lv->requests, secs,
-               (double)obd_live_rate(lv, now), (unsigned)lv->failures,
+    spike_logf(s, "LIVE: %u requests in %u s, %.1f/s, %u failed%s%s%s", (unsigned)lv->requests,
+               secs, (double)obd_live_rate(lv, now), (unsigned)lv->failures,
                lv->use_count ? (lv->count_refused ? ", no response count" : ", response count 1")
                              : "",
                lv->multi_requests > 0 ? (lv->multi_refused ? ", multi-PID refused"
-                                                           : ", several PIDs a request")
-                                      : "");
+                                         : lv->multi_count_off ? ", several PIDs a request (no count)"
+                                         : ", several PIDs a request")
+                                      : "",
+               lv->header_checked ? ", engine ECU only"
+               : lv->header_refused && lv->use_engine_header &&
+                 obd_family(lv->protocol) == OBD_FAMILY_CAN ? ", all ECUs (engine address unanswered)"
+               : "");
     char line[200] = "";
     for (int i = 0; i < lv->count; i++) {
         const obd_live_pid_t *p = &lv->pid[i];
@@ -549,6 +554,7 @@ void spike_live_test(spike_t *s, unsigned poll_ms)
     }
     lv.use_count = true;
     lv.use_multi = true;
+    lv.use_engine_header = true;
     spike_logf(s, "LIVE TEST: polling the Engine view for %u s", poll_ms / 1000u);
     uint64_t t0 = elm_clock(s);
     while (elm_clock(s) - t0 < poll_ms) {
@@ -561,6 +567,7 @@ void spike_live_test(spike_t *s, unsigned poll_ms)
             break;
         }
     }
+    obd_live_restore_header(&lv, s->elm);
     spike_live_summary(s, &lv);
     char value[32];
     for (int i = 0; i < lv.count; i++) {

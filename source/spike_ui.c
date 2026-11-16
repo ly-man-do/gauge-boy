@@ -893,6 +893,11 @@ static live_open_t live_open(spike_t *s, obd_link_t *link)
     return LIVE_OPEN_OK;
 }
 
+static bool lost_status(elm_status_t st)
+{
+    return st == ELM_ERR_IO || st == ELM_ERR_TIMEOUT;
+}
+
 /* LIVE (worker): one poll while the LIVE screen polls. */
 static void live_poll(spike_t *s)
 {
@@ -913,6 +918,9 @@ static void live_poll(spike_t *s)
 
     if (!on) {
         if (ready) {
+            if (lost_status(obd_live_restore_header(&lv, s->elm))) {
+                tcp_transport_close(s->transport);
+            }
             spike_live_summary(s, &lv);
         }
         ready = false;   /* start again from the link next time */
@@ -935,6 +943,7 @@ static void live_poll(spike_t *s)
     }
     if (!ready || gen != gen_seen) {
         if (ready) {
+            obd_live_restore_header(&lv, s->elm);
             spike_live_summary(s, &lv);   /* the old PID set's rates */
         }
         int count = obd_live_init(&lv, &link, pids, n);
@@ -945,6 +954,7 @@ static void live_poll(spike_t *s)
         }
         lv.use_count = true;
         lv.use_multi = true;   /* CAN cars: several PIDs a request */
+        lv.use_engine_header = true;   /* CAN cars: the engine ECU only */
         char list[3 * OBD_LIVE_MAX + 1] = "";
         for (int i = 0; i < count; i++) {
             snprintf(list + strlen(list), sizeof list - strlen(list), " %02X",
