@@ -65,6 +65,25 @@ static void test_config_car_make(void)
 
 /* Keys this version doesn't know (e.g. keep_awake from 0.1.0+446ee76) are
  * ignored without a warning. */
+static void test_config_live_view(void)
+{
+    gb_config_t c;
+    config_defaults(&c);
+    CHECK_EQ_STR(c.live_view, "engine");
+    CHECK_EQ_INT(config_parse(&c, "[live]\nview = Warmup\n"), 0);
+    CHECK_EQ_STR(c.live_view, "warmup");
+    CHECK_EQ_INT(config_parse(&c, "[live]\nview =\nview = muchtoolongname\n"), 2);
+    CHECK_EQ_STR(c.live_view, "warmup");
+    char path[] = "gaugeboy_test_view.tmp.ini";
+    CHECK(config_save(&c, path));
+    gb_config_t back;
+    int w = -1;
+    CHECK(config_load(&back, path, &w));
+    CHECK_EQ_INT(w, 0);
+    CHECK_EQ_STR(back.live_view, "warmup");
+    remove(path);
+}
+
 static void test_config_unknown_key_ignored(void)
 {
     gb_config_t c;
@@ -346,6 +365,7 @@ void suite_data(void)
     RUN_TEST(test_config_car_make);
     RUN_TEST(test_config_live_pids);
     RUN_TEST(test_config_unknown_key_ignored);
+    RUN_TEST(test_config_live_view);
     RUN_TEST(test_config_parse_adapter_section);
     RUN_TEST(test_config_ignores_other_sections_and_keys);
     RUN_TEST(test_config_bad_values_keep_defaults);

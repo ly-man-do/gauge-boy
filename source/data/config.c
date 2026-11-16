@@ -17,6 +17,7 @@ void config_defaults(gb_config_t *cfg)
     static const uint8_t live[] = CONFIG_LIVE_DEFAULT_PIDS;
     memcpy(cfg->live_pids, live, sizeof live);
     cfg->live_pid_count = (uint8_t)sizeof live;
+    strcpy(cfg->live_view, "engine");
 }
 
 /* "0C 0D 05" or "0c,0d,5": hex PIDs 01-FF, repeats dropped. False (and
@@ -180,6 +181,14 @@ int config_parse(gb_config_t *cfg, const char *text)
         if (strcmp(section, "live") == 0) {
             if (strcmp(key, "pids") == 0 && !parse_pids(cfg, value)) {
                 warnings++;
+            } else if (strcmp(key, "view") == 0) {
+                lower(value);
+                size_t n = strlen(value);
+                if (n == 0 || n >= sizeof cfg->live_view) {
+                    warnings++;
+                } else {
+                    memcpy(cfg->live_view, value, n + 1);
+                }
             }
             continue;
         }
@@ -295,13 +304,15 @@ bool config_save(const gb_config_t *cfg, const char *path)
         "[vehicle]\n"
         "make = %s\n"
         "\n"
-        "; pids: the Mode 01 PIDs the LIVE screen polls, in hex (chosen on the LIVE\n"
-        "; screen). Fewer PIDs refresh faster.\n"
+        "; pids: the LIVE Custom view's Mode 01 PIDs, in hex (chosen with EDIT).\n"
+        "; Fewer PIDs refresh faster. view: the LIVE view opened last.\n"
         "\n"
         "[live]\n"
-        "pids = %s\n",
+        "pids = %s\n"
+        "view = %s\n",
         cfg->adapter_host, (unsigned)cfg->adapter_port, slot,
-        cfg->car_make[0] != '\0' ? cfg->car_make : "auto", pids);
+        cfg->car_make[0] != '\0' ? cfg->car_make : "auto", pids,
+        cfg->live_view);
     bool ok = rc > 0;
     if (fclose(f) != 0) {
         ok = false;

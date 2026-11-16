@@ -21,6 +21,7 @@
 #include "data/config.h"
 #include "data/diag_view.h"
 #include "data/live_view.h"
+#include "data/live_views.h"
 #include "data/wifi_guide.h"
 #include "data/textlog.h"
 #include "spike_actions.h"
@@ -57,7 +58,9 @@
 #define BTN_SET_MAKE     107   /* worker: save the car make, apply it to DIAG */
 #define BTN_LIVE_SAVE    108   /* worker: save the LIVE PIDs to config.ini */
 #define BTN_LIVE_TOGGLE  (-33) /* UI: LIVE START / STOP */
-#define BTN_LIVE_PICK    (-80) /* UI: LIVE PID toggle (-80 - slot on the page) */
+#define BTN_LIVE_PICK    (-80) /* UI: Custom PID toggle (-80 - slot on the page) */
+#define BTN_LIVE_EDIT    (-34) /* UI: LIVE Custom view -> PID toggles */
+#define BTN_LIVE_VIEW    (-90) /* UI: LIVE view list (-90 - view) */
 #define BTN_GUIDE        (-8)  /* UI: SETUP -> Wi-Fi guide */
 #define BTN_CLEAR_ASK    (-5)  /* UI: open the clear-codes dialog */
 #define BTN_CLEAR_CANCEL (-6)
@@ -158,11 +161,14 @@ static const button_t setup_buttons[] = {
 #define SETUP_BUTTON_COUNT ((int)(sizeof setup_buttons / sizeof setup_buttons[0]))
 
 typedef enum {
-    SCREEN_HOME, SCREEN_DIAG, SCREEN_SETUP, SCREEN_TEST, SCREEN_GUIDE, SCREEN_MAKE, SCREEN_LIVE
+    SCREEN_HOME, SCREEN_DIAG, SCREEN_SETUP, SCREEN_TEST, SCREEN_GUIDE, SCREEN_MAKE,
+    SCREEN_LIVE_MENU,          /* LIVE: the view list */
+    SCREEN_LIVE,               /* LIVE: one view polling */
+    SCREEN_LIVE_EDIT           /* LIVE: the Custom view's PID toggles */
 } screen_t;
 
-/* LIVE: PID toggles (2 columns x 3 rows a page), then BACK < page > START. */
-#define LIVE_PAGE_SLOTS 6
+/* LIVE view screen: BACK (to the list), < view >, START / STOP; EDIT in
+ * the Custom view. */
 static const button_t live_buttons[] = {
     { "BACK", BTN_BACK,        0,  25, 8, 5 },
     { "<",    BTN_PAGE_PREV,   9,  25, 5, 5 },
@@ -170,6 +176,33 @@ static const button_t live_buttons[] = {
     { NULL,   BTN_LIVE_TOGGLE, 26, 25, 13, 5 },   /* START / STOP */
 };
 #define LIVE_BUTTON_COUNT ((int)(sizeof live_buttons / sizeof live_buttons[0]))
+static const button_t live_edit_button = { "EDIT PIDS", BTN_LIVE_EDIT, 10, 14, 19, 5 };
+
+/* Custom PID toggles (2 columns x 3 rows a page), then BACK < page >. */
+#define LIVE_PAGE_SLOTS 6
+static const button_t live_edit_buttons[] = {
+    { "BACK", BTN_BACK,      0,  25, 8, 5 },
+    { "<",    BTN_PAGE_PREV, 9,  25, 5, 5 },
+    { ">",    BTN_PAGE_NEXT, 17, 25, 5, 5 },
+};
+#define LIVE_EDIT_BUTTON_COUNT ((int)(sizeof live_edit_buttons / sizeof live_edit_buttons[0]))
+
+/* LIVE view list: one button per view (3 columns x 3 rows, 12-13 x 5
+ * cells), then BACK. */
+static button_t live_menu_buttons[LIVE_VIEW_COUNT + 1];
+static int live_menu_count(void)
+{
+    static const int col[3] = { 0, 13, 27 };
+    static const int width[3] = { 12, 13, 12 };
+    for (int v = 0; v < LIVE_VIEW_COUNT; v++) {
+        button_t b = { live_view_name(v), BTN_LIVE_VIEW - v, col[v % 3], 3 + (v / 3) * 7,
+                       width[v % 3], 5 };
+        live_menu_buttons[v] = b;
+    }
+    button_t back = { "BACK", BTN_BACK, 0, 25, 8, 5 };
+    live_menu_buttons[LIVE_VIEW_COUNT] = back;
+    return LIVE_VIEW_COUNT + 1;
+}
 
 static button_t live_slot(int slot)
 {
@@ -299,6 +332,9 @@ static struct {
     float live_rate;
     unsigned live_version;     /* bumped on every published step */
     obd_link_t live_link;      /* supported PIDs, for the toggles */
+    uint8_t live_want[OBD_LIVE_MAX];       /* the view's PIDs (the UI sets them) */
+    uint32_t live_want_period[OBD_LIVE_MAX];
+    int live_want_count;
     bool live_link_ok;
     char live_msg[48];         /* status line, "" while polling fine */
     unsigned live_ui_version;  /* bumped when the bottom screen must change */
@@ -803,9 +839,11 @@ static void live_poll(spike_t *s)
     LightLock_Lock(&shared.lock);
     bool on = shared.live_on;
     unsigned gen = shared.live_gen;
-    uint8_t pids[CONFIG_LIVE_PIDS_MAX];
-    int n = app_cfg->live_pid_count;
-    memcpy(pids, app_cfg->live_pids, sizeof pids);
+    uint8_t pids[OBD_LIVE_MAX];
+    uint32_t periods[OBD_LIVE_MAX];
+    int n = shared.live_want_count;
+    memcpy(pids, shared.live_want, sizeof pids);
+    memcpy(periods, shared.live_want_period, sizeof periods);
     LightLock_Unlock(&shared.lock);
 
     if (!on) {
@@ -835,6 +873,11 @@ static void live_poll(spike_t *s)
             live_summary(s, &lv);   /* the old PID set's rates */
         }
         int count = obd_live_init(&lv, &link, pids, n);
+        for (int i = 0; i < n; i++) {
+            if (periods[i] != LIVE_PERIOD_DEFAULT) {
+                obd_live_set_period(&lv, pids[i], periods[i]);
+            }
+        }
         lv.use_count = true;
         char list[3 * OBD_LIVE_MAX + 1] = "";
         for (int i = 0; i < count; i++) {
@@ -1071,6 +1114,7 @@ static void draw_diag_top(bool home, diag_tab_t tab, int selected, int busy, boo
     print_row(0, TOP_COLS, header);
     print_row(1, TOP_COLS, "-------------------------------------------------");
     print_row(2, TOP_COLS, title);
+    print_row(3, TOP_COLS, "");   /* LIVE writes a note here */
     int row = 4;
     for (int i = 0; i < nf && row < TOP_ROWS; i++) {
         print_row(row++, TOP_COLS, top_lines[i]);
@@ -1138,7 +1182,8 @@ typedef struct {
     bool clear_dialog;         /* clear-codes question showing */
     int home_selected;         /* HOME card tapped last (home_item_t), -1 = none */
     screen_t guide_back;       /* where BACK goes from the Wi-Fi guide */
-    bool live_dirty;           /* LIVE PIDs changed: save on BACK */
+    bool live_dirty;           /* Custom PIDs or the view changed: save */
+    int live_view;             /* live_view_id_t shown on SCREEN_LIVE */
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
@@ -1246,8 +1291,33 @@ static int live_page_count(void)
     return n == 0 ? 1 : (n + LIVE_PAGE_SLOTS - 1) / LIVE_PAGE_SLOTS;
 }
 
-/* LIVE top screen: the values, refresh rates and a status line. */
-static void draw_live_top(int busy, bool connected)
+/* LIVE: show view v and (re)start polling its PIDs. Remembered in
+ * config.ini (saved on BACK). */
+static void live_select_view(ui_state_t *ui, int v)
+{
+    uint8_t pids[OBD_LIVE_MAX];
+    uint32_t periods[OBD_LIVE_MAX];
+    LightLock_Lock(&shared.lock);
+    int n = live_view_request(v, app_cfg->live_pids, app_cfg->live_pid_count, pids, periods,
+                              OBD_LIVE_MAX);
+    memcpy(shared.live_want, pids, sizeof pids);
+    memcpy(shared.live_want_period, periods, sizeof periods);
+    shared.live_want_count = n;
+    shared.live_on = true;
+    shared.live_gen++;
+    shared.live_msg[0] = '\0';
+    shared.live_ui_version++;
+    if (strcmp(app_cfg->live_view, live_view_key(v)) != 0) {
+        snprintf(app_cfg->live_view, sizeof app_cfg->live_view, "%s", live_view_key(v));
+        ui->live_dirty = true;
+    }
+    LightLock_Unlock(&shared.lock);
+    LightEvent_Signal(&shared.wake);
+    ui->live_view = v;
+}
+
+/* LIVE top screen: the view, the values, refresh rates and a status line. */
+static void draw_live_top(int view, int busy, bool connected)
 {
     static obd_live_t lv;
     static char lines[LIVE_VIEW_MAX][LIVE_VIEW_COLS + 1];
@@ -1266,13 +1336,27 @@ static void draw_live_top(int busy, bool connected)
     int n = live_view_lines(have ? &lv : NULL, have ? protocol : 0, rate, OBD_UNITS_US, TOP_COLS,
                             lines, LIVE_VIEW_MAX);
     spike_format_header(header, sizeof header, connected, busy);
-    snprintf(title, sizeof title, "LIVE  %s", lines[0]);
+    snprintf(title, sizeof title, "%s  %s", live_view_name(view), lines[0]);
+    /* Under the title: what the view is for, or the refresh warning. */
+    char note[TOP_COLS + 8];
+    float fast = have ? live_fast_interval(&lv, rate) : 0.0f;
+    if (live_view_warns(view) && have && lv.count > 0) {
+        if (fast > 0.0f) {
+            snprintf(note, sizeof note, "%d PIDs: fast ones every %.1f s. Fewer = faster.",
+                     lv.count, (double)fast);
+        } else {
+            snprintf(note, sizeof note, "%d PIDs: fewer PIDs refresh faster.", lv.count);
+        }
+    } else {
+        snprintf(note, sizeof note, "%s", live_view_purpose(view));
+    }
     consoleSelect(&top_console);
     printf("\x1b[0m");
     print_row(0, TOP_COLS, header);
     print_row(1, TOP_COLS, "-------------------------------------------------");
     print_row(2, TOP_COLS, title);
-    for (int i = 1; i < TOP_ROWS - 3; i++) {
+    print_row(3, TOP_COLS, note);
+    for (int i = 2; i < TOP_ROWS - 3; i++) {
         print_row(2 + i, TOP_COLS, i < n ? lines[i] : "");
     }
     print_row(TOP_ROWS - 1, TOP_COLS, msg[0] != '\0' ? msg
@@ -1487,19 +1571,59 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         return;
     }
 
+    if (ui->screen == SCREEN_LIVE_MENU) {
+        print_row(1, BOTTOM_COLS, "Pick a view: a few PIDs for one job");
+        clear_rows(2, 24);
+        for (int i = 0; i < LIVE_VIEW_COUNT + 1; i++) {
+            const button_t *b = &live_menu_buttons[i];
+            draw_button_ex(b, flashing(b->action, now), false,
+                           b->action == BTN_LIVE_VIEW - ui->live_view);
+        }
+        return;
+    }
     if (ui->screen == SCREEN_LIVE) {
-        uint8_t choices[OBD_LIVE_MAX];
-        int nc = live_choices_now(choices);
-        uint8_t pids[CONFIG_LIVE_PIDS_MAX];
         char msg[sizeof shared.live_msg];
         LightLock_Lock(&shared.lock);
-        int np = cfg->live_pid_count;
-        memcpy(pids, cfg->live_pids, sizeof pids);
         bool on = shared.live_on;
         memcpy(msg, shared.live_msg, sizeof msg);
         LightLock_Unlock(&shared.lock);
+        clear_rows(1, 24);
+        snprintf(line, sizeof line, "View: %s", live_view_name(ui->live_view));
+        print_row(2, BOTTOM_COLS, line);
+        print_row(3, BOTTOM_COLS, live_view_purpose(ui->live_view));
+        print_row(5, BOTTOM_COLS, "< > or L / R: other views");
+        if (live_view_warns(ui->live_view)) {
+            print_row(7, BOTTOM_COLS, "Many PIDs refresh slowly: the top");
+            print_row(8, BOTTOM_COLS, "screen says how often.");
+        }
+        if (ui->live_view == LIVE_VIEW_CUSTOM) {
+            draw_button(&live_edit_button, flashing(live_edit_button.action, now), false);
+        }
+        if (msg[0] != '\0') {
+            print_row(21, BOTTOM_COLS, msg);
+        }
+        for (int i = 0; i < LIVE_BUTTON_COUNT; i++) {
+            button_t b = live_buttons[i];
+            if (b.action == BTN_LIVE_TOGGLE) {
+                b.label = on ? "STOP" : "START";
+            }
+            draw_button_ex(&b, flashing(b.action, now), false,
+                           b.action == BTN_LIVE_TOGGLE && on);
+        }
+        snprintf(line, sizeof line, "%d/%d", ui->live_view + 1, LIVE_VIEW_COUNT);
+        printf("\x1b[%d;15H%-3.3s", 27 + 1, line);
+        return;
+    }
+    if (ui->screen == SCREEN_LIVE_EDIT) {
+        uint8_t choices[OBD_LIVE_MAX];
+        int nc = live_choices_now(choices);
+        uint8_t pids[CONFIG_LIVE_PIDS_MAX];
+        LightLock_Lock(&shared.lock);
+        int np = cfg->live_pid_count;
+        memcpy(pids, cfg->live_pids, sizeof pids);
+        LightLock_Unlock(&shared.lock);
 
-        print_row(1, BOTTOM_COLS, "Tap a PID to poll it; fewer = faster");
+        print_row(1, BOTTOM_COLS, "Custom: tap a PID; fewer = faster");
         clear_rows(2, 24);   /* the page's toggles change */
         for (int slot = 0; slot < LIVE_PAGE_SLOTS; slot++) {
             int k = ui->page * LIVE_PAGE_SLOTS + slot;
@@ -1512,17 +1636,12 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
                            live_pid_chosen(pids, np, choices[k]));
         }
         if (nc == 0) {
-            print_row(12, BOTTOM_COLS, msg[0] != '\0' ? msg
-                                       : on ? "Looking for the car..."
-                                            : "Tap START with the engine running.");
+            print_row(12, BOTTOM_COLS, "The car's PIDs show here once LIVE");
+            print_row(13, BOTTOM_COLS, "has found the car.");
         }
-        for (int i = 0; i < LIVE_BUTTON_COUNT; i++) {
-            button_t b = live_buttons[i];
-            if (b.action == BTN_LIVE_TOGGLE) {
-                b.label = on ? "STOP" : "START";
-            }
-            draw_button_ex(&b, flashing(b.action, now), false,
-                           b.action == BTN_LIVE_TOGGLE && on);
+        for (int i = 0; i < LIVE_EDIT_BUTTON_COUNT; i++) {
+            const button_t *b = &live_edit_buttons[i];
+            draw_button(b, flashing(b->action, now), false);
         }
         snprintf(line, sizeof line, "%d/%d", ui->page + 1,
                  nc == 0 ? 1 : (nc + LIVE_PAGE_SLOTS - 1) / LIVE_PAGE_SLOTS);
@@ -1707,7 +1826,8 @@ void spike_ui_run(void)
     }
 
     ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false, -1, SCREEN_SETUP,
-                      false };
+                      false, LIVE_VIEW_ENGINE };
+    live_menu_count();
     uint64_t notice_until = 0;
     int scroll = 0;                /* log (SETUP, TEST) */
     unsigned drawn_version = ~0u;
@@ -1777,7 +1897,17 @@ void spike_ui_run(void)
             case SCREEN_SETUP: list = setup_buttons; count = SETUP_BUTTON_COUNT; break;
             case SCREEN_GUIDE: list = guide_buttons; count = GUIDE_BUTTON_COUNT; break;
             case SCREEN_MAKE:  count = make_screen_buttons(ui.page, &list);   break;
-            case SCREEN_LIVE:  list = live_buttons;  count = LIVE_BUTTON_COUNT;  break;
+            case SCREEN_LIVE:
+                list = live_buttons;
+                count = LIVE_BUTTON_COUNT;
+                if (ui.live_view == LIVE_VIEW_CUSTOM &&
+                    button_at(&live_edit_button, 1, tp.px, tp.py) == 0) {
+                    list = &live_edit_button;
+                    count = 1;
+                }
+                break;
+            case SCREEN_LIVE_EDIT: list = live_edit_buttons; count = LIVE_EDIT_BUTTON_COUNT; break;
+            case SCREEN_LIVE_MENU: list = live_menu_buttons; count = LIVE_VIEW_COUNT + 1;  break;
             case SCREEN_TEST:  break;
             }
             int i = ui.screen == SCREEN_HOME && home_gfx ? -1 : button_at(list, count, tp.px, tp.py);
@@ -1791,7 +1921,7 @@ void spike_ui_run(void)
             } else if (i >= 0 && !(ui.permanent_hidden && list[i].action == BTN_TAB_PERM)) {
                 action = list[i].action;
                 tapped = true;
-            } else if (ui.screen == SCREEN_LIVE) {
+            } else if (ui.screen == SCREEN_LIVE_EDIT) {
                 for (int slot = 0; slot < LIVE_PAGE_SLOTS; slot++) {
                     button_t b = live_slot(slot);
                     if (button_at(&b, 1, tp.px, tp.py) == 0) {
@@ -1819,8 +1949,8 @@ void spike_ui_run(void)
         } else if (!confirming && !tapped && !ui.clear_dialog) {
             if ((down & KEY_B) && ui.screen != SCREEN_HOME) { action = BTN_BACK; tapped = true; }
             else if ((down & KEY_X) && ui.screen == SCREEN_DIAG) { action = BTN_DIAG_SCAN; tapped = true; }
-            else if ((down & KEY_L) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE || ui.screen == SCREEN_LIVE)) { action = BTN_PAGE_PREV; tapped = true; }
-            else if ((down & KEY_R) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE || ui.screen == SCREEN_LIVE)) { action = BTN_PAGE_NEXT; tapped = true; }
+            else if ((down & KEY_L) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE || ui.screen == SCREEN_LIVE || ui.screen == SCREEN_LIVE_EDIT)) { action = BTN_PAGE_PREV; tapped = true; }
+            else if ((down & KEY_R) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE || ui.screen == SCREEN_LIVE || ui.screen == SCREEN_LIVE_EDIT)) { action = BTN_PAGE_NEXT; tapped = true; }
         }
 
         if (tapped) {
@@ -1846,16 +1976,19 @@ void spike_ui_run(void)
                 ui.screen = SCREEN_SETUP;
                 bottom_full = top_dirty = true;
                 break;
-            case BTN_MENU_LIVE:
-                ui.screen = SCREEN_LIVE;
-                ui.page = 0;
+            case BTN_MENU_LIVE: {
                 LightLock_Lock(&shared.lock);
-                shared.live_on = true;
-                shared.live_gen++;
-                shared.live_msg[0] = '\0';
-                shared.live_ui_version++;
+                int v = live_view_find(cfg.live_view);
                 LightLock_Unlock(&shared.lock);
-                LightEvent_Signal(&shared.wake);
+                ui.live_view = v < 0 ? LIVE_VIEW_ENGINE : v;
+                ui.screen = SCREEN_LIVE_MENU;
+                ui.page = 0;
+                bottom_full = top_dirty = true;
+                break;
+            }
+            case BTN_LIVE_EDIT:
+                ui.screen = SCREEN_LIVE_EDIT;
+                ui.page = 0;
                 bottom_full = top_dirty = true;
                 break;
             case BTN_LIVE_TOGGLE:
@@ -1888,13 +2021,23 @@ void spike_ui_run(void)
                 top_dirty = true;
                 break;
             case BTN_PAGE_PREV:
+                if (ui.screen == SCREEN_LIVE) {   /* the previous view */
+                    live_select_view(&ui, (ui.live_view + LIVE_VIEW_COUNT - 1) % LIVE_VIEW_COUNT);
+                    bottom_full = top_dirty = true;
+                    break;
+                }
                 if (ui.page > 0) { ui.page--; ui.selected = -1; top_dirty = true; }
                 bottom_full |= ui.screen == SCREEN_MAKE;   /* the last page is shorter */
                 break;
             case BTN_PAGE_NEXT: {
+                if (ui.screen == SCREEN_LIVE) {   /* the next view */
+                    live_select_view(&ui, (ui.live_view + 1) % LIVE_VIEW_COUNT);
+                    bottom_full = top_dirty = true;
+                    break;
+                }
                 int pages = ui.screen == SCREEN_GUIDE ? WIFI_GUIDE_STEPS
                           : ui.screen == SCREEN_MAKE  ? make_page_count()
-                          : ui.screen == SCREEN_LIVE  ? live_page_count()
+                          : ui.screen == SCREEN_LIVE_EDIT ? live_page_count()
                           :                             page_count(n);
                 if (ui.page + 1 < pages) { ui.page++; ui.selected = -1; top_dirty = true; }
                 bottom_full |= ui.screen == SCREEN_MAKE;
@@ -1919,16 +2062,21 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
-                if (ui.screen == SCREEN_LIVE) {
-                    LightLock_Lock(&shared.lock);
-                    shared.live_on = false;
-                    shared.live_ui_version++;
-                    LightLock_Unlock(&shared.lock);
+                if (ui.screen == SCREEN_LIVE_EDIT || ui.screen == SCREEN_LIVE) {
+                    if (ui.screen == SCREEN_LIVE) {
+                        LightLock_Lock(&shared.lock);
+                        shared.live_on = false;
+                        shared.live_ui_version++;
+                        LightLock_Unlock(&shared.lock);
+                    }
                     if (ui.live_dirty && worker != NULL) {
                         enqueue(BTN_LIVE_SAVE);
                     }
                     ui.live_dirty = false;
                     ui.page = 0;
+                    ui.screen = ui.screen == SCREEN_LIVE_EDIT ? SCREEN_LIVE : SCREEN_LIVE_MENU;
+                    bottom_full = top_dirty = true;
+                    break;
                 }
                 if (ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_DIAG ||
                     ui.screen == SCREEN_MAKE) {
@@ -1960,7 +2108,12 @@ void spike_ui_run(void)
                 }
                 break;
             default:
-                if (ui.screen == SCREEN_LIVE && action <= BTN_LIVE_PICK &&
+                if (ui.screen == SCREEN_LIVE_MENU && action <= BTN_LIVE_VIEW &&
+                    action > BTN_LIVE_VIEW - LIVE_VIEW_COUNT) {
+                    live_select_view(&ui, BTN_LIVE_VIEW - action);
+                    ui.screen = SCREEN_LIVE;
+                    bottom_full = top_dirty = true;
+                } else if (ui.screen == SCREEN_LIVE_EDIT && action <= BTN_LIVE_PICK &&
                     action > BTN_LIVE_PICK - LIVE_PAGE_SLOTS) {
                     uint8_t choices[OBD_LIVE_MAX];
                     int nc = live_choices_now(choices);
@@ -1969,10 +2122,9 @@ void spike_ui_run(void)
                         LightLock_Lock(&shared.lock);
                         cfg.live_pid_count = (uint8_t)live_toggle(cfg.live_pids, cfg.live_pid_count,
                                                                   CONFIG_LIVE_PIDS_MAX, choices[k]);
-                        shared.live_gen++;
                         LightLock_Unlock(&shared.lock);
+                        live_select_view(&ui, LIVE_VIEW_CUSTOM);   /* poll the new list */
                         ui.live_dirty = true;
-                        LightEvent_Signal(&shared.wake);
                     }
                 } else if (ui.screen == SCREEN_MAKE && action <= BTN_MAKE_PICK &&
                     action > BTN_MAKE_PICK - MAKE_PAGE_SLOTS) {
@@ -2036,21 +2188,23 @@ void spike_ui_run(void)
         }
         if (live_ui_version != drawn_live_ui_version) {
             drawn_live_ui_version = live_ui_version;
-            if (ui.screen == SCREEN_LIVE) {
+            if (ui.screen == SCREEN_LIVE || ui.screen == SCREEN_LIVE_EDIT) {
                 bottom_dirty = true;
             }
         }
         /* LIVE values change many times a second: redraw at most 10 times. */
-        bool live_due = ui.screen == SCREEN_LIVE && live_version != drawn_live_version &&
+        bool live_screen = ui.screen == SCREEN_LIVE || ui.screen == SCREEN_LIVE_EDIT ||
+                           ui.screen == SCREEN_LIVE_MENU;
+        bool live_due = live_screen && live_version != drawn_live_version &&
                         now - live_drawn_at >= 100;
 
         bool shows_log = ui.screen == SCREEN_SETUP || ui.screen == SCREEN_TEST ||
                          ui.screen == SCREEN_MAKE;
         if (top_dirty || busy != drawn_busy || connected != drawn_connected || live_due ||
             (shows_log ? (version != drawn_version || scroll != drawn_scroll)
-                       : ui.screen != SCREEN_LIVE && diag_version != drawn_diag_version)) {
-            if (ui.screen == SCREEN_LIVE) {
-                draw_live_top(busy, connected);
+                       : !live_screen && diag_version != drawn_diag_version)) {
+            if (live_screen) {
+                draw_live_top(ui.live_view, busy, connected);
                 drawn_live_version = live_version;
                 live_drawn_at = now;
             } else if (ui.screen == SCREEN_GUIDE) {

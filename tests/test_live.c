@@ -6,6 +6,7 @@
 #include "obd/obd_live.h"
 #include "obd/obd_pid.h"
 #include "data/live_view.h"
+#include "data/live_views.h"
 
 static fake_io_t f;
 static elm_t elm;
@@ -417,8 +418,62 @@ static void test_live_choices_and_toggle(void)
     CHECK_EQ_INT(pids[1], 0x05);
 }
 
+static void test_live_views(void)
+{
+    uint8_t pids[OBD_LIVE_MAX];
+    uint32_t periods[OBD_LIVE_MAX];
+    for (int v = 0; v < LIVE_VIEW_COUNT; v++) {
+        CHECK(live_view_name(v)[0] != '\0' && live_view_purpose(v)[0] != '\0');
+        CHECK_EQ_INT(live_view_find(live_view_key(v)), v);
+        int n = live_view_request(v, NULL, 0, pids, periods, OBD_LIVE_MAX);
+        if (v != LIVE_VIEW_CUSTOM) {
+            CHECK(n > 0);
+        }
+        for (int i = 0; i < n; i++) {
+            CHECK(obd_pid_info(pids[i]) != NULL);   /* every PID is decodable */
+        }
+        CHECK(live_view_warns(v) == (v == LIVE_VIEW_ALL || v == LIVE_VIEW_CUSTOM));
+    }
+    CHECK_EQ_INT(live_view_find("nope"), -1);
+    CHECK_EQ_STR(live_view_name(LIVE_VIEW_IDLE), "Idle & vacuum");
+
+    /* Warm-up reads coolant every second; Engine leaves RPM at its own. */
+    int n = live_view_request(LIVE_VIEW_WARMUP, NULL, 0, pids, periods, OBD_LIVE_MAX);
+    CHECK_EQ_INT(pids[0], 0x05);
+    CHECK_EQ_INT((int)periods[0], 1000);
+    n = live_view_request(LIVE_VIEW_ENGINE, NULL, 0, pids, periods, OBD_LIVE_MAX);
+    CHECK_EQ_INT(pids[0], 0x0C);
+    CHECK(periods[0] == LIVE_PERIOD_DEFAULT);
+    CHECK_EQ_INT(n, 5);
+    /* All: every decodable PID; Custom: the user's list. */
+    CHECK_EQ_INT(live_view_request(LIVE_VIEW_ALL, NULL, 0, pids, periods, OBD_LIVE_MAX),
+                 obd_pid_count());
+    static const uint8_t mine[] = { 0x0D, 0x0C };
+    CHECK_EQ_INT(live_view_request(LIVE_VIEW_CUSTOM, mine, 2, pids, periods, OBD_LIVE_MAX), 2);
+    CHECK_EQ_INT(pids[0], 0x0D);
+    CHECK_EQ_INT(live_view_request(LIVE_VIEW_ALL, NULL, 0, pids, periods, 3), 3);   /* capped */
+}
+
+static void test_live_fast_interval(void)
+{
+    static const uint8_t car[] = { 0x05, 0x0C, 0x0D, 0x0F, 0 };
+    setup(car);
+    static const uint8_t want[] = { 0x0C, 0x0D, 0x05, 0x0F };
+    obd_live_init(&lv, &link, want, 4);
+    /* 2 fast PIDs; coolant (15 s), intake air (10 s) and ATRV (5 s) take
+     * 0.067 + 0.1 + 0.2 requests/s of 2.2: each fast PID about every 1.1 s. */
+    float s = live_fast_interval(&lv, 2.2f);
+    CHECK(s > 1.0f && s < 1.2f);
+    CHECK_NEAR(live_fast_interval(&lv, 0.0f), 0.0f);
+    obd_live_set_period(&lv, 0x0C, 1000);
+    obd_live_set_period(&lv, 0x0D, 1000);
+    CHECK_NEAR(live_fast_interval(&lv, 2.2f), 0.0f);   /* no fast PIDs */
+}
+
 void suite_live(void)
 {
+    RUN_TEST(test_live_views);
+    RUN_TEST(test_live_fast_interval);
     RUN_TEST(test_live_view_lines);
     RUN_TEST(test_live_choices_and_toggle);
     RUN_TEST(test_live_init_keeps_supported_known_pids);

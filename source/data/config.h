@@ -17,7 +17,8 @@
  *   make = auto            ; or a make name (e.g. Geo) for cars with no VIN over OBD
  *
  *   [live]
- *   pids = 0C 0D 05 0F 11 04 0B 0E 10   ; Mode 01 PIDs the LIVE screen polls, hex
+ *   pids = 0C 0D 05 0F 11 04 0B 0E 10   ; the Custom view's PIDs, hex
+ *   view = engine                        ; the LIVE view opened last
  */
 
 #include <stdbool.h>
@@ -42,6 +43,7 @@ typedef struct {
     char car_make[24];       /* "" = auto (from the VIN), else a DTC make name */
     uint8_t live_pids[CONFIG_LIVE_PIDS_MAX];  /* LIVE screen PIDs, in order */
     uint8_t live_pid_count;
+    char live_view[12];      /* LIVE view key ("engine", "custom" ...) */
 } gb_config_t;
 
 #define CONFIG_WIFI_SLOTS 3

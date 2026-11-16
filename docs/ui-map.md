@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-16, 0.1.0+2d4e05a (M2 in progress)
+**As of:** 2026-11-16, LIVE views (gauge-boy-3n6.12; M2 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -13,7 +13,7 @@ GaugeBoy
     └── HOME                         (graphics; top screen: car facts)
         ├── [CEL card]               → DIAG        (shows CEL off / CEL ON / CEL not read)
         ├── [Adapter card]           → Wi-Fi guide (shows Connected / Not connected)
-        ├── [LIVE  · Dash gauges]    → LIVE (starts polling)
+        ├── [LIVE  · Dash gauges]    → LIVE view list
         ├── [DIAG  · Codes & CEL]    → DIAG
         ├── [TRIM  · Fuel trims]     → notice "comes in version 0.2"
         ├── [FUN   · Fun modes]      → notice "comes in version 0.6"
@@ -21,13 +21,20 @@ GaugeBoy
         ├── [SETUP · Settings]       → SETUP
         └── [START Close bar]        → closes GaugeBoy            [START]
         │
-        ├── LIVE                     (top: values, refresh rates, battery, vacuum)
-        │   ├── [PID toggles]        6 per page, green = polled (Load, Coolant,
-        │   │                        STFT/LTFT B1-B2, MAP, RPM, Speed, Timing,
-        │   │                        Intake air, Throttle, MAF … as the car supports)
-        │   ├── [BACK]               → HOME, stops polling, saves the PID choice  [B]
-        │   ├── [<] page n/m [>]                                                  [L/R]
-        │   └── [START / STOP]       pauses or resumes polling
+        ├── LIVE view list           (top: the last view's values)
+        │   ├── [Engine] [Idle & vacuum] [Air & fuel]
+        │   ├── [Warm-up] [Drive] [All]
+        │   ├── [Custom]             tap a view → LIVE view (starts polling; green = last used)
+        │   ├── [BACK]               → HOME                                       [B]
+        │   └── LIVE view            (top: view, purpose or refresh warning, values,
+        │       │                    refresh rates, battery, vacuum)
+        │       ├── [BACK]           → view list, stops polling, saves the view   [B]
+        │       ├── [<] view n/7 [>] previous / next view                         [L/R]
+        │       ├── [START / STOP]   pauses or resumes polling
+        │       └── [EDIT PIDS]      (Custom only) → Custom PIDs
+        │           ├── [PID toggles] 6 per page, green = polled (the PIDs the car supports)
+        │           ├── [BACK]       → Custom view, saves the choice              [B]
+        │           └── [<] page n/m [>]                                          [L/R]
         │
         ├── DIAG                     (top: car facts or the selected code's text)
         │   ├── [STORED] [PENDING] [PERM] [READY]   tabs (PERM hidden if unsupported)
@@ -66,5 +73,6 @@ GaugeBoy
 
 - The adapter test screen and Car make are both under SETUP. SETUP's bottom row is BACK, ADAPTER and WI-FI GUIDE.
 - **SLOT** on the adapter test screen does the same thing as SETUP's **Wi-Fi slot** row.
+- LIVE views and the PIDs in each: Engine (RPM, speed, coolant, throttle, load), Idle & vacuum (RPM, MAP + vacuum, short-term trims, timing), Air & fuel (MAF, MAP, intake air, throttle, short- and long-term trims), Warm-up (coolant, intake air, oil, outside air, run time, RPM), Drive (RPM, speed, throttle, load, timing), All (every supported PID), Custom (your pick). Each view only shows what the car supports.
 - Only HOME is drawn with graphics (citro2d). Every other screen is still the text console until M3.
 - The code for these screens is in `source/spike_ui.c` (screens, buttons, actions) and `source/ui/` (HOME layout and drawing).
