@@ -93,6 +93,7 @@ To test without a car, see [tools/README.md](tools/README.md) for the ELM327 emu
 
 - [Project brief](docs/gaugeboy-brief.md): scope, design and milestones.
 - [Testing on a real New 3DS](docs/testing-on-3ds.md): install the test build and run the adapter tests.
+- [Screen and button map](docs/ui-map.md): every screen and button in the app.
 - [Contributing](CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)
 
