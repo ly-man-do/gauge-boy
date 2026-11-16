@@ -66,6 +66,14 @@ obd_pid_result_t obd_pid_decode(uint8_t pid, const uint8_t *data, size_t len, fl
  * vehicle speed). */
 obd_pid_result_t obd_pid_from_reply(const obd_reply_t *reply, uint8_t pid, float *value);
 
+/*
+ * A Mode 01 reply to a request for several PIDs (CAN only, up to 6):
+ * "41 0C A B 0D C 05 D ..." gives (0C, rpm), (0D, speed), (05, coolant).
+ * msg starts at the 0x41. Stops at a PID this table can't size or a cut-
+ * short value. Writes up to max pairs; returns how many.
+ */
+int obd_pid_parse_multi(const uint8_t *msg, size_t len, uint8_t *pids, float *values, int max);
+
 /* ---------- display ---------- */
 
 /* A metric value in the display units, and the unit's label ("mph"). */

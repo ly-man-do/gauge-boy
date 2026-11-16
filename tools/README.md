@@ -25,7 +25,7 @@ Scenarios (`ELM_SCENARIO=...`):
 | `ridgeline` (default) | ISO 9141-2 (`ATDPN` A3) | Like the 2008 Honda Ridgeline: 4.5 s protocol search, PIDs 01-5F, CEL off, no codes, a multi-line VIN (made up); warm idle live data with fuel trims for both banks (no MAF, no PID 33) |
 | `tracker` | ISO 9141-2 (A3) | Like the 1996 Geo Tracker: PIDs 01-1F only, CEL off, no codes, no VIN over OBD (choose the make in SETUP); idle live data, one bank of fuel trims, MAF |
 | `j1850` | SAE J1850 VPW (A2) | A made-up 2002 Chevrolet truck: CEL on, stored P0171 and P0300, pending P0420, VIN; lean fuel trims (about +20 % on bank 1) |
-| `car` | ISO 15765-4 CAN 11-bit 500k (A6) | The package's CAN car (a Toyota): CEL status, codes, bank 1 fuel trims, MAP, VIN |
+| `car` | ISO 15765-4 CAN 11-bit 500k (A6) | The package's CAN car (a Toyota): CEL status, codes, bank 1 fuel trims, MAP, VIN; answers several PIDs in one request, as CAN cars do |
 | `default` | CAN (A6) | Two ECUs (CAN multi-response), no fuel trims or codes |
 
 `ridgeline`, `tracker` and `j1850` are defined in `tools/elm_scenarios.py`. They answer the way

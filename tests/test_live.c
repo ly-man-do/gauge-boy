@@ -321,6 +321,87 @@ static void test_live_priority_refresh_times(void)
     CHECK_EQ_INT(f.unexpected_writes, 0);
 }
 
+static void test_live_multi_pid_on_can(void)
+{
+    static const uint8_t car[] = { 0x05, 0x0C, 0x0D, 0 };
+    setup(car);
+    link.protocol = 6;   /* CAN 11-bit 500k */
+    static const uint8_t want[] = { 0x0C, 0x0D, 0x05 };
+    obd_live_init(&lv, &link, want, 3);
+    lv.use_multi = true;
+    fake_io_reply(&f, "ATRV", "12.6V\r\r>", 10, 0);
+    /* All three due: one request, a two-frame reply (headers off). */
+    fake_io_reply(&f, "010C0D05", "008\r0: 41 0C 1A F8 0D 00 \r1: 05 7B \r\r>", 60, 0);
+    /* Coolant waits 15 s now: RPM and speed only. */
+    fake_io_reply(&f, "010C0D", "41 0C 0B B8 0D 05 \r\r>", 60, 0);
+    for (int i = 0; i < 3; i++) {
+        CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    }
+    float v = 0.0f;
+    CHECK(obd_live_value(&lv, 0x0C, &v) && v == 750.0f);
+    CHECK(obd_live_value(&lv, 0x0D, &v) && v == 5.0f);
+    CHECK(obd_live_value(&lv, 0x05, &v) && v == 83.0f);
+    CHECK_EQ_INT((int)lv.multi_requests, 2);
+    CHECK(!lv.multi_refused);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* A PID missing from the reply counts as a miss for that PID only. */
+    setup(car);
+    link.protocol = 6;
+    obd_live_init(&lv, &link, want, 3);
+    lv.use_multi = true;
+    lv.volts_failed = true;
+    fake_io_reply(&f, "010C0D05", "41 0C 1A F8 05 7B \r\r>", 60, 0);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    CHECK_EQ_INT(obd_live_get(&lv, 0x0D)->misses, 1);
+    CHECK_EQ_INT(obd_live_get(&lv, 0x0C)->misses, 0);
+    CHECK(!lv.multi_refused);
+}
+
+static void test_live_multi_pid_refused(void)
+{
+    static const uint8_t car[] = { 0x05, 0x0C, 0x0D, 0 };
+    static const uint8_t want[] = { 0x0C, 0x0D, 0x05 };
+    /* NO DATA to the combined request: one PID at a time from then on. */
+    setup(car);
+    link.protocol = 6;
+    obd_live_init(&lv, &link, want, 3);
+    lv.use_multi = true;
+    lv.volts_failed = true;
+    fake_io_reply(&f, "010C0D05", "NO DATA\r\r>", 60, 0);
+    fake_io_reply(&f, "010C", "41 0C 0B B8 \r\r>", 60, 0);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_MISSED);
+    CHECK(lv.multi_refused);
+    CHECK_EQ_INT(obd_live_get(&lv, 0x0C)->misses, 0);   /* nobody's miss */
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* Only the first PID answered: also one at a time, keeping that value. */
+    setup(car);
+    link.protocol = 6;
+    obd_live_init(&lv, &link, want, 3);
+    lv.use_multi = true;
+    lv.volts_failed = true;
+    fake_io_reply(&f, "010C0D05", "41 0C 0B B8 \r\r>", 60, 0);
+    fake_io_reply(&f, "010C", "41 0C 0B B8 \r\r>", 60, 0);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    CHECK(lv.multi_refused);
+    CHECK(obd_live_value(&lv, 0x0C, NULL));
+    CHECK_EQ_INT(obd_live_get(&lv, 0x0D)->misses, 0);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* Not CAN (ISO 9141-2): always one PID a request. */
+    setup(car);
+    obd_live_init(&lv, &link, want, 3);
+    lv.use_multi = true;
+    lv.volts_failed = true;
+    fake_io_reply(&f, "010C", "41 0C 0B B8 \r\r>", 60, 0);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    CHECK_EQ_INT((int)lv.multi_requests, 0);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+}
+
 static int traced;
 static void count_trace(void *ctx, const char *cmd, const elm_response_t *resp, unsigned ms)
 {
@@ -489,4 +570,6 @@ void suite_live(void)
     RUN_TEST(test_live_trace);
     RUN_TEST(test_live_response_count);
     RUN_TEST(test_live_priority_refresh_times);
+    RUN_TEST(test_live_multi_pid_on_can);
+    RUN_TEST(test_live_multi_pid_refused);
 }

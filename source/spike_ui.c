@@ -840,10 +840,13 @@ static void live_summary(spike_t *s, const obd_live_t *lv)
         now = lv->pid[i].at_ms > now ? lv->pid[i].at_ms : now;
     }
     unsigned secs = now > lv->started_ms ? (unsigned)((now - lv->started_ms) / 1000u) : 0;
-    spike_logf(s, "LIVE: %u requests in %u s, %.1f/s, %u failed%s", (unsigned)lv->requests, secs,
+    spike_logf(s, "LIVE: %u requests in %u s, %.1f/s, %u failed%s%s", (unsigned)lv->requests, secs,
                (double)obd_live_rate(lv, now), (unsigned)lv->failures,
                lv->use_count ? (lv->count_refused ? ", no response count" : ", response count 1")
-                             : "");
+                             : "",
+               lv->multi_requests > 0 ? (lv->multi_refused ? ", multi-PID refused"
+                                                           : ", several PIDs a request")
+                                      : "");
     char line[200] = "";
     for (int i = 0; i < lv->count; i++) {
         const obd_live_pid_t *p = &lv->pid[i];
@@ -906,6 +909,7 @@ static void live_poll(spike_t *s)
             }
         }
         lv.use_count = true;
+        lv.use_multi = true;   /* CAN cars: several PIDs a request */
         char list[3 * OBD_LIVE_MAX + 1] = "";
         for (int i = 0; i < count; i++) {
             snprintf(list + strlen(list), sizeof list - strlen(list), " %02X",

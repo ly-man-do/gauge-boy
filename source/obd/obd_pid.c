@@ -127,6 +127,27 @@ obd_pid_result_t obd_pid_from_reply(const obd_reply_t *reply, uint8_t pid, float
     return result;
 }
 
+int obd_pid_parse_multi(const uint8_t *msg, size_t len, uint8_t *pids, float *values, int max)
+{
+    int n = 0;
+    if (msg == NULL || len < 2 || msg[0] != 0x41) {
+        return 0;
+    }
+    size_t i = 1;
+    while (i < len && n < max) {
+        const pid_entry_t *e = find(msg[i]);
+        if (e == NULL || i + 1 + e->info.bytes > len) {
+            break;
+        }
+        float v = 0.0f;
+        obd_pid_decode(msg[i], msg + i + 1, e->info.bytes, &v);
+        pids[n] = msg[i];
+        values[n++] = v;
+        i += 1 + e->info.bytes;
+    }
+    return n;
+}
+
 /* ---------- display ---------- */
 
 float obd_unit_convert(obd_unit_t unit, float metric, obd_units_t units)

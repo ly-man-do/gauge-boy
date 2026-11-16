@@ -148,6 +148,7 @@ int main(int argc, char **argv)
     static obd_live_t lv;
     int polled = obd_live_init(&lv, &d.link, wanted, (int)sizeof wanted);
     lv.use_count = true;   /* as the app polls */
+    lv.use_multi = true;
     snprintf(detail, sizeof detail, "%d of %d", polled, (int)sizeof wanted);
     check(polled > 0, "PIDs to poll (supported and known)", detail);
     bool lost_live = false;
@@ -173,6 +174,8 @@ int main(int argc, char **argv)
     }
     snprintf(detail, sizeof detail, "%d of %d", with_value, lv.count);
     check(with_value == lv.count, "every polled PID has a value", detail);
+    printf("    %u requests, %u with several PIDs%s\n", (unsigned)lv.requests,
+           (unsigned)lv.multi_requests, lv.multi_refused ? " (refused: one at a time)" : "");
     check(lv.have_volts || lv.volts_failed, "ATRV read while polling", NULL);
 
     printf("\nSpike actions (as the 3DS app runs them):\n");

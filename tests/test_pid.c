@@ -160,8 +160,35 @@ static void test_pid_derived(void)
     CHECK_NEAR(obd_vacuum_kpa(100.0f, 120.0f), -20.0f);      /* boost */
 }
 
+static void test_pid_parse_multi(void)
+{
+    uint8_t pids[6];
+    float v[6];
+    /* RPM 0x1AF8 / 4, speed 0, coolant 0x7B - 40. */
+    static const uint8_t three[] = { 0x41, 0x0C, 0x1A, 0xF8, 0x0D, 0x00, 0x05, 0x7B };
+    CHECK_EQ_INT(obd_pid_parse_multi(three, sizeof three, pids, v, 6), 3);
+    CHECK_EQ_INT(pids[0], 0x0C);
+    CHECK_NEAR(v[0], 1726.0f);
+    CHECK_EQ_INT(pids[1], 0x0D);
+    CHECK_NEAR(v[1], 0.0f);
+    CHECK_EQ_INT(pids[2], 0x05);
+    CHECK_NEAR(v[2], 83.0f);
+    CHECK_EQ_INT(obd_pid_parse_multi(three, sizeof three, pids, v, 2), 2);   /* max */
+    /* Cut short in the middle of RPM's second byte: only what's whole. */
+    static const uint8_t cut[] = { 0x41, 0x0D, 0x05, 0x0C, 0x1A };
+    CHECK_EQ_INT(obd_pid_parse_multi(cut, sizeof cut, pids, v, 6), 1);
+    CHECK_EQ_INT(pids[0], 0x0D);
+    /* A PID the table can't size stops the walk; not a Mode 01 reply: 0. */
+    static const uint8_t odd[] = { 0x41, 0x05, 0x7B, 0x99, 0x01, 0x0D, 0x05 };
+    CHECK_EQ_INT(obd_pid_parse_multi(odd, sizeof odd, pids, v, 6), 1);
+    static const uint8_t other[] = { 0x49, 0x02, 0x01 };
+    CHECK_EQ_INT(obd_pid_parse_multi(other, sizeof other, pids, v, 6), 0);
+    CHECK_EQ_INT(obd_pid_parse_multi(NULL, 0, pids, v, 6), 0);
+}
+
 void suite_pid(void)
 {
+    RUN_TEST(test_pid_parse_multi);
     RUN_TEST(test_pid_table);
     RUN_TEST(test_pid_formulas);
     RUN_TEST(test_pid_bad_input);

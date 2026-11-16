@@ -112,6 +112,122 @@ static obd_live_step_t read_volts(obd_live_t *lv, elm_t *elm, uint64_t t0,
     return OBD_LIVE_READ;
 }
 
+/* A value read at t1: refresh rate, value, misses, engine-off MAP. */
+static void record(obd_live_t *lv, obd_live_pid_t *p, float v, uint64_t t1)
+{
+    if (p->have && t1 > p->at_ms) {
+        float inst = 1000.0f / (float)(t1 - p->at_ms);
+        p->hz = p->reads == 1 ? inst : 0.7f * p->hz + 0.3f * inst;
+    }
+    p->value = v;
+    p->have = true;
+    p->at_ms = t1;
+    p->reads++;
+    p->misses = 0;
+    note_engine_off_map(lv, p->pid, v);
+}
+
+static void miss(obd_live_t *lv, obd_live_pid_t *p)
+{
+    lv->failures++;
+    if (++p->misses >= OBD_LIVE_MAX_MISSES) {
+        p->dropped = true;
+    }
+}
+
+/*
+ * CAN: one request for the most overdue PID (first) and up to 5 more that
+ * are due or read as often as possible, most overdue first. Returns IDLE
+ * when there is only one PID to ask for (the caller sends a single).
+ */
+static obd_live_step_t multi_step(obd_live_t *lv, elm_t *elm, int first, uint64_t t0,
+                                  obd_link_trace_fn trace, void *ctx)
+{
+    static elm_response_t r;
+    static obd_reply_t reply;
+    int pick[OBD_LIVE_MULTI_MAX];
+    int np = 0;
+    bool taken[OBD_LIVE_MAX] = { false };
+    pick[np++] = first;
+    taken[first] = true;
+    while (np < OBD_LIVE_MULTI_MAX) {
+        int best = -1;
+        for (int i = 0; i < lv->count; i++) {
+            const obd_live_pid_t *q = &lv->pid[i];
+            if (taken[i] || q->dropped || (q->due_ms > t0 && q->period_ms != 0)) {
+                continue;
+            }
+            if (best < 0 || q->due_ms < lv->pid[best].due_ms) {
+                best = i;
+            }
+        }
+        if (best < 0) {
+            break;
+        }
+        pick[np++] = best;
+        taken[best] = true;
+    }
+    if (np < 2) {
+        return OBD_LIVE_IDLE;
+    }
+
+    char cmd[2 + 2 * OBD_LIVE_MULTI_MAX + 1] = "01";
+    for (int k = 0; k < np; k++) {
+        snprintf(cmd + 2 + 2 * k, sizeof cmd - 2 - 2 * (size_t)k, "%02X",
+                 (unsigned)lv->pid[pick[k]].pid);
+    }
+    elm_status_t st = elm_command(elm, cmd, OBD_LIVE_TIMEOUT_MS, &r);
+    uint64_t t1 = clock_ms(elm);
+    lv->requests++;
+    lv->multi_requests++;
+    if (trace != NULL) {
+        trace(ctx, cmd, &r, (unsigned)(t1 - t0));
+    }
+    if (lost(st)) {
+        return OBD_LIVE_LOST;
+    }
+
+    /* Every PID found in any ECU's reply. */
+    bool found[OBD_LIVE_MULTI_MAX] = { false };
+    int nfound = 0;
+    if (st == ELM_OK && obd_assemble(&r, lv->protocol, false, &reply) == OBD_OK) {
+        for (int e = 0; e < reply.ecu_count; e++) {
+            for (int m = 0; m < reply.ecu[e].msg_count; m++) {
+                const obd_msg_t *msg = &reply.ecu[e].msg[m];
+                uint8_t pids[OBD_LIVE_MULTI_MAX];
+                float values[OBD_LIVE_MULTI_MAX];
+                int n = obd_pid_parse_multi(msg->data, msg->len, pids, values, OBD_LIVE_MULTI_MAX);
+                for (int j = 0; j < n; j++) {
+                    for (int k = 0; k < np; k++) {
+                        if (!found[k] && lv->pid[pick[k]].pid == pids[j]) {
+                            found[k] = true;
+                            nfound++;
+                            record(lv, &lv->pid[pick[k]], values[j], t1);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (nfound == 0 || (nfound == 1 && found[0])) {
+        /* No answer, or only to the first PID: this car takes one PID a
+         * request. Nothing counts as a miss; singles from the next step. */
+        lv->multi_refused = true;
+        if (nfound == 0) {
+            lv->failures++;
+            return OBD_LIVE_MISSED;
+        }
+    }
+    for (int k = 0; k < np; k++) {
+        obd_live_pid_t *q = &lv->pid[pick[k]];
+        q->due_ms = t1 + q->period_ms;
+        if (!found[k] && !lv->multi_refused) {
+            miss(lv, q);
+        }
+    }
+    return OBD_LIVE_READ;
+}
+
 obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trace, void *ctx)
 {
     static elm_response_t r;
@@ -136,6 +252,14 @@ obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trac
         return OBD_LIVE_IDLE;
     }
     obd_live_pid_t *p = &lv->pid[idx];
+
+    if (lv->use_multi && !lv->multi_refused && obd_family(lv->protocol) == OBD_FAMILY_CAN) {
+        obd_live_step_t ms = multi_step(lv, elm, idx, t0, trace, ctx);
+        if (ms != OBD_LIVE_IDLE) {
+            return ms;
+        }
+        /* IDLE here: only one PID to ask for, so a single request. */
+    }
 
     char cmd[8];
     bool count = lv->use_count && !lv->count_refused;
@@ -166,23 +290,10 @@ obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trac
     float v = 0.0f;
     if (st == ELM_OK && obd_assemble(&r, lv->protocol, false, &reply) == OBD_OK &&
         obd_pid_from_reply(&reply, p->pid, &v) == OBD_PID_OK) {
-        if (p->have && t1 > p->at_ms) {
-            float inst = 1000.0f / (float)(t1 - p->at_ms);
-            p->hz = p->reads == 1 ? inst : 0.7f * p->hz + 0.3f * inst;
-        }
-        p->value = v;
-        p->have = true;
-        p->at_ms = t1;
-        p->reads++;
-        p->misses = 0;
-        note_engine_off_map(lv, p->pid, v);
+        record(lv, p, v, t1);
         return OBD_LIVE_READ;
     }
-
-    lv->failures++;
-    if (++p->misses >= OBD_LIVE_MAX_MISSES) {
-        p->dropped = true;
-    }
+    miss(lv, p);
     return OBD_LIVE_MISSED;
 }
 

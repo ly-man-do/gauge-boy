@@ -32,6 +32,7 @@
 #define OBD_LIVE_MAX_MISSES 3       /* NO DATA in a row before a PID is dropped */
 #define OBD_LIVE_VOLTS_MS   5000u   /* ATRV this often */
 #define OBD_LIVE_TIMEOUT_MS 2000u   /* per request */
+#define OBD_LIVE_MULTI_MAX  6       /* PIDs in one CAN request (SAE J1979) */
 
 typedef struct {
     uint8_t pid;
@@ -63,6 +64,9 @@ typedef struct {
 
     bool use_count;          /* ask for one reply ("010C1"): set after init */
     bool count_refused;      /* the adapter answered "?" to it: plain requests */
+    bool use_multi;          /* CAN: several PIDs per request: set after init */
+    bool multi_refused;      /* the car didn't answer them: one PID at a time */
+    uint32_t multi_requests; /* requests that carried several PIDs */
 
     uint32_t requests;       /* commands sent */
     uint32_t failures;       /* NO DATA, unusable or failed replies */
@@ -85,7 +89,11 @@ int obd_live_init(obd_live_t *lv, const obd_link_t *link, const uint8_t *wanted,
 /* One request: ATRV when it is due, else the next PID. trace may be NULL.
  * With use_count set, PID requests carry the response count "1" so the
  * adapter answers as soon as one ECU replies instead of waiting for more;
- * an adapter that refuses it gets plain requests from then on. */
+ * an adapter that refuses it gets plain requests from then on.
+ * With use_multi set and a CAN car, a request carries up to 6 PIDs: the
+ * most overdue one plus others that are due or read as often as possible
+ * ("010C0D05"); a car that answers with none or only the first of them
+ * gets one PID per request from then on. */
 obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trace, void *ctx);
 
 /* Change a PID's desired refresh time (0 = as often as possible). */
