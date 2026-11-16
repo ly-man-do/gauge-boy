@@ -134,8 +134,9 @@ int main(int argc, char **argv)
     }
     if (d.have_vin) {
         /* Check digits are a North American rule: report, don't require. */
-        snprintf(detail, sizeof detail, "%s, %d %s, check digit %s", d.vin, d.model_year,
-                 d.maker != NULL ? d.maker : "(maker not listed)",
+        snprintf(detail, sizeof detail, "%s, %d %s%s%s, check digit %s", d.vin, d.model_year,
+                 d.maker != NULL ? d.maker : "(maker not listed)", d.model ? ", model " : "",
+                 d.model ? d.model : "",
                  obd_vin_check_digit_ok(d.vin) ? "OK" : "doesn't match");
         check(obd_vin_chars_ok(d.vin), "VIN decoded", detail);
     } else {

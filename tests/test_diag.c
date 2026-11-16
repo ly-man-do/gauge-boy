@@ -110,6 +110,16 @@ static void test_scan_ridgeline(void)
     CHECK_EQ_INT(diag.model_year, 2008);
     CHECK_EQ_STR(diag.maker, "Honda");
     CHECK(diag.make >= 0);
+    CHECK(diag.model == NULL);   /* this made-up VIN has no vPIC pattern */
+
+    /* With a model from vPIC, it shows instead of the maker. */
+    diag.model_make = "Honda";
+    diag.model = "Ridgeline";
+    int n = diag_facts(&diag, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Car       2008 Honda Ridgeline");
+    n = diag_view_lines(&diag, DIAG_TAB_STORED, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "2008 Honda Ridgeline  VIN 2HJYK16618H000123");
+    diag.model_make = diag.model = NULL;
 }
 
 static void test_chosen_make(void)

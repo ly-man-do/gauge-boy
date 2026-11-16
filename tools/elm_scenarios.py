@@ -130,7 +130,7 @@ SCENARIOS = {
          "010F": "41 0F 46",                                           # intake air 30 C
          "0111": "41 11 26"},                                          # throttle 15 %
         status="41 01 00 07 E5 00", stored=None, pending=None,
-        vin="2HJYK16618H000123", volts="13.2V"),
+        vin="2HJYK16528H000123", volts="13.2V"),
     "tracker": scenario(
         3, "ISO 9141-2",
         {"0100": "41 00 BE 3F B8 10",

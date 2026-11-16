@@ -144,6 +144,11 @@ obd_link_result_t obd_diag_scan(elm_t *elm, bool reset, int current_year, obd_di
         obd_decode_vin(&reply, protocol, out->vin)) {
         out->have_vin = true;
         out->model_year = obd_vin_model_year(out->vin, current_year);
+        obd_vin_model_t md;
+        if (obd_vin_model(out->vin, out->model_year, &md)) {
+            out->model_make = md.make;
+            out->model = md.model;
+        }
         obd_vin_maker_t mk;
         if (obd_vin_maker(out->vin, &mk)) {
             out->maker = mk.maker;

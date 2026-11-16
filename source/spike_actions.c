@@ -210,8 +210,14 @@ static void do_vin(spike_t *s)
     int year = obd_vin_model_year(vin, tm != NULL ? tm->tm_year + 1900 : 0);
     obd_vin_maker_t mk;
     bool known = obd_vin_maker(vin, &mk);
-    spike_logf(s, "= VIN %s: %s, model year %d%s", vin, known ? mk.maker : "maker not listed", year,
-               obd_vin_check_digit_ok(vin) ? "" : " (check digit doesn't match)");
+    obd_vin_model_t md;
+    bool have_model = obd_vin_model(vin, year, &md);
+    spike_logf(s, "= VIN %s: %s, model year %d%s%s%s%s", vin, known ? mk.maker : "maker not listed",
+               year, have_model ? ", " : "", have_model ? md.make : "", have_model ? " " : "",
+               have_model ? md.model : "");
+    if (!obd_vin_check_digit_ok(vin)) {
+        spike_logf(s, "  (check digit doesn't match)");
+    }
 }
 
 void spike_trace_command(void *ctx, const char *cmd, const elm_response_t *resp, unsigned ms)

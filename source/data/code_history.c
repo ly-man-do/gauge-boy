@@ -32,6 +32,8 @@ static void car_text(const obd_diag_t *d, char *out, size_t len)
 {
     if (!d->have_vin) {
         out[0] = '\0';
+    } else if (d->model != NULL) {
+        snprintf(out, len, "%d %s %s", d->model_year, d->model_make, d->model);
     } else if (d->maker != NULL) {
         snprintf(out, len, "%d %s", d->model_year, d->maker);
     } else {

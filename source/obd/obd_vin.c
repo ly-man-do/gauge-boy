@@ -1,5 +1,7 @@
 #include "obd_vin.h"
 
+#include "vin_model_data.h"
+
 #include <ctype.h>
 #include <string.h>
 
@@ -235,6 +237,92 @@ bool obd_vin_maker(const char *vin, obd_vin_maker_t *out)
         if (strncmp(vin, wmis[i].wmi, 3) == 0) {
             out->maker = wmis[i].maker;
             out->dtc_make = wmis[i].dtc_make;
+            return true;
+        }
+    }
+    return false;
+}
+
+/* vPIC's key match: pattern against the start of keys; '*' is any one
+ * character, "[...]" a set (with ranges such as "A-H"). */
+static bool vin_keys_match(const char *pat, const char *keys)
+{
+    for (; *pat != '\0'; pat++, keys++) {
+        if (*keys == '\0') {
+            return false;
+        }
+        if (*pat == '*') {
+            continue;
+        }
+        if (*pat == '[') {
+            bool in = false;
+            pat++;
+            for (; *pat != '\0' && *pat != ']'; pat++) {
+                if (pat[1] == '-' && pat[2] != '\0' && pat[2] != ']') {
+                    in = in || (*keys >= pat[0] && *keys <= pat[2]);
+                    pat += 2;
+                } else {
+                    in = in || *keys == *pat;
+                }
+            }
+            if (!in || *pat == '\0') {
+                return false;
+            }
+            continue;
+        }
+        if (*pat != *keys) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool obd_vin_model(const char *vin, int model_year, obd_vin_model_t *out)
+{
+    if (vin == NULL || strlen(vin) != OBD_VIN_LEN || model_year < VIN_MODEL_FIRST_YEAR ||
+        model_year > VIN_MODEL_FIRST_YEAR + VIN_MODEL_OPEN_YEAR) {
+        return false;
+    }
+    char wmi[7] = { vin[0], vin[1], vin[2], '\0' };
+    if (vin[2] == '9') {
+        memcpy(wmi + 3, vin + 11, 3);
+        wmi[6] = '\0';
+    }
+    char keys[15];
+    memcpy(keys, vin + 3, 5);
+    keys[5] = '|';
+    memcpy(keys + 6, vin + 9, 8);
+    keys[14] = '\0';
+
+    int lo = 0, hi = vin_model_wmi_count - 1;
+    const vin_model_wmi_t *w = NULL;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        int c = strcmp(vin_model_wmis[mid].wmi, wmi);
+        if (c == 0) {
+            w = &vin_model_wmis[mid];
+            break;
+        }
+        if (c < 0) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    if (w == NULL) {
+        return false;
+    }
+    int y = model_year - VIN_MODEL_FIRST_YEAR;
+    for (uint32_t i = 0; i < w->count; i++) {
+        const vin_model_rule_t *r = &vin_model_rules[w->first + i];
+        if (y < r->year_from || (r->year_to != VIN_MODEL_OPEN_YEAR && y > r->year_to)) {
+            continue;
+        }
+        if (vin_keys_match(vin_model_keys[r->keys], keys)) {
+            if (out != NULL) {
+                out->make = vin_model_names[r->name].make;
+                out->model = vin_model_names[r->name].model;
+            }
             return true;
         }
     }

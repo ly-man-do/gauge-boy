@@ -125,7 +125,9 @@ int diag_view_lines(const obd_diag_t *d, diag_tab_t tab, int cols,
     }
 
     if (d->have_vin) {
-        if (d->maker != NULL) {
+        if (d->model != NULL) {
+            addf(&v, "%d %s %s  VIN %s", d->model_year, d->model_make, d->model, d->vin);
+        } else if (d->maker != NULL) {
             addf(&v, "%d %s%s  VIN %s", d->model_year, d->maker,
                  d->make_chosen ? " (set in SETUP)" : "", d->vin);
         } else {
@@ -323,7 +325,9 @@ int diag_facts(const obd_diag_t *d, int cols, char lines[][DIAG_VIEW_COLS + 1], 
         return v.count;
     }
     if (d->have_vin) {
-        if (d->maker != NULL) {
+        if (d->model != NULL) {
+            snprintf(buf, sizeof buf, "%d %s %s", d->model_year, d->model_make, d->model);
+        } else if (d->maker != NULL) {
             snprintf(buf, sizeof buf, "%d %s%s", d->model_year, d->maker,
                      d->make_chosen ? " (SETUP)" : "");
         } else {

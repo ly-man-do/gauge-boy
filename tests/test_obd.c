@@ -603,6 +603,29 @@ static void test_vin_facts(void)
     }
 }
 
+static void test_vin_model(void)
+{
+    /* Made-up VINs (serials 000001), decoded with NHTSA vPIC's patterns. */
+    obd_vin_model_t md;
+    CHECK(obd_vin_model("4S4WMAHD0P3000001", 2023, &md));
+    CHECK_EQ_STR(md.make, "Subaru");
+    CHECK_EQ_STR(md.model, "Ascent");
+    CHECK(obd_vin_model("5FPYK16528B000001", 2008, &md));
+    CHECK_EQ_STR(md.make, "Honda");
+    CHECK_EQ_STR(md.model, "Ridgeline");
+    CHECK(obd_vin_model("1C4PJMDS0FW000001", 2015, &md));   /* a group WMI: vPIC's make */
+    CHECK_EQ_STR(md.make, "Jeep");
+    CHECK_EQ_STR(md.model, "Cherokee");
+    CHECK(obd_vin_model("1FTFW1E50JF000001", 2018, &md));
+    CHECK_EQ_STR(md.model, "F-150");
+
+    CHECK(!obd_vin_model("5FPYK16628B000001", 2008, NULL));  /* no pattern for YK166 */
+    CHECK(!obd_vin_model("4S4WMAHD0P3000001", 1990, NULL));  /* before the table */
+    CHECK(!obd_vin_model("ZZZWMAHD0P3000001", 2023, NULL));  /* unknown WMI */
+    CHECK(!obd_vin_model("4S4WMAHD", 2023, NULL));
+    CHECK(!obd_vin_model(NULL, 2023, NULL));
+}
+
 void suite_obd(void)
 {
     gb_suite("obd");
@@ -622,4 +645,5 @@ void suite_obd(void)
     RUN_TEST(test_readiness_from_reply);
     RUN_TEST(test_vin_decode);
     RUN_TEST(test_vin_facts);
+    RUN_TEST(test_vin_model);
 }

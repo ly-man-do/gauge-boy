@@ -49,6 +49,8 @@ typedef struct {
     char vin[OBD_VIN_LEN + 1];
     int model_year;                 /* 0 if unknown */
     const char *maker;              /* NULL if the WMI isn't listed */
+    const char *model_make;         /* from NHTSA vPIC with model, e.g. "Jeep" */
+    const char *model;              /* e.g. "Cherokee"; NULL if not decoded */
     int make;                       /* for obd_dtc_text_for(), -1 if unknown */
     bool make_chosen;               /* maker / make came from SETUP, not the VIN */
 } obd_diag_t;

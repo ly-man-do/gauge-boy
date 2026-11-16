@@ -2,9 +2,9 @@
 #define GAUGEBOY_OBD_VIN_H
 
 /*
- * VIN from Mode 09 PID 02, and the generic facts in it (CLAUDE.md section
- * 7: manufacturer from the WMI, model year from position 10; no model
- * names).
+ * VIN from Mode 09 PID 02, and the facts in it (CLAUDE.md section 7):
+ * manufacturer from the WMI, model year from position 10, and the model
+ * name from NHTSA vPIC's VIN patterns (vin_model_data.h).
  *
  * Reply layouts (after obd_reply.h assembly):
  *   CAN     one message: 49 02 01 then the 17 VIN characters
@@ -46,5 +46,15 @@ typedef struct {
 /* Manufacturer from the first three characters (WMI), from a short
  * built-in list of common makers. False if the WMI isn't listed. */
 bool obd_vin_maker(const char *vin, obd_vin_maker_t *out);
+
+typedef struct {
+    const char *make;       /* vPIC's make, e.g. "Subaru", "Jeep" */
+    const char *model;      /* e.g. "Ascent" */
+} obd_vin_model_t;
+
+/* Make and model from NHTSA vPIC's patterns for the WMI, model year and
+ * VIN positions 4-8 and 10-17 (as vPIC decodes them; model years 1996 and
+ * later, cars, MPVs and trucks). False if no pattern matches. */
+bool obd_vin_model(const char *vin, int model_year, obd_vin_model_t *out);
 
 #endif

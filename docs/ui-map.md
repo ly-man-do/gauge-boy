@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-16, boost and PID 87 in the Idle & vacuum and Air & fuel views (gauge-boy-3n6.15; M2 in progress)
+**As of:** 2026-11-16, DIAG shows the model from the VIN (gauge-boy-1hi; M2 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -52,7 +52,7 @@ GaugeBoy
         │   ├── [CLEAR]              → Clear codes dialog (needs a scan first)
         │   │   ├── [CANCEL]         → DIAG                                       [B]
         │   │   └── [CLEAR CODES]    clears (refused if moving), then rescans
-        │   └── [SCAN]               reads CEL, readiness, codes, VIN             [X]
+        │   └── [SCAN]               reads CEL, readiness, codes, VIN (and model)  [X]
         │
         ├── SETUP                    (top: session log)                     [L/R scroll log]
         │   ├── [Wi-Fi slot   Any/1/2/3]          cycles the slot, saved
