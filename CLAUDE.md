@@ -1,7 +1,7 @@
 # CLAUDE.md: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.18.0
-**Matches project brief:** 1.13.0 (`docs/gaugeboy-brief.md`)
+**Version:** 1.19.0
+**Matches project brief:** 1.14.0 (`docs/gaugeboy-brief.md`)
 
 You are the developer on GaugeBoy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
 
@@ -142,6 +142,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.19.0 | 2026-11-16 | Matches brief 1.14.0: the 8 PIDs at 2 Hz success criterion is for CAN cars |
 | 1.18.0 | 2026-11-16 | Matches brief 1.13.0: third test car, 2023 Subaru Ascent (section 1) |
 | 1.17.0 | 2026-11-16 | Owner request: keep `docs/ui-map.md` (screen and button map) current with every UI change (section 5) |
 | 1.16.0 | 2026-11-15 | Matches brief 1.12.0: the HOME START Close bar is an exception to the 40x40 px button rule (section 5) |

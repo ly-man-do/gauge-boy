@@ -1,6 +1,6 @@
 # Project Brief: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.13.0
+**Version:** 1.14.0
 **Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
 **Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -337,7 +337,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 - Reads and clears DTCs correctly on the 2008 Honda Ridgeline and at least one other vehicle.
 - CEL status, stored and pending codes match a reference scan tool on the Ridgeline.
 - Fuel trims for both Ridgeline banks match a reference scan tool within 1%.
-- Shows at least 8 live PIDs with 2 Hz or faster refresh.
+- On CAN cars (ISO 15765-4, e.g. the 2023 Subaru Ascent), shows at least 8 live PIDs with 2 Hz or faster refresh. Older buses can't: the 2008 Ridgeline (ISO 9141-2) manages about 5.5 requests a second in total, so there the fast PIDs of a focused LIVE view refresh at about 1-1.5 Hz.
 - Runs 30 minutes without a crash or memory leak.
 - A fresh New 3DS with FBI installs the app by scanning the README QR code alone.
 - UI holds a steady 60 fps on the top screen while polling, with the 3D slider at maximum.
@@ -361,6 +361,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.14.0 | 2026-11-16 | Owner decision: the "8 live PIDs at 2 Hz" success criterion applies to CAN cars; ISO 9141-2 tops out around 5.5 requests a second (Ridgeline speed test) (section 9); `CLAUDE.md` updated to 1.19.0 |
 | 1.13.0 | 2026-11-16 | Third test vehicle: the owner's 2023 Subaru Ascent (CAN, turbo) (section 7); `CLAUDE.md` updated to 1.18.0 |
 | 1.12.0 | 2026-11-15 | Owner decision: the HOME screen's START Close bar may be 32 px tall, an exception to the 40x40 px button rule (section 5b); `CLAUDE.md` updated to 1.16.0 |
 | 1.11.0 | 2026-11-15 | The METER menu is renamed LIVE ("Dash gauges"), by owner decision with the new HOME screen (section 5b); `CLAUDE.md` updated to 1.15.0 |
