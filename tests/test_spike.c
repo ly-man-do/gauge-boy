@@ -329,11 +329,21 @@ static void test_spike_speed_test(void)
     fake_io_reply(&f, "010C", "41 0C 0A F0\r\r>", 700, 0);
     fake_io_reply(&f, "010C1", "41 0C 0A F0\r\r>", 150, 0);
     fake_io_reply(&f, "010C1", "41 0C 0A F0\r\r>", 150, 0);
+    fake_io_reply(&f, "ATAT2", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "010C1", "41 0C 0A F0\r\r>", 120, 0);
+    fake_io_reply(&f, "010C1", "41 0C 0A F0\r\r>", 140, 0);
+    fake_io_reply(&f, "ATAT1", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "ATST19", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "010C1", "41 0C 0A F0\r\r>", 100, 0);
+    fake_io_reply(&f, "010C1", "41 0C 0A F0\r\r>", 100, 0);
+    fake_io_reply(&f, "ATST32", "OK\r\r>", 10, 0);
     spike_speed_test(&s, 2);
     CHECK_LOGGED(&cap, "ATRV (adapter only)  avg 350 ms (min 300, max 400)");
     CHECK_LOGGED(&cap, "010C (RPM)           avg 650 ms (min 600, max 700)");
     CHECK_LOGGED(&cap, "010C1 (one reply)    avg 150 ms");
-    CHECK_LOGGED(&cap, "= Speed (avg ms): adapter 350, car 650, one reply 150");
+    CHECK_LOGGED(&cap, "010C1 with ATAT2     avg 130 ms (min 120, max 140)");
+    CHECK_LOGGED(&cap, "010C1 with ATST19    avg 100 ms");
+    CHECK_LOGGED(&cap, "= Speed (avg ms): adapter 350, car 650, one reply 150, ATAT2 130, ATST19 100");
     CHECK_EQ_INT(f.unexpected_writes, 0);
 
     /* A clone without the count digit, and a car that's off. */
@@ -343,9 +353,12 @@ static void test_spike_speed_test(void)
     fake_io_reply(&f, "0100", "41 00 BF BE A8 91\r\r>", 600, 0);
     fake_io_reply(&f, "010C", "41 0C 0A F0\r\r>", 600, 0);
     fake_io_reply(&f, "010C1", "?\r\r>", 50, 0);
+    fake_io_reply(&f, "ATAT2", "?\r\r>", 10, 0);
+    fake_io_reply(&f, "ATST19", "?\r\r>", 10, 0);
     spike_speed_test(&s, 1);
     CHECK_LOGGED(&cap, "010C1 (one reply)    not supported (?)");
-    CHECK_LOGGED(&cap, "= Speed (avg ms): adapter 300, car 600, one reply -");
+    CHECK_LOGGED(&cap, "= Speed (avg ms): adapter 300, car 600, one reply -, ATAT2 -, ATST19 -");
+    CHECK_EQ_INT(f.unexpected_writes, 0);
     memset(&cap, 0, sizeof cap);
     fake_io_init(&f);
     fake_io_reply(&f, "ATRV", "12.6V\r\r>", 300, 0);

@@ -338,10 +338,27 @@ static const char *avg_text(const speed_set_t *st, char *buf, size_t len)
     return buf;
 }
 
+/* One more 010C1 set with an adapter setting on, then the default back. */
+static speed_set_t time_with(spike_t *s, const char *setting, const char *restore,
+                             const char *what, int n)
+{
+    static elm_response_t r;
+    speed_set_t st = { UINT_MAX, 0, 0, 0, 0, true };
+    elm_status_t e = elm_command(s->elm, setting, ELM_TIMEOUT_DEFAULT_MS, &r);
+    if (e != ELM_OK) {
+        spike_logf(s, "  %-20s not supported (%s)", setting, elm_status_str(e));
+        return st;
+    }
+    st = time_command(s, "010C1", n);
+    log_set(s, what, &st);
+    elm_command(s->elm, restore, ELM_TIMEOUT_DEFAULT_MS, &r);
+    return st;
+}
+
 void spike_speed_test(spike_t *s, int n)
 {
     static elm_response_t r;
-    char a[12], b[12], c[12];
+    char a[12], b[12], c[12], d[12], e2[12];
     spike_logf(s, "Speed test: each request %d times", n);
 
     speed_set_t adapter = time_command(s, "ATRV", n);
@@ -357,10 +374,15 @@ void spike_speed_test(spike_t *s, int n)
     log_set(s, "010C (RPM)", &plain);
     speed_set_t one = time_command(s, "010C1", n);
     log_set(s, "010C1 (one reply)", &one);
+    /* The adapter's aggressive timing, and a 100 ms reply timeout instead of
+     * the default 200 ms; the defaults go back afterwards. */
+    speed_set_t at2 = time_with(s, "ATAT2", "ATAT1", "010C1 with ATAT2", n);
+    speed_set_t st19 = time_with(s, "ATST19", "ATST32", "010C1 with ATST19", n);
 
-    spike_logf(s, "= Speed (avg ms): adapter %s, car %s, one reply %s",
+    spike_logf(s, "= Speed (avg ms): adapter %s, car %s, one reply %s, ATAT2 %s, ATST19 %s",
                avg_text(&adapter, a, sizeof a), avg_text(&plain, b, sizeof b),
-               avg_text(&one, c, sizeof c));
+               avg_text(&one, c, sizeof c), avg_text(&at2, d, sizeof d),
+               avg_text(&st19, e2, sizeof e2));
 }
 
 void spike_run(spike_t *s, spike_action_t action)

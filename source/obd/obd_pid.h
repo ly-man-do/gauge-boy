@@ -43,6 +43,7 @@ typedef struct {
     const char *label;       /* short, for the dashboard: "RPM" */
     obd_unit_t unit;
     float min, max;          /* decoded range (metric) */
+    uint32_t refresh_ms;     /* desired refresh time; 0 = as often as possible */
 } obd_pid_info_t;
 
 /* PIDs GaugeBoy decodes (fuel trims, live data). NULL for others. */

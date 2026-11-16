@@ -282,6 +282,44 @@ static void test_live_response_count(void)
     CHECK_EQ_INT(f.unexpected_writes, 0);
 }
 
+static void test_live_priority_refresh_times(void)
+{
+    /* RPM as often as possible, coolant every 15 s (the table's times). */
+    static const uint8_t car[] = { 0x05, 0x0C, 0 };
+    setup(car);
+    static const uint8_t want[] = { 0x0C, 0x05 };
+    obd_live_init(&lv, &link, want, 2);
+    CHECK_EQ_INT((int)obd_live_get(&lv, 0x0C)->period_ms, 0);
+    CHECK_EQ_INT((int)obd_live_get(&lv, 0x05)->period_ms, 15000);
+    lv.volts_failed = true;   /* no ATRV in this script */
+    fake_io_reply(&f, "010C", "41 0C 0B B8\r\r>", 1500, 0);   /* both due: list order */
+    fake_io_reply(&f, "0105", "41 05 7B\r\r>", 1500, 0);      /* read at 3 s, due at 18 s */
+    for (int i = 0; i < 11; i++) {
+        fake_io_reply(&f, "010C", "41 0C 0B B8\r\r>", 1500, 0);
+    }
+    fake_io_reply(&f, "0105", "41 05 7C\r\r>", 1500, 0);      /* overdue again */
+    for (int i = 0; i < 14; i++) {
+        CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    }
+    CHECK_EQ_INT((int)obd_live_get(&lv, 0x0C)->reads, 12);
+    CHECK_EQ_INT((int)obd_live_get(&lv, 0x05)->reads, 2);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* A refresh time of 0 for both: they take turns. */
+    setup(car);
+    obd_live_init(&lv, &link, want, 2);
+    obd_live_set_period(&lv, 0x05, 0);
+    lv.volts_failed = true;
+    fake_io_reply(&f, "010C", "41 0C 0B B8\r\r>", 100, 0);
+    fake_io_reply(&f, "0105", "41 05 7B\r\r>", 100, 0);
+    fake_io_reply(&f, "010C", "41 0C 0B B8\r\r>", 100, 0);
+    fake_io_reply(&f, "0105", "41 05 7B\r\r>", 100, 0);
+    for (int i = 0; i < 4; i++) {
+        CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    }
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+}
+
 static int traced;
 static void count_trace(void *ctx, const char *cmd, const elm_response_t *resp, unsigned ms)
 {
@@ -340,7 +378,7 @@ static void test_live_view_lines(void)
     lv.pid[2].dropped = true;   /* as after 3 NO DATA */
     n = live_view_lines(&lv, 3, 1.9f, OBD_UNITS_US, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
     CHECK_EQ_STR(lines[0], "ISO 9141-2 (5 baud init), 1.9 requests/s");
-    CHECK(has_line(n, "RPM         710 rpm          0.5 Hz"));
+    CHECK(has_line(n, "RPM         710 rpm          every 2 s"));
     CHECK(has_line(n, "MAP         8.9 inHg"));
     CHECK(has_line(n, "Speed       -                no data"));
     CHECK(has_line(n, "Coolant     181 F"));
@@ -395,4 +433,5 @@ void suite_live(void)
     RUN_TEST(test_live_vacuum_from_baro_pid);
     RUN_TEST(test_live_trace);
     RUN_TEST(test_live_response_count);
+    RUN_TEST(test_live_priority_refresh_times);
 }

@@ -20,26 +20,30 @@ typedef struct {
     formula_t formula;
 } pid_entry_t;
 
+/* Refresh times (last field): fast-changing values as often as possible,
+ * short-term trims, load and timing twice a second, slow ones (temperatures,
+ * long-term trims, fuel level, pressure outside) every 5-60 s, so on a slow
+ * bus like ISO 9141-2 RPM and speed stay live (gauge-boy-3n6.10). */
 static const pid_entry_t table[] = {
-    { { 0x04, 1, "Calculated engine load", "Load", OBD_UNIT_PERCENT, 0.0f, 100.0f }, F_PCT255 },
-    { { 0x05, 1, "Coolant temperature", "Coolant", OBD_UNIT_CELSIUS, -40.0f, 215.0f }, F_TEMP },
-    { { 0x06, 1, "Short-term fuel trim, bank 1", "STFT B1", OBD_UNIT_PERCENT, -100.0f, 99.2f }, F_TRIM },
-    { { 0x07, 1, "Long-term fuel trim, bank 1", "LTFT B1", OBD_UNIT_PERCENT, -100.0f, 99.2f }, F_TRIM },
-    { { 0x08, 1, "Short-term fuel trim, bank 2", "STFT B2", OBD_UNIT_PERCENT, -100.0f, 99.2f }, F_TRIM },
-    { { 0x09, 1, "Long-term fuel trim, bank 2", "LTFT B2", OBD_UNIT_PERCENT, -100.0f, 99.2f }, F_TRIM },
-    { { 0x0B, 1, "Intake manifold pressure", "MAP", OBD_UNIT_KPA, 0.0f, 255.0f }, F_RAW },
-    { { 0x0C, 2, "Engine speed", "RPM", OBD_UNIT_RPM, 0.0f, 16383.75f }, F_RPM },
-    { { 0x0D, 1, "Vehicle speed", "Speed", OBD_UNIT_KMH, 0.0f, 255.0f }, F_RAW },
-    { { 0x0E, 1, "Ignition timing advance", "Timing", OBD_UNIT_DEGREES, -64.0f, 63.5f }, F_TIMING },
-    { { 0x0F, 1, "Intake air temperature", "Intake air", OBD_UNIT_CELSIUS, -40.0f, 215.0f }, F_TEMP },
-    { { 0x10, 2, "Mass air flow", "MAF", OBD_UNIT_GRAMS_S, 0.0f, 655.35f }, F_MAF },
-    { { 0x11, 1, "Throttle position", "Throttle", OBD_UNIT_PERCENT, 0.0f, 100.0f }, F_PCT255 },
-    { { 0x1F, 2, "Run time since engine start", "Run time", OBD_UNIT_SECONDS, 0.0f, 65535.0f }, F_WORD },
-    { { 0x2F, 1, "Fuel tank level", "Fuel", OBD_UNIT_PERCENT, 0.0f, 100.0f }, F_PCT255 },
-    { { 0x33, 1, "Barometric pressure", "Baro", OBD_UNIT_KPA, 0.0f, 255.0f }, F_RAW },
-    { { 0x42, 2, "Control module voltage", "Module", OBD_UNIT_VOLTS, 0.0f, 65.535f }, F_MILLI },
-    { { 0x46, 1, "Ambient air temperature", "Ambient", OBD_UNIT_CELSIUS, -40.0f, 215.0f }, F_TEMP },
-    { { 0x5C, 1, "Engine oil temperature", "Oil", OBD_UNIT_CELSIUS, -40.0f, 210.0f }, F_TEMP },
+    { { 0x04, 1, "Calculated engine load", "Load", OBD_UNIT_PERCENT, 0.0f, 100.0f, 500u }, F_PCT255 },
+    { { 0x05, 1, "Coolant temperature", "Coolant", OBD_UNIT_CELSIUS, -40.0f, 215.0f, 15000u }, F_TEMP },
+    { { 0x06, 1, "Short-term fuel trim, bank 1", "STFT B1", OBD_UNIT_PERCENT, -100.0f, 99.2f, 500u }, F_TRIM },
+    { { 0x07, 1, "Long-term fuel trim, bank 1", "LTFT B1", OBD_UNIT_PERCENT, -100.0f, 99.2f, 5000u }, F_TRIM },
+    { { 0x08, 1, "Short-term fuel trim, bank 2", "STFT B2", OBD_UNIT_PERCENT, -100.0f, 99.2f, 500u }, F_TRIM },
+    { { 0x09, 1, "Long-term fuel trim, bank 2", "LTFT B2", OBD_UNIT_PERCENT, -100.0f, 99.2f, 5000u }, F_TRIM },
+    { { 0x0B, 1, "Intake manifold pressure", "MAP", OBD_UNIT_KPA, 0.0f, 255.0f, 0u }, F_RAW },
+    { { 0x0C, 2, "Engine speed", "RPM", OBD_UNIT_RPM, 0.0f, 16383.75f, 0u }, F_RPM },
+    { { 0x0D, 1, "Vehicle speed", "Speed", OBD_UNIT_KMH, 0.0f, 255.0f, 0u }, F_RAW },
+    { { 0x0E, 1, "Ignition timing advance", "Timing", OBD_UNIT_DEGREES, -64.0f, 63.5f, 500u }, F_TIMING },
+    { { 0x0F, 1, "Intake air temperature", "Intake air", OBD_UNIT_CELSIUS, -40.0f, 215.0f, 10000u }, F_TEMP },
+    { { 0x10, 2, "Mass air flow", "MAF", OBD_UNIT_GRAMS_S, 0.0f, 655.35f, 0u }, F_MAF },
+    { { 0x11, 1, "Throttle position", "Throttle", OBD_UNIT_PERCENT, 0.0f, 100.0f, 0u }, F_PCT255 },
+    { { 0x1F, 2, "Run time since engine start", "Run time", OBD_UNIT_SECONDS, 0.0f, 65535.0f, 5000u }, F_WORD },
+    { { 0x2F, 1, "Fuel tank level", "Fuel", OBD_UNIT_PERCENT, 0.0f, 100.0f, 30000u }, F_PCT255 },
+    { { 0x33, 1, "Barometric pressure", "Baro", OBD_UNIT_KPA, 0.0f, 255.0f, 60000u }, F_RAW },
+    { { 0x42, 2, "Control module voltage", "Module", OBD_UNIT_VOLTS, 0.0f, 65.535f, 5000u }, F_MILLI },
+    { { 0x46, 1, "Ambient air temperature", "Ambient", OBD_UNIT_CELSIUS, -40.0f, 215.0f, 60000u }, F_TEMP },
+    { { 0x5C, 1, "Engine oil temperature", "Oil", OBD_UNIT_CELSIUS, -40.0f, 210.0f, 15000u }, F_TEMP },
 };
 
 #define TABLE_COUNT ((int)(sizeof table / sizeof table[0]))

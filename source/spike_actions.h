@@ -99,9 +99,11 @@ char *spike_format_header(char *out, size_t out_len, bool connected, int busy);
 /*
  * Speed test (the SPEED TEST button): times n requests of each kind and
  * logs min / average / max: ATRV (the adapter alone, so Wi-Fi and adapter
- * time), 010C (a car request) and 010C1 (asks the adapter to return after
- * one reply instead of waiting for more ECUs). Needs the adapter connected;
- * times come from the adapter driver's clock.
+ * time), 010C (a car request), 010C1 (asks the adapter to return after one
+ * reply instead of waiting for more ECUs), then 010C1 with ATAT2 (aggressive
+ * adaptive timing) and with ATST19 (100 ms reply timeout), putting ATAT1 and
+ * ATST32 (the defaults) back. Needs the adapter connected; times come from
+ * the adapter driver's clock.
  */
 void spike_speed_test(spike_t *s, int n);
 #define SPIKE_SPEED_COUNT 10

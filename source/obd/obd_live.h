@@ -5,8 +5,11 @@
  * Live data poller for the LIVE and TRIM screens.
  *
  * Polls the chosen Mode 01 PIDs the car supports, one request per step,
- * round-robin, and keeps the latest value of each with when it was read
- * and how often it refreshes. The adapter's battery voltage (ATRV) is read
+ * and keeps the latest value of each with when it was read and how often
+ * it refreshes. Each PID has a desired refresh time (obd_pid_info's
+ * refresh_ms: RPM as often as possible, coolant every 15 s ...); the next
+ * request always goes to the most overdue PID, ties in list order
+ * (gauge-boy-3n6.10). The adapter's battery voltage (ATRV) is read
  * every few seconds in between. A PID that keeps answering NO DATA is
  * dropped. For manifold vacuum it remembers the MAP read with the engine
  * off when the car has no barometric pressure PID (brief section 7): a MAP
@@ -39,12 +42,13 @@ typedef struct {
     uint32_t reads;
     uint8_t misses;          /* NO DATA (or no usable reply) in a row */
     bool dropped;            /* stopped polling after OBD_LIVE_MAX_MISSES */
+    uint32_t period_ms;      /* desired refresh time, 0 = as often as possible */
+    uint64_t due_ms;         /* when it should be read next (0 = now) */
 } obd_live_pid_t;
 
 typedef struct {
     obd_live_pid_t pid[OBD_LIVE_MAX];
     int count;
-    int next;                /* round-robin position */
     int protocol;            /* from the link, for reply assembly */
 
     bool have_volts;
@@ -83,6 +87,9 @@ int obd_live_init(obd_live_t *lv, const obd_link_t *link, const uint8_t *wanted,
  * adapter answers as soon as one ECU replies instead of waiting for more;
  * an adapter that refuses it gets plain requests from then on. */
 obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trace, void *ctx);
+
+/* Change a PID's desired refresh time (0 = as often as possible). */
+void obd_live_set_period(obd_live_t *lv, uint8_t pid, uint32_t period_ms);
 
 /* The PID's entry, or NULL if it isn't polled. */
 const obd_live_pid_t *obd_live_get(const obd_live_t *lv, uint8_t pid);

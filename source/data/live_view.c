@@ -63,8 +63,10 @@ int live_view_lines(const obd_live_t *lv, int protocol, float rate, obd_units_t 
         }
         if (p->dropped) {
             snprintf(hz, sizeof hz, "no data");
-        } else if (p->reads >= 2) {
+        } else if (p->reads >= 2 && p->hz >= 0.95f) {
             snprintf(hz, sizeof hz, "%.1f Hz", (double)p->hz);
+        } else if (p->reads >= 2 && p->hz > 0.0f) {
+            snprintf(hz, sizeof hz, "every %.0f s", (double)(1.0f / p->hz));
         } else {
             hz[0] = '\0';
         }

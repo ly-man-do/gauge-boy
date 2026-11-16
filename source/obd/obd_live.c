@@ -28,6 +28,14 @@ static obd_live_pid_t *find(obd_live_t *lv, uint8_t pid)
     return NULL;
 }
 
+void obd_live_set_period(obd_live_t *lv, uint8_t pid, uint32_t period_ms)
+{
+    obd_live_pid_t *p = find(lv, pid);
+    if (p != NULL) {
+        p->period_ms = period_ms;
+    }
+}
+
 const obd_live_pid_t *obd_live_get(const obd_live_t *lv, uint8_t pid)
 {
     return find((obd_live_t *)lv, pid);
@@ -51,9 +59,11 @@ int obd_live_init(obd_live_t *lv, const obd_link_t *link, const uint8_t *wanted,
     lv->protocol = link->protocol;
     for (int i = 0; i < n && lv->count < OBD_LIVE_MAX; i++) {
         uint8_t pid = wanted[i];
-        if (obd_pid_info(pid) != NULL && obd_link_pid_supported(link, pid) &&
-            find(lv, pid) == NULL) {
-            lv->pid[lv->count++].pid = pid;
+        const obd_pid_info_t *info = obd_pid_info(pid);
+        if (info != NULL && obd_link_pid_supported(link, pid) && find(lv, pid) == NULL) {
+            lv->pid[lv->count].pid = pid;
+            lv->pid[lv->count].period_ms = info->refresh_ms;
+            lv->count++;
         }
     }
     return lv->count;
@@ -115,20 +125,17 @@ obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trac
         return read_volts(lv, elm, t0, trace, ctx);
     }
 
-    /* The next PID still being polled. */
+    /* The most overdue PID still being polled (ties: list order). */
     int idx = -1;
-    for (int k = 0; k < lv->count; k++) {
-        int i = (lv->next + k) % lv->count;
-        if (!lv->pid[i].dropped) {
+    for (int i = 0; i < lv->count; i++) {
+        if (!lv->pid[i].dropped && (idx < 0 || lv->pid[i].due_ms < lv->pid[idx].due_ms)) {
             idx = i;
-            break;
         }
     }
     if (idx < 0) {
         return OBD_LIVE_IDLE;
     }
     obd_live_pid_t *p = &lv->pid[idx];
-    lv->next = (idx + 1) % lv->count;
 
     char cmd[8];
     bool count = lv->use_count && !lv->count_refused;
@@ -155,6 +162,7 @@ obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trac
         return OBD_LIVE_LOST;
     }
 
+    p->due_ms = t1 + p->period_ms;
     float v = 0.0f;
     if (st == ELM_OK && obd_assemble(&r, lv->protocol, false, &reply) == OBD_OK &&
         obd_pid_from_reply(&reply, p->pid, &v) == OBD_PID_OK) {
