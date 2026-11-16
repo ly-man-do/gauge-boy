@@ -108,7 +108,7 @@ Do this once per adapter, in the car with the adapter plugged in and the ignitio
    - Secondary DNS: `000.000.000.000`
 6. Save. The connection test will still fail: GaugeBoy isn't running yet.
 
-**Check:** open GaugeBoy, tap **SLOT** until it shows the adapter's slot (e.g. `SLOT 1`) and tap **SETUP SLOT**. It reads the slot (read-only) and says it's set up, or shows the current (NOW) and needed (NEW) values to fix in System Settings.
+**Check:** open GaugeBoy, go to **SETUP**, tap **Wi-Fi slot** until it shows the adapter's slot and tap **Check the slot's IP and DNS**. It reads the slot (read-only) and says it's set up, or shows the current (NOW) and needed (NEW) values to fix in System Settings.
 
 This assumes the adapter is at `192.168.0.10`, as the Vgate iCar Pro and most Wi-Fi ELM327 adapters are. If yours differs, use its address as the Gateway, pick a free address in the same subnet for the 3DS, and use that same address as Primary DNS.
 
@@ -138,7 +138,7 @@ If your adapter uses a different address, edit the file (card reader or FTP) and
 
 ## 5. Smoke test (at home, no adapter)
 
-1. GaugeBoy opens on **HOME**: two status cards on top (the check engine light, amber when on, which opens DIAG; and the adapter, Connected or Not connected, which opens the Wi-Fi guide), six big cards, LIVE, DIAG, TRIM / FUN, LOG, SETUP (LIVE, TRIM, FUN and LOG say in the bottom bar which version brings them), and a **START Close** bar (tap it or press START to close GaugeBoy). The card you tapped last has a green outline. **DIAG** has tabs STORED / PENDING / PERM / READY across the top, a list of up to three rows per page, then **BACK**, **<** page **>**, **CLEAR** and **SCAN** along the bottom. **SETUP** is a list: Wi-Fi slot (tap to change), check the slot's IP and DNS, **Car make** and save this session's log, then **BACK**, **ADAPTER** (the adapter test screen) and **WI-FI GUIDE** along the bottom. WI-FI GUIDE is the setup steps below with this adapter's values, and a CHECK button that reports the slot, its IP / DNS, Wi-Fi and the adapter (the adapter test screen:  CONNECT, ATZ, ATSP0+0100 / ATDPN, ATRV, 0902 VIN / SLOT, SETUP SLOT, BACK / OLDER, SAVE LOG, NEWER). Shortcuts: B = BACK, X = SCAN, L / R = page. A tap flashes the button yellow; while an action runs it turns red and the top header shows `BUSY`.
+1. GaugeBoy opens on **HOME**: two status cards on top (the check engine light, amber when on, which opens DIAG; and the adapter, Connected or Not connected, which opens the Wi-Fi guide), six big cards, LIVE, DIAG, TRIM / FUN, LOG, SETUP (LIVE, TRIM, FUN and LOG say in the bottom bar which version brings them), and a **START Close** bar (tap it or press START to close GaugeBoy). The card you tapped last has a green outline. **DIAG** has tabs STORED / PENDING / PERM / READY across the top, a list of up to three rows per page, then **BACK**, **<** page **>**, **CLEAR** and **SCAN** along the bottom. **SETUP** is a list: Wi-Fi slot (tap to change), check the slot's IP and DNS, **Car make** and save this session's log, then **BACK**, **ADAPTER** (the adapter test screen) and **WI-FI GUIDE** along the bottom. WI-FI GUIDE is the setup steps below with this adapter's values, and a CHECK button that reports the slot, its IP / DNS, Wi-Fi and the adapter (the adapter test screen: CONNECT, ATZ, ATSP0+0100 / ATDPN, ATRV, 0902 VIN / SLOT, SPEED TEST, BACK / OLDER, SAVE LOG, NEWER). Shortcuts: B = BACK, X = SCAN, L / R = page. A tap flashes the button yellow; while an action runs it turns red and the top header shows `BUSY`.
 2. Tap **ATZ**. About 3 seconds later the log shows "Adapter did not answer" (or "refused or unreachable"). The buttons keep responding meanwhile.
 3. OLDER / NEWER scroll the log. SAVE LOG writes this session's log to its own file (see step 7).
 4. Exit with **START**. On the SD card, `sdmc:/3ds/gaugeboy/spike-log.txt` has the same lines as the screen.
@@ -159,6 +159,7 @@ Report anything garbled (colors, layout, text running off the screen).
    - **ATDPN**: the 2008 Ridgeline reports `Protocol 3: ISO 9141-2 (5 baud init) (auto)`. Other cars can report any OBD-II protocol (J1850 PWM / VPW, ISO 9141-2, ISO 14230-4 KWP, ISO 15765-4 CAN); with only the ignition on, `0100` may say `UNABLE TO CONNECT` until the engine runs.
    - **ATRV**: expect roughly 12.4 to 14.5 V (higher with the engine running).
    - **0902 VIN**: expect several `0: 49 02 ...` lines.
+   - **SPEED TEST** (engine running): sends each kind of request 10 times and logs how long they take: `ATRV` (the adapter alone, so Wi-Fi and adapter time), `010C` (a car request), `010C1` (the adapter returns after one reply instead of waiting for more ECUs; LIVE uses this) and `010C1` with `ATAT2` (the adapter's aggressive timing). The last line sums it up, e.g. `= Speed (avg ms): adapter 370, car 650, one reply ...`. Save the log afterwards.
 6. Transport checks (on the adapter test screen):
    - **Lid:** close the lid for 10 seconds, open it, tap ATRV. It should reconnect on its own.
    - **Unplug:** unplug the adapter, tap ATRV a few times (retries back off up to 8 s), plug it back in, tap CONNECT.

@@ -247,6 +247,41 @@ static void test_live_vacuum_from_baro_pid(void)
     CHECK_NEAR(vac, 68.0f);
 }
 
+static void test_live_response_count(void)
+{
+    static const uint8_t car[] = { 0x0C, 0x0D, 0 };
+    setup(car);
+    static const uint8_t want[] = { 0x0C, 0x0D };
+    obd_live_init(&lv, &link, want, 2);
+    lv.use_count = true;
+    fake_io_reply(&f, "ATRV", "12.6V\r\r>", 10, 0);
+    fake_io_reply(&f, "010C1", "41 0C 0B B8\r\r>", 100, 0);
+    fake_io_reply(&f, "010D1", "41 0D 05\r\r>", 100, 0);
+    for (int i = 0; i < 3; i++) {
+        CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    }
+    float v = 0.0f;
+    CHECK(obd_live_value(&lv, 0x0D, &v) && v == 5.0f);
+    CHECK(!lv.count_refused);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* An adapter that answers "?" gets the same PID plainly, then plain ones. */
+    setup(car);
+    obd_live_init(&lv, &link, want, 2);
+    lv.use_count = true;
+    fake_io_reply(&f, "ATRV", "12.6V\r\r>", 10, 0);
+    fake_io_reply(&f, "010C1", "?\r\r>", 50, 0);
+    fake_io_reply(&f, "010C", "41 0C 0B B8\r\r>", 100, 0);
+    fake_io_reply(&f, "010D", "41 0D 05\r\r>", 100, 0);
+    for (int i = 0; i < 3; i++) {
+        CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    }
+    CHECK(lv.count_refused);
+    CHECK(obd_live_value(&lv, 0x0C, &v) && v == 750.0f);
+    CHECK_EQ_INT((int)lv.failures, 0);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+}
+
 static int traced;
 static void count_trace(void *ctx, const char *cmd, const elm_response_t *resp, unsigned ms)
 {
@@ -359,4 +394,5 @@ void suite_live(void)
     RUN_TEST(test_live_engine_starting_is_not_baro);
     RUN_TEST(test_live_vacuum_from_baro_pid);
     RUN_TEST(test_live_trace);
+    RUN_TEST(test_live_response_count);
 }

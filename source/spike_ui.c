@@ -96,7 +96,7 @@ static const button_t buttons[] = {
     { NULL,         SPIKE_VOLTAGE,    13, 9, 13, 6 },
     { NULL,         SPIKE_VIN,        27, 9, 12, 6 },
     { NULL,         BTN_WIFI_SLOT,    0, 16, 12, 6 },  /* "SLOT ANY" / "SLOT 2" */
-    { "SETUP SLOT", BTN_SETUP_SLOT,   13, 16, 13, 6 },
+    { NULL,         SPIKE_SPEED,      13, 16, 13, 6 },  /* SETUP SLOT is in the SETUP list */
     { "BACK",       BTN_BACK,         27, 16, 12, 6 },
     { "OLDER ^",    BTN_SCROLL_OLDER, 0, 23, 12, 6 },
     { "SAVE LOG",   BTN_SAVE_LOG,     13, 23, 13, 6 },
@@ -552,7 +552,7 @@ static void diag_scan(spike_t *s)
         strcpy(car_make, app_cfg->car_make);
         LightLock_Unlock(&shared.lock);
         obd_diag_apply_make(&d, car_make);
-        if (d.result != OBD_LINK_LOST) {
+        if (reset && obd_link_adapter_ready(d.result)) {
             reset_at_connect = s->transport->connects;
         }
         if (d.result == OBD_LINK_OK) {
@@ -571,7 +571,12 @@ static void diag_scan(spike_t *s)
                        d.stored.count, d.pending.count,
                        d.stopped_at == OBD_DIAG_STEP_DONE ? "" : " (incomplete)");
         } else {
-            spike_logf(s, "! Scan: %s", obd_link_result_str(d.result));
+            if (d.link.failed_command != NULL) {
+                spike_logf(s, "! Scan: %s (%s: %s)", obd_link_result_str(d.result),
+                           d.link.failed_command, elm_status_str(d.link.elm_status));
+            } else {
+                spike_logf(s, "! Scan: %s", obd_link_result_str(d.result));
+            }
         }
     } else {
         memset(&d, 0, sizeof d);
@@ -744,14 +749,47 @@ static live_open_t live_open(spike_t *s, obd_link_t *link)
         tcp_transport_close(s->transport);
         return LIVE_OPEN_RETRY;
     }
-    reset_at_connect = connects;
+    if (reset && obd_link_adapter_ready(r)) {
+        reset_at_connect = connects;
+    }
     if (r != OBD_LINK_OK) {
-        spike_logf(s, "! LIVE: %s", obd_link_result_str(r));
+        if (link->failed_command != NULL) {
+            spike_logf(s, "! LIVE: %s (%s: %s)", obd_link_result_str(r), link->failed_command,
+                       elm_status_str(link->elm_status));
+        } else {
+            spike_logf(s, "! LIVE: %s", obd_link_result_str(r));
+        }
         return LIVE_OPEN_STOP;
     }
     last_link = *link;
     last_link_connects = connects;
     return LIVE_OPEN_OK;
+}
+
+/* LIVE (worker): how fast the poller went, for comparing logs. */
+static void live_summary(spike_t *s, const obd_live_t *lv)
+{
+    if (lv->requests == 0) {
+        return;
+    }
+    uint64_t now = lv->pid[0].at_ms > lv->volts_at_ms ? lv->pid[0].at_ms : lv->volts_at_ms;
+    for (int i = 0; i < lv->count; i++) {
+        now = lv->pid[i].at_ms > now ? lv->pid[i].at_ms : now;
+    }
+    unsigned secs = now > lv->started_ms ? (unsigned)((now - lv->started_ms) / 1000u) : 0;
+    spike_logf(s, "LIVE: %u requests in %u s, %.1f/s, %u failed%s", (unsigned)lv->requests, secs,
+               (double)obd_live_rate(lv, now), (unsigned)lv->failures,
+               lv->use_count ? (lv->count_refused ? ", no response count" : ", response count 1")
+                             : "");
+    char line[200] = "";
+    for (int i = 0; i < lv->count; i++) {
+        const obd_live_pid_t *p = &lv->pid[i];
+        snprintf(line + strlen(line), sizeof line - strlen(line), "%s%02X %.1f Hz%s",
+                 i ? ", " : "", (unsigned)p->pid, (double)p->hz, p->dropped ? " (dropped)" : "");
+    }
+    if (line[0] != '\0') {
+        spike_logf(s, "LIVE: %s", line);
+    }
 }
 
 /* LIVE (worker): one poll while the LIVE screen polls. */
@@ -771,6 +809,9 @@ static void live_poll(spike_t *s)
     LightLock_Unlock(&shared.lock);
 
     if (!on) {
+        if (ready) {
+            live_summary(s, &lv);
+        }
         ready = false;   /* start again from the link next time */
         return;
     }
@@ -790,7 +831,11 @@ static void live_poll(spike_t *s)
         LightLock_Unlock(&shared.lock);
     }
     if (!ready || gen != gen_seen) {
+        if (ready) {
+            live_summary(s, &lv);   /* the old PID set's rates */
+        }
         int count = obd_live_init(&lv, &link, pids, n);
+        lv.use_count = true;
         char list[3 * OBD_LIVE_MAX + 1] = "";
         for (int i = 0; i < count; i++) {
             snprintf(list + strlen(list), sizeof list - strlen(list), " %02X",
@@ -839,10 +884,15 @@ static void worker_main(void *arg)
 {
     spike_t *spike = arg;
 
+    bool was_polling = false;
     while (!shared.quit) {
         LightLock_Lock(&shared.lock);
         bool polling = shared.live_on;
         LightLock_Unlock(&shared.lock);
+        if (was_polling && !polling) {
+            live_poll(spike);   /* polling stopped: log the summary */
+        }
+        was_polling = polling;
         if (!polling) {
             LightEvent_WaitTimeout(&shared.wake, 200LL * 1000 * 1000);
         }

@@ -1,6 +1,7 @@
 #include "spike_actions.h"
 
 #include <stdarg.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -53,6 +54,7 @@ const char *spike_action_label(spike_action_t action)
     case SPIKE_PROTOCOL: return "ATDPN";
     case SPIKE_VOLTAGE:  return "ATRV";
     case SPIKE_VIN:      return "0902 VIN";
+    case SPIKE_SPEED:    return "SPEED TEST";
     case SPIKE_ACTION_COUNT: break;
     }
     return "?";
@@ -268,6 +270,108 @@ static void do_voltage(spike_t *s)
     }
 }
 
+/* ---------- speed test ---------- */
+
+typedef struct {
+    unsigned min, max, sum;
+    int ok, failed;
+    bool unsupported;   /* the adapter answered "?" */
+} speed_set_t;
+
+static uint64_t elm_clock(const spike_t *s)
+{
+    return s->elm->io.now_ms != NULL ? s->elm->io.now_ms(s->elm->io.ctx) : tp_now_ms();
+}
+
+static speed_set_t time_command(spike_t *s, const char *cmd, int n)
+{
+    static elm_response_t r;
+    speed_set_t st = { UINT_MAX, 0, 0, 0, 0, false };
+    for (int i = 0; i < n; i++) {
+        uint64_t t0 = elm_clock(s);
+        elm_status_t e = elm_command(s->elm, cmd, ELM_TIMEOUT_DEFAULT_MS, &r);
+        unsigned ms = (unsigned)(elm_clock(s) - t0);
+        if (e == ELM_ERR_UNKNOWN_COMMAND) {
+            st.unsupported = true;
+            break;
+        }
+        if (e != ELM_OK) {
+            st.failed++;
+            if (e == ELM_ERR_IO || e == ELM_ERR_TIMEOUT) {
+                break;
+            }
+            continue;
+        }
+        st.ok++;
+        st.sum += ms;
+        st.min = ms < st.min ? ms : st.min;
+        st.max = ms > st.max ? ms : st.max;
+    }
+    return st;
+}
+
+static unsigned speed_avg(const speed_set_t *st)
+{
+    return st->ok > 0 ? st->sum / (unsigned)st->ok : 0;
+}
+
+static void log_set(spike_t *s, const char *what, const speed_set_t *st)
+{
+    if (st->unsupported) {
+        spike_logf(s, "  %-20s not supported (?)", what);
+    } else if (st->ok == 0) {
+        spike_logf(s, "  %-20s failed", what);
+    } else {
+        spike_logf(s, "  %-20s avg %u ms (min %u, max %u)%s", what, speed_avg(st), st->min,
+                   st->max, st->failed > 0 ? ", some failed" : "");
+    }
+}
+
+/* "370" or "-" for the summary line. */
+static const char *avg_text(const speed_set_t *st, char *buf, size_t len)
+{
+    if (st->ok == 0 || st->unsupported) {
+        snprintf(buf, len, "-");
+    } else {
+        snprintf(buf, len, "%u", speed_avg(st));
+    }
+    return buf;
+}
+
+void spike_speed_test(spike_t *s, int n)
+{
+    static elm_response_t r;
+    char a[12], b[12], c[12], d[12];
+    spike_logf(s, "Speed test: each request %d times", n);
+
+    speed_set_t adapter = time_command(s, "ATRV", n);
+    log_set(s, "ATRV (adapter only)", &adapter);
+
+    elm_status_t e = elm_command(s->elm, "0100", ELM_TIMEOUT_SEARCH_MS, &r);
+    if (e != ELM_OK) {
+        spike_logf(s, "! Speed test: the car didn't answer 0100 (%s); is the engine running?",
+                   elm_status_str(e));
+        return;
+    }
+    speed_set_t plain = time_command(s, "010C", n);
+    log_set(s, "010C (RPM)", &plain);
+    speed_set_t one = time_command(s, "010C1", n);
+    log_set(s, "010C1 (one reply)", &one);
+
+    speed_set_t fast = { UINT_MAX, 0, 0, 0, 0, true };
+    e = elm_command(s->elm, "ATAT2", ELM_TIMEOUT_DEFAULT_MS, &r);
+    if (e == ELM_OK) {
+        fast = time_command(s, "010C1", n);
+        log_set(s, "010C1 with ATAT2", &fast);
+        elm_command(s->elm, "ATAT1", ELM_TIMEOUT_DEFAULT_MS, &r);   /* the default */
+    } else {
+        spike_logf(s, "  %-20s not supported (%s)", "ATAT2", elm_status_str(e));
+    }
+    spike_logf(s, "= Speed (avg ms): adapter %s, car %s, one reply %s, ATAT2 %s",
+               avg_text(&adapter, a, sizeof a), avg_text(&plain, b, sizeof b),
+               avg_text(&one, c, sizeof c), avg_text(&fast, d, sizeof d));
+}
+
 void spike_run(spike_t *s, spike_action_t action)
 {
     if (action == SPIKE_CONNECT) {
@@ -293,6 +397,9 @@ void spike_run(spike_t *s, spike_action_t action)
         break;
     case SPIKE_VIN:
         do_vin(s);
+        break;
+    case SPIKE_SPEED:
+        spike_speed_test(s, SPIKE_SPEED_COUNT);
         break;
     case SPIKE_CONNECT:
     case SPIKE_ACTION_COUNT:

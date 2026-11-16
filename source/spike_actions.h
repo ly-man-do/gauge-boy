@@ -23,6 +23,7 @@ typedef enum {
     SPIKE_PROTOCOL,      /* ATDPN */
     SPIKE_VOLTAGE,       /* ATRV */
     SPIKE_VIN,           /* 0902 */
+    SPIKE_SPEED,         /* time adapter and car requests (spike_speed_test) */
     SPIKE_ACTION_COUNT
 } spike_action_t;
 
@@ -94,5 +95,16 @@ int spike_format_slot_compare(const net_ip_settings_t *now, const net_ip_setting
 
 #define SPIKE_HEADER_COLS 49
 char *spike_format_header(char *out, size_t out_len, bool connected, int busy);
+
+/*
+ * Speed test (the SPEED TEST button): times n requests of each kind and
+ * logs min / average / max: ATRV (the adapter alone, so Wi-Fi and adapter
+ * time), 010C (a car request), 010C1 (asks the adapter to return after one
+ * reply instead of waiting for more ECUs), and 010C1 with ATAT2 (the
+ * adapter's aggressive timing), then puts ATAT1 back. Needs the adapter
+ * connected; times come from the adapter driver's clock.
+ */
+void spike_speed_test(spike_t *s, int n);
+#define SPIKE_SPEED_COUNT 10
 
 #endif

@@ -171,6 +171,11 @@ char *obd_link_pid_list(const obd_link_t *link, char *out, size_t out_len)
     return out;
 }
 
+bool obd_link_adapter_ready(obd_link_result_t result)
+{
+    return result == OBD_LINK_OK || result == OBD_LINK_NO_VEHICLE;
+}
+
 const char *obd_link_result_str(obd_link_result_t result)
 {
     switch (result) {

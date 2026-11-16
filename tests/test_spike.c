@@ -11,6 +11,7 @@
 #include "data/textlog.h"
 #include "version.h"
 #include "test_server.h"
+#include "fake_io.h"
 
 /* Collects log lines into one buffer. */
 typedef struct {
@@ -309,8 +310,59 @@ static void test_spike_slot_matches_and_compare(void)
     CHECK_EQ_INT(spike_format_slot_compare(&now, &plan, lines, 2), 2);
 }
 
+static void test_spike_speed_test(void)
+{
+    static fake_io_t f;
+    static elm_t elm;
+    static tcp_transport_t unused;
+    static capture_t cap;
+    static spike_t s;
+    memset(&cap, 0, sizeof cap);
+    spike_init(&s, &unused, &elm, capture, &cap);
+    fake_io_init(&f);
+    elm_io_t io = fake_io_iface(&f);
+    elm_bind(&elm, &io);
+    fake_io_reply(&f, "ATRV", "12.6V\r\r>", 300, 0);
+    fake_io_reply(&f, "ATRV", "12.6V\r\r>", 400, 0);
+    fake_io_reply(&f, "0100", "41 00 BF BE A8 91\r\r>", 600, 0);
+    fake_io_reply(&f, "010C", "41 0C 0A F0\r\r>", 600, 0);
+    fake_io_reply(&f, "010C", "41 0C 0A F0\r\r>", 700, 0);
+    fake_io_reply(&f, "010C1", "41 0C 0A F0\r\r>", 150, 0);
+    fake_io_reply(&f, "010C1", "41 0C 0A F0\r\r>", 150, 0);
+    fake_io_reply(&f, "ATAT2", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "010C1", "41 0C 0A F0\r\r>", 100, 0);
+    fake_io_reply(&f, "010C1", "41 0C 0A F0\r\r>", 120, 0);
+    fake_io_reply(&f, "ATAT1", "OK\r\r>", 10, 0);
+    spike_speed_test(&s, 2);
+    CHECK_LOGGED(&cap, "ATRV (adapter only)  avg 350 ms (min 300, max 400)");
+    CHECK_LOGGED(&cap, "010C (RPM)           avg 650 ms (min 600, max 700)");
+    CHECK_LOGGED(&cap, "010C1 (one reply)    avg 150 ms");
+    CHECK_LOGGED(&cap, "010C1 with ATAT2     avg 110 ms (min 100, max 120)");
+    CHECK_LOGGED(&cap, "= Speed (avg ms): adapter 350, car 650, one reply 150, ATAT2 110");
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* A clone without the count digit or ATAT2, and a car that's off. */
+    memset(&cap, 0, sizeof cap);
+    fake_io_init(&f);
+    fake_io_reply(&f, "ATRV", "12.6V\r\r>", 300, 0);
+    fake_io_reply(&f, "0100", "41 00 BF BE A8 91\r\r>", 600, 0);
+    fake_io_reply(&f, "010C", "41 0C 0A F0\r\r>", 600, 0);
+    fake_io_reply(&f, "010C1", "?\r\r>", 50, 0);
+    fake_io_reply(&f, "ATAT2", "?\r\r>", 10, 0);
+    spike_speed_test(&s, 1);
+    CHECK_LOGGED(&cap, "010C1 (one reply)    not supported (?)");
+    CHECK_LOGGED(&cap, "= Speed (avg ms): adapter 300, car 600, one reply -, ATAT2 -");
+    memset(&cap, 0, sizeof cap);
+    fake_io_init(&f);
+    fake_io_reply(&f, "ATRV", "12.6V\r\r>", 300, 0);
+    fake_io_reply(&f, "0100", "NO DATA\r\r>", 600, 0);
+    spike_speed_test(&s, 1);
+    CHECK_LOGGED(&cap, "the car didn't answer 0100");
+}
+
 void suite_spike(void)
 {
+    RUN_TEST(test_spike_speed_test);
     signal(SIGPIPE, SIG_IGN);
     gb_suite("spike");
     RUN_TEST(test_spike_all_buttons_against_adapter);

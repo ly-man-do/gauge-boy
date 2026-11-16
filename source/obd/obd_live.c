@@ -131,12 +131,25 @@ obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trac
     lv->next = (idx + 1) % lv->count;
 
     char cmd[8];
-    snprintf(cmd, sizeof cmd, "01%02X", p->pid);
+    bool count = lv->use_count && !lv->count_refused;
+    snprintf(cmd, sizeof cmd, count ? "01%02X1" : "01%02X", p->pid);
     elm_status_t st = elm_command(elm, cmd, OBD_LIVE_TIMEOUT_MS, &r);
     uint64_t t1 = clock_ms(elm);
     lv->requests++;
     if (trace != NULL) {
         trace(ctx, cmd, &r, (unsigned)(t1 - t0));
+    }
+    if (count && st == ELM_ERR_UNKNOWN_COMMAND) {
+        /* No response count on this adapter: the same PID, plainly. */
+        lv->count_refused = true;
+        snprintf(cmd, sizeof cmd, "01%02X", p->pid);
+        t0 = t1;
+        st = elm_command(elm, cmd, OBD_LIVE_TIMEOUT_MS, &r);
+        t1 = clock_ms(elm);
+        lv->requests++;
+        if (trace != NULL) {
+            trace(ctx, cmd, &r, (unsigned)(t1 - t0));
+        }
     }
     if (lost(st)) {
         return OBD_LIVE_LOST;

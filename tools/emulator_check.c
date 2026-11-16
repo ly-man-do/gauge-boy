@@ -147,6 +147,7 @@ int main(int argc, char **argv)
                                       0x06, 0x07, 0x08, 0x09, 0x33, 0x42 };
     static obd_live_t lv;
     int polled = obd_live_init(&lv, &d.link, wanted, (int)sizeof wanted);
+    lv.use_count = true;   /* as the app polls */
     snprintf(detail, sizeof detail, "%d of %d", polled, (int)sizeof wanted);
     check(polled > 0, "PIDs to poll (supported and known)", detail);
     bool lost_live = false;

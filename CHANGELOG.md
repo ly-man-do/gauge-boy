@@ -6,7 +6,14 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ### Added
 
+- **SPEED TEST** on the adapter test screen (in place of SETUP SLOT, which is in the SETUP list): times 10 of each kind of request (`ATRV` for the adapter alone, `010C`, `010C1` with a response count, and `010C1` with `ATAT2`) and logs min / average / max, to find where the time per request goes.
+- LIVE asks for one reply per request (`010C1`), so the adapter answers as soon as the car does instead of waiting for more ECUs; adapters that refuse it get plain requests. When LIVE stops, the log gets its requests per second and each PID's refresh rate.
+- The build's git commit is shown after the version (`GaugeBoy 0.1.0+b4beb83`) in the header, the start-up screen and the log.
 - **LIVE screen** (text dashboard; the toy-like gauges come in M3): the LIVE card on HOME polls the chosen Mode 01 PIDs the car supports and shows each value in US units with its refresh rate, plus the adapter's battery voltage and manifold vacuum (barometric pressure from PID 33, or MAP read with the engine off, minus MAP). Defaults: RPM, speed, coolant, intake air, throttle, load, MAP, timing, MAF. The bottom screen has a toggle for every supported PID (19 decoded, including fuel trims for both banks), START / STOP and BACK; the choice is saved as `pids` under `[live]` in `config.ini`. PIDs that keep answering NO DATA are dropped; a lost connection is reconnected while polling.
+
+### Fixed
+
+- After a reconnect whose adapter reset failed, the reset wasn't tried again, so the adapter's echo stayed on for the rest of the session. The reset is now only marked done when it worked, and a failed setup logs the command that failed.
 
 ## [0.1.0] - 2026-11-15
 

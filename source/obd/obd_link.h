@@ -68,4 +68,9 @@ char *obd_link_pid_list(const obd_link_t *link, char *out, size_t out_len);
 
 const char *obd_link_result_str(obd_link_result_t result);
 
+/* True if the adapter setup (ATZ, ATE0, ...) is known to have worked, so
+ * the next open on this connection can skip the reset. A failed or lost
+ * setup can leave echo on: reset again next time. */
+bool obd_link_adapter_ready(obd_link_result_t result);
+
 #endif

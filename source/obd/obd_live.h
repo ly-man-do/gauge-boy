@@ -57,6 +57,9 @@ typedef struct {
     bool have_pending_map;      /* MAP read after an RPM 0, kept if the next RPM is 0 too */
     float pending_map_kpa;
 
+    bool use_count;          /* ask for one reply ("010C1"): set after init */
+    bool count_refused;      /* the adapter answered "?" to it: plain requests */
+
     uint32_t requests;       /* commands sent */
     uint32_t failures;       /* NO DATA, unusable or failed replies */
     uint64_t started_ms;
@@ -75,7 +78,10 @@ typedef enum {
  */
 int obd_live_init(obd_live_t *lv, const obd_link_t *link, const uint8_t *wanted, int n);
 
-/* One request: ATRV when it is due, else the next PID. trace may be NULL. */
+/* One request: ATRV when it is due, else the next PID. trace may be NULL.
+ * With use_count set, PID requests carry the response count "1" so the
+ * adapter answers as soon as one ECU replies instead of waiting for more;
+ * an adapter that refuses it gets plain requests from then on. */
 obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trace, void *ctx);
 
 /* The PID's entry, or NULL if it isn't polled. */

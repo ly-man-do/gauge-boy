@@ -117,8 +117,18 @@ static void test_link_partial_ranges(void)
     CHECK(res == OBD_LINK_LOST || res == OBD_LINK_NO_VEHICLE);
 }
 
+static void test_link_adapter_ready(void)
+{
+    /* Only a setup that worked lets the next open skip the reset. */
+    CHECK(obd_link_adapter_ready(OBD_LINK_OK));
+    CHECK(obd_link_adapter_ready(OBD_LINK_NO_VEHICLE));
+    CHECK(!obd_link_adapter_ready(OBD_LINK_NO_ADAPTER));
+    CHECK(!obd_link_adapter_ready(OBD_LINK_LOST));
+}
+
 void suite_link(void)
 {
+    RUN_TEST(test_link_adapter_ready);
     gb_suite("link");
     RUN_TEST(test_link_ridgeline);
     RUN_TEST(test_link_can_two_ecus);
