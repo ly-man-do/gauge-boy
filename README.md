@@ -12,7 +12,7 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 
 ## Status
 
-**Early development: M0 spike done (0.0.2), M1 next.** The current release is a test build for checking adapters, not the finished gauges. M0 proved that a New 3DS can talk to a Wi-Fi ELM327 adapter directly: tested with a Vgate iCar Pro Wi-Fi adapter (its network is called `V-LINK`) in a 2008 Honda Ridgeline, where it reads the adapter version, protocol, battery voltage and VIN. Work now moves to M1 (check engine codes and readiness monitors).
+**Early development: M1 core read done (0.1.0), M2 next.** The current release reads the car: the **DIAG** screen shows the check engine light, readiness monitors, stored / pending / permanent codes with plain-English descriptions and the VIN, and clears codes behind a confirmation. Every scan is also saved to a code history file on the SD card. The gauges (LIVE), fuel trims (TRIM), fun modes and logging come in later milestones. Work now moves to M2 (live data and fuel trims).
 
 | Milestone | Version | Scope |
 |---|---|---|
@@ -27,10 +27,10 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 
 ## Planned features
 
-- **Diagnostics:** check engine light status, stored / pending / permanent codes with generic SAE J2012 descriptions, readiness monitors, and clearing codes behind a confirmation dialog.
+- **Diagnostics (working in 0.1.0):** check engine light status, stored / pending / permanent codes with plain-English descriptions, readiness monitors, the VIN, and clearing codes behind a confirmation dialog.
 - **Fuel trims:** short-term, long-term and total trims for both banks on center-zero gauges.
 - **Live data:** RPM, speed, coolant temp, throttle, engine load, intake air temp, manifold vacuum and battery voltage.
-- **Logging:** CSV logs and a code history saved to the SD card.
+- **Logging:** CSV logs of drives (the code history on the SD card already works in 0.1.0).
 - **Style:** chunky, toy-like gauges and low-poly models with thin dark outlines, a teal mascot car, layered stereoscopic 3D on the top screen and touch-only controls on the bottom screen. All art is original.
 
 ## Requirements
@@ -43,15 +43,22 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 
 | Adapter | Reports as | Wi-Fi network | Result |
 |---|---|---|---|
-| Vgate iCar Pro Wi-Fi | ELM327 v2.3 | `V-LINK`, adapter at `192.168.0.10:35000` | Works (0.0.2), with the slot setup below |
+| Vgate iCar Pro Wi-Fi | ELM327 v2.3 | `V-LINK`, adapter at `192.168.0.10:35000` | Works (0.0.2, 0.1.0), with the slot setup below |
 
-The iCar Pro supports all OBD-II protocols (SAE J1850 PWM and VPW, ISO 9141-2, ISO 14230-4 KWP, ISO 15765-4 CAN 11/29-bit at 250/500 kbaud) plus SAE J1939 and two user-set CAN modes. GaugeBoy detects the car's protocol automatically; the 2008 Ridgeline uses ISO 9141-2.
+The iCar Pro supports all OBD-II protocols (SAE J1850 PWM and VPW, ISO 9141-2, ISO 14230-4 KWP, ISO 15765-4 CAN 11/29-bit at 250/500 kbaud) plus SAE J1939 and two user-set CAN modes. GaugeBoy detects the car's protocol automatically.
+
+## Tested cars
+
+| Car | Protocol | Result |
+|---|---|---|
+| 2008 Honda Ridgeline | ISO 9141-2 | Works (0.1.0): check engine light, readiness, codes, VIN |
+| 1996 Geo Tracker | ISO 9141-2 | Works (0.1.0): check engine light, readiness, codes. No VIN over OBD (normal for 1996), so choose the make in **SETUP > Car make** |
 
 More adapters will be tested later; reports are welcome (see [Testing on a real New 3DS](docs/testing-on-3ds.md)).
 
 ## Install
 
-The current release is an **M0 test build**: an adapter test app, not the finished gauges. Download it from the [latest release](https://github.com/ly-man-do/gauge-boy/releases/latest):
+The current release is an **M1 build**: diagnostics (DIAG) and setup, not the finished gauges yet. Download it from the [latest release](https://github.com/ly-man-do/gauge-boy/releases/latest):
 
 - [`gaugeboy.cia`](https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.cia): install with FBI; GaugeBoy then appears on the HOME menu.
 - [`gaugeboy.3dsx`](https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.3dsx): copy to `sdmc:/3ds/gaugeboy/` and start it from the Homebrew Launcher.
@@ -66,9 +73,9 @@ The adapter's network has no internet, so the 3DS fails its connection test ther
 2. Open that slot > **Change Settings**:
    - **IP Address:** Auto-Obtain **No**; IP `192.168.000.011`, Subnet Mask `255.255.255.000`, Gateway `192.168.000.010`
    - **DNS:** Auto-Obtain **No**; Primary DNS `192.168.000.011` (the 3DS's own address), Secondary DNS `000.000.000.000`
-3. In GaugeBoy, tap **SLOT** until it shows that slot, then **SETUP SLOT** to check the settings, then **CONNECT** and **ATZ**.
+3. In GaugeBoy, open **SETUP**, tap **Wi-Fi slot** until it shows that slot, then **Check the slot's IP and DNS**. Then go to **DIAG** and tap **SCAN** with the engine running.
 
-GaugeBoy has the same steps built in: **SETUP > WI-FI GUIDE**, with a **CHECK** button that tells you which part isn't right yet. This assumes the adapter is at `192.168.0.10`, as most are. [Testing on a real New 3DS](docs/testing-on-3ds.md) has the details, the test steps and how to report results; **SAVE LOG** saves a session log to `sdmc:/3ds/gaugeboy/logs/` to attach.
+GaugeBoy has the same steps built in: **SETUP > WI-FI GUIDE**, with a **CHECK** button that tells you which part isn't right yet. This assumes the adapter is at `192.168.0.10`, as most are. [Testing on a real New 3DS](docs/testing-on-3ds.md) has the details, the test steps and how to report results; **SETUP > Save this session's log** saves a log to `sdmc:/3ds/gaugeboy/logs/` to attach.
 
 ## Building
 
