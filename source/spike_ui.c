@@ -20,6 +20,7 @@
 #include "data/code_history.h"
 #include "data/config.h"
 #include "data/diag_view.h"
+#include "data/drive_log.h"
 #include "data/live_view.h"
 #include "data/live_views.h"
 #include "data/trim_view.h"
@@ -37,6 +38,9 @@
 
 #define LOG_PATH      CONFIG_DIR "/spike-log.txt"
 #define LOGS_DIR      CONFIG_DIR "/logs"   /* SAVE LOG copies go here */
+#define DRIVES_DIR    CONFIG_DIR "/" DRIVE_LOG_DIR   /* REC drive logs */
+#define REC_FLUSH_MS  5000u                  /* to the SD card at least this often */
+#define REC_MAX_BYTES (50u * 1024 * 1024)    /* stop a drive log at 50 MB */
 #define QUEUE_MAX     8
 #define WORKER_STACK  (64 * 1024)
 #define FLASH_MS      150
@@ -66,6 +70,7 @@
 #define BTN_LIVE_PICK    (-80) /* UI: Custom PID toggle (-80 - slot on the page) */
 #define BTN_LIVE_EDIT    (-34) /* UI: LIVE Custom view -> PID toggles */
 #define BTN_DIAG_TRIM    (-35) /* UI: DIAG -> TRIM (lean / rich codes stored) */
+#define BTN_LIVE_REC     (-36) /* UI: LIVE: record a drive on / off */
 #define BTN_LIVE_VIEW    (-90) /* UI: LIVE view list (-90 - view) */
 #define BTN_GUIDE        (-8)  /* UI: SETUP -> Wi-Fi guide */
 #define BTN_CLEAR_ASK    (-5)  /* UI: open the clear-codes dialog */
@@ -249,6 +254,7 @@ static const button_t live_buttons[] = {
     { "<",    BTN_PAGE_PREV,   9,  25, 5, 5 },
     { ">",    BTN_PAGE_NEXT,   17, 25, 5, 5 },
     { NULL,   BTN_LIVE_TOGGLE, 26, 25, 13, 5 },   /* START / STOP */
+    { NULL,   BTN_LIVE_REC,    26, 19, 13, 5 },   /* REC / REC m:ss */
 };
 #define LIVE_BUTTON_COUNT ((int)(sizeof live_buttons / sizeof live_buttons[0]))
 static const button_t live_edit_button = { "EDIT PIDS", BTN_LIVE_EDIT, 10, 14, 19, 5 };
@@ -413,6 +419,10 @@ static struct {
     bool live_link_ok;
     char live_msg[48];         /* status line, "" while polling fine */
     unsigned live_ui_version;  /* bumped when the bottom screen must change */
+    bool rec_want;             /* UI: record the LIVE view (REC) */
+    bool rec_active;           /* worker: a drive log is open */
+    uint64_t rec_started_ms;   /* when it was opened */
+    char rec_file[40];         /* "drive-20261116-171230.csv" */
 
     volatile bool quit;
 } shared;
@@ -975,6 +985,123 @@ static live_open_t live_open(spike_t *s, obd_link_t *link)
     return LIVE_OPEN_OK;
 }
 
+/* ---------- REC: drive logs (worker) ---------- */
+
+static drive_log_t rec_log;
+static FILE *rec_fp;
+static uint64_t rec_flush_at;
+static unsigned rec_seconds_shown;
+
+static void rec_stop(spike_t *s, const char *why)
+{
+    if (rec_fp == NULL) {
+        return;
+    }
+    bool ok = drive_log_flush(&rec_log);
+    ok = fclose(rec_fp) == 0 && ok;
+    rec_fp = NULL;
+    LightLock_Lock(&shared.lock);
+    uint64_t secs = (tp_now_ms() - shared.rec_started_ms) / 1000u;
+    shared.rec_active = false;
+    shared.live_ui_version++;
+    char file[sizeof shared.rec_file];
+    memcpy(file, shared.rec_file, sizeof file);
+    LightLock_Unlock(&shared.lock);
+    spike_logf(s, "%s REC stopped (%s): %s, %u rows, %u:%02u, %u KB%s", ok ? "=" : "!", why, file,
+               (unsigned)rec_log.rows, (unsigned)(secs / 60), (unsigned)(secs % 60),
+               (unsigned)((rec_log.bytes + 1023) / 1024), ok ? "" : " (! not all written)");
+}
+
+static void rec_refuse(spike_t *s, const char *msg, const char *path)
+{
+    spike_logf(s, msg, path);
+    LightLock_Lock(&shared.lock);
+    shared.rec_want = false;
+    shared.live_ui_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
+static void rec_start(spike_t *s, const obd_live_t *lv, const obd_link_t *link)
+{
+    time_t now = time(NULL);
+    char name[sizeof shared.rec_file];
+    char path[96];
+    drive_log_file_name(name, sizeof name, gmtime(&now));
+    snprintf(path, sizeof path, "%s/%s", DRIVES_DIR, name);
+    mkdir(DRIVES_DIR, 0777);
+    rec_fp = fopen(path, "wb");
+    if (rec_fp == NULL) {
+        rec_refuse(s, "! REC: can't create %s (is the SD card in?)", path);
+        return;
+    }
+    if (s->transport->connects != identified_connects) {
+        identify_car(s);   /* the car for the header: just 0902 on this link */
+    }
+    char when[24], car[64], vin[OBD_VIN_LEN + 1];
+    now_text(when, sizeof when);
+    LightLock_Lock(&shared.lock);
+    diag_car_text(&shared.diag, car, sizeof car);
+    snprintf(vin, sizeof vin, "%s", shared.diag.have_vin ? shared.diag.vin : "");
+    obd_units_t units = app_cfg->metric ? OBD_UNITS_METRIC : OBD_UNITS_US;
+    LightLock_Unlock(&shared.lock);
+    drive_log_meta_t meta = { GB_VERSION_TEXT, when, car, vin, elm_protocol_name(link->protocol) };
+    uint64_t t = tp_now_ms();
+    if (!drive_log_open(&rec_log, drive_log_stdio_write, rec_fp, &meta, lv, units, 0, t)) {
+        fclose(rec_fp);
+        rec_fp = NULL;
+        rec_refuse(s, "! REC: can't write %s (is the SD card full?)", path);
+        return;
+    }
+    rec_flush_at = t + REC_FLUSH_MS;
+    rec_seconds_shown = 0;
+    LightLock_Lock(&shared.lock);
+    shared.rec_active = true;
+    shared.rec_started_ms = t;
+    snprintf(shared.rec_file, sizeof shared.rec_file, "%s", name);
+    shared.live_ui_version++;
+    LightLock_Unlock(&shared.lock);
+    spike_logf(s, "REC: recording %d PIDs to %s", lv->count, path);
+}
+
+/* After each LIVE step: start, sample, flush or stop as REC asks. */
+static void rec_step(spike_t *s, const obd_live_t *lv, const obd_link_t *link)
+{
+    LightLock_Lock(&shared.lock);
+    bool want = shared.rec_want;
+    LightLock_Unlock(&shared.lock);
+    if (want && rec_fp == NULL) {
+        rec_start(s, lv, link);
+    } else if (!want && rec_fp != NULL) {
+        rec_stop(s, "REC tapped");
+    }
+    if (rec_fp == NULL) {
+        return;
+    }
+    uint64_t now = tp_now_ms();
+    drive_log_sample(&rec_log, lv, now);
+    if (now >= rec_flush_at) {
+        drive_log_flush(&rec_log);
+        fflush(rec_fp);
+        rec_flush_at = now + REC_FLUSH_MS;
+    }
+    const char *why = rec_log.failed ? "SD card write failed"
+                    : rec_log.bytes >= REC_MAX_BYTES ? "file reached 50 MB" : NULL;
+    if (why != NULL) {
+        rec_stop(s, why);
+        LightLock_Lock(&shared.lock);
+        shared.rec_want = false;
+        LightLock_Unlock(&shared.lock);
+        return;
+    }
+    LightLock_Lock(&shared.lock);
+    unsigned secs = (unsigned)((now - shared.rec_started_ms) / 1000u);
+    if (secs != rec_seconds_shown) {
+        rec_seconds_shown = secs;
+        shared.live_ui_version++;   /* the REC button's time */
+    }
+    LightLock_Unlock(&shared.lock);
+}
+
 static bool lost_status(elm_status_t st)
 {
     return st == ELM_ERR_IO || st == ELM_ERR_TIMEOUT;
@@ -999,6 +1126,12 @@ static void live_poll(spike_t *s)
     LightLock_Unlock(&shared.lock);
 
     if (!on) {
+        if (rec_fp != NULL) {
+            rec_stop(s, "polling stopped");
+        }
+        LightLock_Lock(&shared.lock);
+        shared.rec_want = false;
+        LightLock_Unlock(&shared.lock);
         if (ready) {
             if (lost_status(obd_live_restore_header(&lv, s->elm))) {
                 tcp_transport_close(s->transport);
@@ -1024,6 +1157,11 @@ static void live_poll(spike_t *s)
         LightLock_Unlock(&shared.lock);
     }
     if (!ready || gen != gen_seen) {
+        if (gen != gen_seen && rec_fp != NULL) {
+            rec_stop(s, "view changed; a new file follows");   /* new columns */
+        } else if (!ready && rec_fp != NULL) {
+            spike_logf(s, "REC: resumed");
+        }
         if (ready) {
             obd_live_restore_header(&lv, s->elm);
             spike_live_summary(s, &lv);   /* the old PID set's rates */
@@ -1051,6 +1189,11 @@ static void live_poll(spike_t *s)
     obd_live_step_t st = obd_live_step(&lv, s->elm, NULL, NULL);
     if (st == OBD_LIVE_LOST) {
         spike_logf(s, "! LIVE: the adapter stopped answering; reconnecting");
+        if (rec_fp != NULL) {
+            drive_log_flush(&rec_log);
+            fflush(rec_fp);
+            spike_logf(s, "REC: paused until the connection is back");
+        }
         tcp_transport_close(s->transport);
         ready = false;
         live_publish(&lv, true, link.protocol, tp_now_ms(), "Connection lost; reconnecting", false);
@@ -1068,6 +1211,7 @@ static void live_poll(spike_t *s)
         return;
     }
     live_publish(&lv, true, link.protocol, tp_now_ms(), "", false);
+    rec_step(s, &lv, &link);
 }
 
 /* LIVE PIDs to config.ini (worker). */
@@ -1657,7 +1801,15 @@ static void draw_live_top(int view, int busy, bool connected)
     for (int i = 2; i < TOP_ROWS - 3; i++) {
         print_row(2 + i, TOP_COLS, i < n ? lines[i] : "");
     }
+    LightLock_Lock(&shared.lock);
+    bool rec = shared.rec_active;
+    unsigned rec_secs = rec ? (unsigned)((tp_now_ms() - shared.rec_started_ms) / 1000u) : 0;
+    char rec_line[TOP_COLS + 8];
+    snprintf(rec_line, sizeof rec_line, "REC %u:%02u  %s", rec_secs / 60, rec_secs % 60,
+             shared.rec_file);
+    LightLock_Unlock(&shared.lock);
     print_row(TOP_ROWS - 1, TOP_COLS, msg[0] != '\0' ? msg
+                                      : rec ? rec_line
                                       : on ? "Polling. Fewer PIDs refresh faster."
                                            : "Stopped. Tap START to poll.");
 }
@@ -2038,15 +2190,38 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         if (ui->live_view == LIVE_VIEW_CUSTOM) {
             draw_button(&live_edit_button, flashing(live_edit_button.action, now), false);
         }
+        LightLock_Lock(&shared.lock);
+        bool rec = shared.rec_active;
+        bool rec_want = shared.rec_want;
+        unsigned rec_secs = rec ? (unsigned)((now - shared.rec_started_ms) / 1000u) : 0;
+        char rec_file[sizeof shared.rec_file];
+        memcpy(rec_file, shared.rec_file, sizeof rec_file);
+        LightLock_Unlock(&shared.lock);
         if (msg[0] != '\0') {
-            print_row(21, BOTTOM_COLS, msg);
+            print_row(11, BOTTOM_COLS, msg);
         }
+        if (rec) {
+            print_row(19, 25, "Recording to drives/");
+            print_row(20, 25, rec_file);
+            print_row(22, 25, "Safe to leave running;");
+            print_row(23, 25, "tap REC again to stop.");
+        } else {
+            print_row(19, 25, "REC: save this view to");
+            print_row(20, 25, "the SD card (CSV).");
+            print_row(22, 25, "");
+            print_row(23, 25, "");
+        }
+        char rec_label[16];
+        snprintf(rec_label, sizeof rec_label, "REC %u:%02u", rec_secs / 60, rec_secs % 60);
         for (int i = 0; i < LIVE_BUTTON_COUNT; i++) {
             button_t b = live_buttons[i];
             if (b.action == BTN_LIVE_TOGGLE) {
                 b.label = on ? "STOP" : "START";
             }
-            draw_button_ex(&b, flashing(b.action, now), false,
+            if (b.action == BTN_LIVE_REC) {
+                b.label = rec ? rec_label : rec_want ? "REC ..." : "REC";
+            }
+            draw_button_ex(&b, flashing(b.action, now), b.action == BTN_LIVE_REC && rec,
                            b.action == BTN_LIVE_TOGGLE && on);
         }
         snprintf(line, sizeof line, "%d/%d", ui->live_view + 1, LIVE_VIEW_COUNT);
@@ -2474,6 +2649,19 @@ void spike_ui_run(void)
                 ui.screen = SCREEN_LIVE_EDIT;
                 ui.page = 0;
                 bottom_full = top_dirty = true;
+                break;
+            case BTN_LIVE_REC:
+                LightLock_Lock(&shared.lock);
+                shared.rec_want = !shared.rec_want;
+                if (shared.rec_want && !shared.live_on) {   /* REC polls too */
+                    shared.live_on = true;
+                    shared.live_gen++;
+                    shared.live_msg[0] = '\0';
+                }
+                shared.live_ui_version++;
+                LightLock_Unlock(&shared.lock);
+                LightEvent_Signal(&shared.wake);
+                top_dirty = true;
                 break;
             case BTN_LIVE_TOGGLE:
                 LightLock_Lock(&shared.lock);

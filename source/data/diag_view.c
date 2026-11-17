@@ -141,6 +141,11 @@ static void car_text(const obd_diag_t *d, const char *setup, char *out, size_t l
     }
 }
 
+void diag_car_text(const obd_diag_t *d, char *out, size_t len)
+{
+    car_text(d, " (set in SETUP)", out, len);
+}
+
 int diag_view_lines(const obd_diag_t *d, diag_tab_t tab, int cols,
                     char lines[][DIAG_VIEW_COLS + 1], int max)
 {

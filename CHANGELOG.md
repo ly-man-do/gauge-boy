@@ -4,6 +4,10 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- **REC on the LIVE screen**: records the view's values to a CSV file on the SD card (`sdmc:/3ds/gaugeboy/drives/drive-YYYYMMDD-HHMMSS.csv`), 5 rows a second: time, each PID with its unit, battery voltage, and vacuum (negative under boost) when MAP is polled, under a header with the GaugeBoy version, date, car, VIN, protocol and units. The button turns red with the elapsed time, and the top screen shows `REC m:ss` and the file name. Start and stop it parked; it keeps recording while driving with no touch needed. REC again, STOP or BACK stops it; switching views starts a new file (the columns change); a lost connection pauses it in the same file; a full card or a 50 MB file stops it with a log line. Tapping REC while stopped starts polling too.
+
 ## [0.2.0] - 2026-11-16
 
 M2 release: live data. **LIVE** shows the car's sensors in task-focused views (Engine, Idle & vacuum, Air & fuel, Warm-up, Drive, All, Custom) with how often each value refreshes, plus battery voltage and manifold vacuum or boost; **TRIM** shows short-term, long-term and total fuel trims for both banks with hints. Polling is fast: about 5.5 requests a second on ISO 9141-2 cars and about 14 a second on CAN cars, where one request carries several PIDs and only the engine computer is asked. GaugeBoy finds the car by itself after connecting and decodes the make and model from the VIN (NHTSA vPIC). SETUP is now four pages: TESTS, WI-FI, VEHICLE and OTHER (units, About). Tested on a 2008 Honda Ridgeline and a 1996 Geo Tracker (ISO 9141-2) and a 2023 Subaru Ascent (CAN, turbo).

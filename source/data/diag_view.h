@@ -58,4 +58,8 @@ int diag_facts(const obd_diag_t *d, int cols, char lines[][DIAG_VIEW_COLS + 1], 
  * continuation lines indented by indent). Returns lines written. */
 int diag_wrap(const char *text, int cols, int indent, char lines[][DIAG_VIEW_COLS + 1], int max);
 
+/* The car in a few words, "2023 Subaru Ascent" or "1996 Geo Tracker (set
+ * in SETUP)"; "" when nothing is known. */
+void diag_car_text(const obd_diag_t *d, char *out, size_t len);
+
 #endif

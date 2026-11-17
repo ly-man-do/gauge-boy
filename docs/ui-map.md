@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-16, the car is found after connecting and shown on HOME (gauge-boy-3n6.19; M2 in progress)
+**As of:** 2026-11-16, REC on the LIVE screen records drives (gauge-boy-43v.2; M3 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -31,7 +31,9 @@ GaugeBoy
         │       │                    refresh rates, battery, vacuum)
         │       ├── [BACK]           → view list, stops polling, saves the view   [B]
         │       ├── [<] view n/7 [>] previous / next view                         [L/R]
-        │       ├── [START / STOP]   pauses or resumes polling
+        │       ├── [START / STOP]   pauses or resumes polling (STOP also ends a recording)
+        │       ├── [REC / REC m:ss] records this view to drives/drive-<date>.csv; red while
+        │       │                    recording; tap again to stop (starts polling if stopped)
         │       └── [EDIT PIDS]      (Custom only) → Custom PIDs
         │           ├── [PID toggles] 6 per page, green = polled (the PIDs the car supports)
         │           ├── [BACK]       → Custom view, saves the choice              [B]
