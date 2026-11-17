@@ -4,6 +4,10 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-16
+
+M2 release: live data. **LIVE** shows the car's sensors in task-focused views (Engine, Idle & vacuum, Air & fuel, Warm-up, Drive, All, Custom) with how often each value refreshes, plus battery voltage and manifold vacuum or boost; **TRIM** shows short-term, long-term and total fuel trims for both banks with hints. Polling is fast: about 5.5 requests a second on ISO 9141-2 cars and about 14 a second on CAN cars, where one request carries several PIDs and only the engine computer is asked. GaugeBoy finds the car by itself after connecting and decodes the make and model from the VIN (NHTSA vPIC). SETUP is now four pages: TESTS, WI-FI, VEHICLE and OTHER (units, About). Tested on a 2008 Honda Ridgeline and a 1996 Geo Tracker (ISO 9141-2) and a 2023 Subaru Ascent (CAN, turbo).
+
 ### Added
 
 - **The car is found on its own**: after GaugeBoy connects to the adapter, it finds the car's protocol and reads the VIN by itself (once per connection, when nothing else is running), so HOME, DIAG and SETUP > VEHICLE show the car, e.g. "2023 Subaru Ascent", before any SCAN. Codes show as "not read yet" until you SCAN. If the car doesn't answer (ignition off), it tries again every 20 s. A different car than the last scan clears the old codes. Cars without a VIN over OBD get the make, model and year set in SETUP > VEHICLE.

@@ -12,7 +12,7 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 
 ## Status
 
-**Early development: M1 core read done (0.1.0), M2 next.** The current release reads the car: the **DIAG** screen shows the check engine light, readiness monitors, stored / pending / permanent codes with plain-English descriptions and the VIN, and clears codes behind a confirmation. Every scan is also saved to a code history file on the SD card. The gauges (LIVE), fuel trims (TRIM), fun modes and logging come in later milestones. Work now moves to M2 (live data and fuel trims).
+**Early development: M2 live data done (0.2.0), M3 next.** The current release reads the car and its live data: **DIAG** shows the check engine light, readiness monitors, stored / pending / permanent codes with plain-English descriptions and the VIN, and clears codes behind a confirmation; **LIVE** shows the car's sensors in task-focused views with their refresh rates, battery voltage and manifold vacuum or boost; **TRIM** shows fuel trims for both banks. GaugeBoy finds the car by itself after connecting and shows its make, model and year. Everything is still on text screens except HOME: the toy-like 3D gauges come in M3 (UI polish), which is next.
 
 | Milestone | Version | Scope |
 |---|---|---|
@@ -27,9 +27,9 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 
 ## Planned features
 
-- **Diagnostics (working in 0.1.0):** check engine light status, stored / pending / permanent codes with plain-English descriptions, readiness monitors, the VIN, and clearing codes behind a confirmation dialog.
-- **Fuel trims:** short-term, long-term and total trims for both banks on center-zero gauges.
-- **Live data:** RPM, speed, coolant temp, throttle, engine load, intake air temp, manifold vacuum and battery voltage.
+- **Diagnostics (working since 0.1.0):** check engine light status, stored / pending / permanent codes with plain-English descriptions, readiness monitors, the VIN, and clearing codes behind a confirmation dialog.
+- **Fuel trims (working in 0.2.0, as text bars):** short-term, long-term and total trims for both banks on center-zero gauges, with hints such as a possible vacuum leak.
+- **Live data (working in 0.2.0, as text):** RPM, speed, coolant, oil and intake air temperature, throttle, engine load, MAF, MAP, timing, fuel level, manifold vacuum or turbo boost, battery voltage and more, in views for one job each, or all of them, or your own pick.
 - **Logging:** CSV logs of drives (the code history on the SD card already works in 0.1.0).
 - **Style:** chunky, toy-like gauges and low-poly models with thin dark outlines, a teal mascot car, layered stereoscopic 3D on the top screen and touch-only controls on the bottom screen. All art is original.
 
@@ -43,7 +43,7 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 
 | Adapter | Reports as | Wi-Fi network | Result |
 |---|---|---|---|
-| Vgate iCar Pro Wi-Fi | ELM327 v2.3 | `V-LINK`, adapter at `192.168.0.10:35000` | Works (0.0.2, 0.1.0), with the slot setup below |
+| Vgate iCar Pro Wi-Fi | ELM327 v2.3 | `V-LINK`, adapter at `192.168.0.10:35000` | Works (0.0.2 to 0.2.0), with the slot setup below |
 
 The iCar Pro supports all OBD-II protocols (SAE J1850 PWM and VPW, ISO 9141-2, ISO 14230-4 KWP, ISO 15765-4 CAN 11/29-bit at 250/500 kbaud) plus SAE J1939 and two user-set CAN modes. GaugeBoy detects the car's protocol automatically.
 
@@ -51,14 +51,15 @@ The iCar Pro supports all OBD-II protocols (SAE J1850 PWM and VPW, ISO 9141-2, I
 
 | Car | Protocol | Result |
 |---|---|---|
-| 2008 Honda Ridgeline | ISO 9141-2 | Works (0.1.0): check engine light, readiness, codes, VIN |
-| 1996 Geo Tracker | ISO 9141-2 | Works (0.1.0): check engine light, readiness, codes. No VIN over OBD (normal for 1996), so choose the make (and model and year) in **SETUP > VEHICLE** |
+| 2008 Honda Ridgeline | ISO 9141-2 | Works (0.2.0): check engine light, readiness, codes, VIN, live data and fuel trims for both banks (about 5.5 requests a second) |
+| 2023 Subaru Ascent | ISO 15765-4 CAN (11-bit, 500 kbaud) | Works (0.2.0): check engine light, readiness, codes, VIN and model, live data incl. turbo manifold pressure (PID 87), fuel trims (about 14 requests a second, several PIDs each) |
+| 1996 Geo Tracker | ISO 9141-2 | Works (0.2.0): check engine light, readiness, codes, live data and fuel trims. No VIN over OBD (normal for 1996), so choose the make (and model and year) in **SETUP > VEHICLE** |
 
 More adapters will be tested later; reports are welcome (see [Testing on a real New 3DS](docs/testing-on-3ds.md)).
 
 ## Install
 
-The current release is an **M1 build**: diagnostics (DIAG) and setup, not the finished gauges yet. Download it from the [latest release](https://github.com/ly-man-do/gauge-boy/releases/latest):
+The current release is an **M2 build**: diagnostics (DIAG), live data (LIVE), fuel trims (TRIM) and setup, on text screens; the finished gauges come in M3. Download it from the [latest release](https://github.com/ly-man-do/gauge-boy/releases/latest):
 
 - [`gaugeboy.cia`](https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.cia): install with FBI; GaugeBoy then appears on the HOME menu.
 - [`gaugeboy.3dsx`](https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.3dsx): copy to `sdmc:/3ds/gaugeboy/` and start it from the Homebrew Launcher.
