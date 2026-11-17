@@ -15,7 +15,7 @@ SRCS    := $(wildcard *.c) $(wildcard ../source/elm327/*.c) $(wildcard ../source
 HDRS    := $(wildcard *.h) $(wildcard ../source/*.h) $(wildcard ../source/elm327/*.h) $(wildcard ../source/obd/*.h) \
            $(wildcard ../source/data/*.h) ../source/transport/tcp_transport.h \
            ../source/transport/conntest.h ../source/spike_actions.h
-LDLIBS  := -pthread
+LDLIBS  := -pthread -lm
 
 .PHONY: run clean emulator-check
 

@@ -23,6 +23,7 @@
 #include "data/diag_view.h"
 #include "data/drive_list.h"
 #include "data/drive_log.h"
+#include "data/history.h"
 #include "data/live_view.h"
 #include "data/live_views.h"
 #include "data/trim_view.h"
@@ -1091,6 +1092,9 @@ static void log_delete(spike_t *s)
     log_scan(s);
 }
 
+/* Recent values of the polled PIDs (worker): for live graphs and fun modes. */
+static history_t live_history;
+
 /* ---------- REC: drive logs (worker) ---------- */
 
 static drive_log_t rec_log;
@@ -1281,6 +1285,11 @@ static void live_poll(spike_t *s)
         lv.use_count = true;
         lv.use_multi = true;   /* CAN cars: several PIDs a request */
         lv.use_engine_header = true;   /* CAN cars: the engine ECU only */
+        uint8_t polled[OBD_LIVE_MAX];
+        for (int i = 0; i < lv.count; i++) {
+            polled[i] = lv.pid[i].pid;
+        }
+        history_reset(&live_history, polled, lv.count);
         char list[3 * OBD_LIVE_MAX + 1] = "";
         for (int i = 0; i < count; i++) {
             snprintf(list + strlen(list), sizeof list - strlen(list), " %02X",
@@ -1317,6 +1326,7 @@ static void live_poll(spike_t *s)
         return;
     }
     live_publish(&lv, true, link.protocol, tp_now_ms(), "", false);
+    history_from_live(&live_history, &lv);
     rec_step(s, &lv, &link);
 }
 
