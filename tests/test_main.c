@@ -15,6 +15,7 @@ void suite_ui(void);
 void suite_pid(void);
 void suite_live(void);
 void suite_trim(void);
+void suite_drive_log(void);
 
 int main(void)
 {
@@ -32,5 +33,6 @@ int main(void)
     suite_pid();
     suite_live();
     suite_trim();
+    suite_drive_log();
     return gb_test_summary();
 }
