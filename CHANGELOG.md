@@ -6,6 +6,7 @@ All notable changes to GaugeBoy are recorded here. The format follows [Keep a Ch
 
 ### Added
 
+- **LOG screen**: the LOG card on HOME now lists the drives recorded with REC (newest first, up to 100): date and time, car and length, three per page. Tap one to see its details on the top screen (date, car, VIN, protocol, length, size, units and the values recorded); **DELETE** removes it from the SD card after a confirmation. Files in `drives/` that aren't GaugeBoy drive logs are listed as such.
 - **REC on the LIVE screen**: records the view's values to a CSV file on the SD card (`sdmc:/3ds/gaugeboy/drives/drive-YYYYMMDD-HHMMSS.csv`), 5 rows a second: time, each PID with its unit, battery voltage, and vacuum (negative under boost) when MAP is polled, under a header with the GaugeBoy version, date, car, VIN, protocol and units. The button turns red with the elapsed time, and the top screen shows `REC m:ss` and the file name. Start and stop it parked; it keeps recording while driving with no touch needed. REC again, STOP or BACK stops it; switching views starts a new file (the columns change); a lost connection pauses it in the same file; a full card or a 50 MB file stops it with a log line. Tapping REC while stopped starts polling too.
 
 ## [0.2.0] - 2026-11-16

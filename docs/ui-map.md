@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-16, REC on the LIVE screen records drives (gauge-boy-43v.2; M3 in progress)
+**As of:** 2026-11-16, LOG lists recorded drives (gauge-boy-43v.4; M3 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -18,7 +18,7 @@ GaugeBoy
         ├── [DIAG  · Codes & CEL]    → DIAG
         ├── [TRIM  · Fuel trims]     → TRIM (starts polling)
         ├── [FUN   · Fun modes]      → notice "comes in version 0.6"
-        ├── [LOG   · Record drives]  → notice "comes in version 0.3"
+        ├── [LOG   · Record drives]  → LOG (lists the drives on the SD card)
         ├── [SETUP · Settings]       → SETUP
         └── [START Close bar]        → closes GaugeBoy            [START]
         │
@@ -56,6 +56,16 @@ GaugeBoy
         │   │   ├── [CANCEL]         → DIAG                                       [B]
         │   │   └── [CLEAR CODES]    clears (refused if moving), then rescans
         │   └── [SCAN]               reads CEL, readiness, codes, VIN (and model)  [X]
+        │
+        ├── LOG                      (top: the selected drive's details: date, car, VIN,
+        │   │                        protocol, length, size, values; else what LOG is)
+        │   ├── [list rows]          3 per page, newest first: date, car, length;
+        │   │                        tap → details on top (green = selected)
+        │   ├── [BACK]               → HOME                                       [B]
+        │   ├── [<] page n/m [>]                                                  [L/R]
+        │   └── [DELETE]             (a drive selected) → Delete question
+        │       ├── [CANCEL]         → LOG                                        [B]
+        │       └── [DELETE]         removes the file from the SD card, lists again
         │
         ├── SETUP                    (top: session log on every SETUP page but About)  [L/R scroll log]
         │   ├── [TESTS]              → SETUP > TESTS
