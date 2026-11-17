@@ -18,7 +18,7 @@ GaugeBoy
         ├── [DIAG  · Codes & CEL]    → DIAG
         ├── [TRIM  · Fuel trims]     → TRIM (starts polling)
         ├── [FUN   · Fun modes]      → notice "comes in version 0.6"
-        ├── [LOG   · Record drives]  → notice "comes in version 0.4"
+        ├── [LOG   · Record drives]  → notice "comes in version 0.3"
         ├── [SETUP · Settings]       → SETUP
         └── [START Close bar]        → closes GaugeBoy            [START]
         │
@@ -95,5 +95,5 @@ GaugeBoy
 
 - SETUP is a menu of four pages (owner layout, gauge-boy-cib): TESTS (adapter and car tests, the log's buttons), WI-FI (connection), VEHICLE (make, model, year, VIN) and OTHER (units, About).
 - LIVE views and the PIDs in each: Engine (RPM, speed, coolant, throttle, load), Idle & vacuum (RPM, MAP (PID 0B or 87) + vacuum or boost, short-term trims, timing, baro), Air & fuel (MAF, MAP (0B or 87), intake air, throttle, short- and long-term trims, baro), Warm-up (coolant, intake air, oil, outside air, run time, RPM), Drive (RPM, speed, throttle, load, timing), All (every supported PID), Custom (your pick). Each view only shows what the car supports.
-- Only HOME is drawn with graphics (citro2d). Every other screen is still the text console until M3.
+- Only HOME is drawn with graphics (citro2d). Every other screen is still the text console until M4 (UI polish).
 - The code for these screens is in `source/spike_ui.c` (screens, buttons, actions) and `source/ui/` (HOME layout and drawing).

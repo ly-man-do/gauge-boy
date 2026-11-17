@@ -1,7 +1,7 @@
 # CLAUDE.md: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.20.0
-**Matches project brief:** 1.15.0 (`docs/gaugeboy-brief.md`)
+**Version:** 1.21.0
+**Matches project brief:** 1.16.0 (`docs/gaugeboy-brief.md`)
 
 You are the developer on GaugeBoy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
 
@@ -27,7 +27,7 @@ Use Beads (`bd`) for all task tracking. Do not create markdown TODO lists, plan 
 - Never commit on `main` directly if the owner has asked for branches or PRs.
 
 **Structure:**
-- One epic per milestone: M0 Spike, M1 Core read, M2 Live data, M3 UI polish, M4 Logging, M5 Audio, M6 Fun modes, M7 Release.
+- One epic per milestone: M0 Spike, M1 Core read, M2 Live data, M3 Logging, M4 UI polish, M5 Audio, M6 Fun modes, M7 Release.
 - ESP32 bridge is a deferred epic. Do not work on it unless the owner opens it after the M0 go / no-go decision.
 - The M0 go / no-go issue is labeled `needs-owner`. Every M1 issue is blocked by it (`bd dep add <m1-id> --blocked-by <go-no-go-id>`).
 - Only the owner closes milestone epics, because epics contain `needs-hardware` work and closing one triggers a release.
@@ -142,6 +142,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.21.0 | 2026-11-16 | Matches brief 1.16.0: M3 is Logging and M4 is UI polish (section 1) |
 | 1.20.0 | 2026-11-16 | Matches brief 1.15.0: VIN model names from NHTSA vPIC (section 7) |
 | 1.19.0 | 2026-11-16 | Matches brief 1.14.0: the 8 PIDs at 2 Hz success criterion is for CAN cars |
 | 1.18.0 | 2026-11-16 | Matches brief 1.13.0: third test car, 2023 Subaru Ascent (section 1) |

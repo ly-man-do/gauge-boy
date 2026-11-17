@@ -1,6 +1,6 @@
 # Project Brief: GaugeBoy: OBD-II Deluxe
 
-**Version:** 1.15.0
+**Version:** 1.16.0
 **Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
 **Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -276,8 +276,8 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 | M0: Spike | 0.0.x | Join adapter Wi-Fi, open socket, send `ATZ`, print reply on screen; test FBI QR install from a GitHub release link |
 | M1: Core read | 0.1.x | Auto protocol detect across all OBD-II protocols (section 4), read VIN, CEL status, stored / pending / permanent codes with descriptions, readiness monitors, clear codes, code history log |
 | M2: Live data | 0.2.x | Polling of selected PIDs, supported-PID discovery, text dashboard, fuel trims for both banks (short-term, long-term, total) |
-| M3: UI polish | 0.3.x | 3DS-game visual style: chunky toy-like gauges with outlines, mascot car on the title screen, layered stereoscopic 3D on the top screen, touch control panel with pressable buttons, startup needle sweep, theme file, metric/imperial toggle, menu sounds |
-| M4: Logging | 0.4.x | CSV logging to SD, session list, simple graph replay |
+| M3: Logging | 0.3.x | CSV logging to SD, session list, simple graph replay |
+| M4: UI polish | 0.4.x | 3DS-game visual style: chunky toy-like gauges with outlines, mascot car on the title screen, layered stereoscopic 3D on the top screen, touch control panel with pressable buttons, startup needle sweep, theme file, metric/imperial toggle, menu sounds |
 | M5: Audio | 0.5.x | Sound effects for all UI events and alerts, music playback, jukebox, user music folder, volume settings, credits screen |
 | M6: Fun modes | 0.6.x | Time Attack timers, shift light, G-meter, Rev Sync, Eco Challenge, garage card, achievements, attract mode |
 | M7: Release | 1.0.0 | `.cia` build, QR code install (stable and per-release), README, compatibility list, safety notice |
@@ -323,7 +323,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 | Agent loses track of long-running work across sessions | Repeated or half-finished work | Beads as the single task list; `bd ready` at the start of every session |
 | UI looks too close to a real brand | Trademark complaints, repo takedown | Original logo and art only; no brand names or marks; open-licensed fonts |
 | 3DS-game look plus the GaugeBoy name reads as an official Nintendo app | Trademark complaint or repo takedown | Original models, art and fonts only; nothing copied, traced or converted from Nintendo games; no Nintendo characters or UI elements; README disclaimer |
-| Solo developer scope creep (3D models and art are time-consuming) | Delayed release | Keep text dashboard working first (M2); visual style in M3 builds on it; build one finished gauge in full detail before making the rest; stretch items stay out of 1.0 |
+| Solo developer scope creep (3D models and art are time-consuming) | Delayed release | Keep text dashboard working first (M2) and finish the features before the visual style (logging is M3; the visual style is M4, built on every screen at once); build one finished gauge in full detail before making the rest; stretch items stay out of 1.0 |
 | Fun modes encourage street racing | Safety, reputation | Closed-course warning, no online leaderboards, Rev Sync locked unless stopped, no touch input needed while moving |
 | Slow OBD speed updates | Inaccurate timers | Poll speed only during timer runs; label results as estimates |
 | Sourcing original music as a solo developer | Delayed audio milestone | Start with CC0 / CC-BY tracks from open music libraries; commission or compose originals later; user music folder covers the gap |
@@ -361,6 +361,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.16.0 | 2026-11-16 | Owner decision: Logging and UI polish swap places, so features come before the visual style: M3 is Logging (0.3.x), M4 is UI polish (0.4.x) (section 8); `CLAUDE.md` updated to 1.21.0 |
 | 1.15.0 | 2026-11-16 | Owner decision: VIN model names from NHTSA vPIC (public domain), offline table of model names only, model years 1996 and later (section 5e, Garage card); `CLAUDE.md` updated to 1.20.0 |
 | 1.14.0 | 2026-11-16 | Owner decision: the "8 live PIDs at 2 Hz" success criterion applies to CAN cars; ISO 9141-2 tops out around 5.5 requests a second (Ridgeline speed test) (section 9); `CLAUDE.md` updated to 1.19.0 |
 | 1.13.0 | 2026-11-16 | Third test vehicle: the owner's 2023 Subaru Ascent (CAN, turbo) (section 7); `CLAUDE.md` updated to 1.18.0 |

@@ -6,7 +6,7 @@
  * how to show the value (SAE J1979 formulas).
  *
  * Values are decoded to metric (km/h, degC, kPa, g/s, V) and converted for
- * display, so the units toggle (M3) only changes formatting. Text is ASCII
+ * display, so the units setting (SETUP > OTHER) only changes formatting. Text is ASCII
  * only (the HOME font has no degree sign): "195 F", "34 mph".
  *
  * Platform-free, no allocation.

@@ -2497,7 +2497,7 @@ void spike_ui_run(void)
             case BTN_MENU_FUN:
             case BTN_MENU_LOG:
                 ui.notice = action == BTN_MENU_FUN   ? "FUN: fun modes come in version 0.6"
-                          :                            "LOG: logging comes in version 0.4";
+                          :                            "LOG: logging comes in version 0.3";
                 notice_until = now + 3000;
                 break;
             case BTN_TAB_STORED:

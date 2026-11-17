@@ -12,15 +12,15 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 
 ## Status
 
-**Early development: M2 live data done (0.2.0), M3 next.** The current release reads the car and its live data: **DIAG** shows the check engine light, readiness monitors, stored / pending / permanent codes with plain-English descriptions and the VIN, and clears codes behind a confirmation; **LIVE** shows the car's sensors in task-focused views with their refresh rates, battery voltage and manifold vacuum or boost; **TRIM** shows fuel trims for both banks. GaugeBoy finds the car by itself after connecting and shows its make, model and year. Everything is still on text screens except HOME: the toy-like 3D gauges come in M3 (UI polish), which is next.
+**Early development: M2 live data done (0.2.0), M3 logging next.** The current release reads the car and its live data: **DIAG** shows the check engine light, readiness monitors, stored / pending / permanent codes with plain-English descriptions and the VIN, and clears codes behind a confirmation; **LIVE** shows the car's sensors in task-focused views with their refresh rates, battery voltage and manifold vacuum or boost; **TRIM** shows fuel trims for both banks. GaugeBoy finds the car by itself after connecting and shows its make, model and year. Everything is still on text screens except HOME: logging (M3) comes next, then the toy-like 3D gauges and the rest of the visual style (M4, UI polish), done once all the screens exist.
 
 | Milestone | Version | Scope |
 |---|---|---|
 | M0 Spike | 0.0.x | Connect to the adapter, send `ATZ`, show the reply; test QR install |
 | M1 Core read | 0.1.x | Check engine codes (stored, pending, permanent), readiness monitors, clear codes, VIN |
 | M2 Live data | 0.2.x | Live sensor data and fuel trims for both banks |
-| M3 UI polish | 0.3.x | Toy-like 3D gauges, mascot car title screen, stereoscopic 3D top screen, touch control panel |
-| M4 Logging | 0.4.x | CSV session logs on the SD card |
+| M3 Logging | 0.3.x | CSV logs of drives on the SD card, a session list and a simple graph replay |
+| M4 UI polish | 0.4.x | Toy-like 3D gauges, mascot car title screen, stereoscopic 3D top screen, touch control panel |
 | M5 Audio | 0.5.x | Original music and sound effects |
 | M6 Fun modes | 0.6.x | Timers, shift light, G-meter, achievements and more |
 | M7 Release | 1.0.0 | `.cia` release, QR code install |
@@ -59,7 +59,7 @@ More adapters will be tested later; reports are welcome (see [Testing on a real 
 
 ## Install
 
-The current release is an **M2 build**: diagnostics (DIAG), live data (LIVE), fuel trims (TRIM) and setup, on text screens; the finished gauges come in M3. Download it from the [latest release](https://github.com/ly-man-do/gauge-boy/releases/latest):
+The current release is an **M2 build**: diagnostics (DIAG), live data (LIVE), fuel trims (TRIM) and setup, on text screens; the finished gauges come in M4. Download it from the [latest release](https://github.com/ly-man-do/gauge-boy/releases/latest):
 
 - [`gaugeboy.cia`](https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.cia): install with FBI; GaugeBoy then appears on the HOME menu.
 - [`gaugeboy.3dsx`](https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.3dsx): copy to `sdmc:/3ds/gaugeboy/` and start it from the Homebrew Launcher.
