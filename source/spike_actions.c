@@ -66,7 +66,7 @@ const char *spike_action_label(spike_action_t action)
 char *spike_format_header(char *out, size_t out_len, bool connected, int busy)
 {
     bool is_busy = busy >= 0 && busy < SPIKE_ACTION_COUNT;
-    snprintf(out, out_len, "GaugeBoy %s  %s%s%s", GB_VERSION_TEXT,
+    snprintf(out, out_len, "Gauge Boy %s  %s%s%s", GB_VERSION_TEXT,
              connected ? "[CONNECTED]" : "[offline]",
              is_busy ? "  BUSY: " : "",
              is_busy ? spike_action_label((spike_action_t)busy) : "");
@@ -527,7 +527,7 @@ void spike_live_test(spike_t *s, unsigned poll_ms)
     spike_logf(s, "LIVE TEST: protocol %d, %s, %d ECU%s", link.protocol,
                elm_protocol_name(link.protocol), link.ecus, link.ecus == 1 ? "" : "s");
 
-    /* 1: every supported PID GaugeBoy decodes, once. */
+    /* 1: every supported PID Gauge Boy decodes, once. */
     bool count = true;
     int asked = 0, read = 0;
     for (int i = 0; i < obd_pid_count(); i++) {
@@ -584,9 +584,9 @@ void spike_live_test(spike_t *s, unsigned poll_ms)
 char *spike_format_log_name(char *out, size_t out_len, const struct tm *when)
 {
     if (when == NULL) {
-        snprintf(out, out_len, "gaugeboy-log.txt");
+        snprintf(out, out_len, "gauge-boy-log.txt");
     } else {
-        snprintf(out, out_len, "gaugeboy-log-%04d%02d%02d-%02d%02d%02d.txt",
+        snprintf(out, out_len, "gauge-boy-log-%04d%02d%02d-%02d%02d%02d.txt",
                  when->tm_year + 1900, when->tm_mon + 1, when->tm_mday,
                  when->tm_hour, when->tm_min, when->tm_sec);
     }

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Make GaugeBoy's offline VIN model-name table from NHTSA vPIC (dev only).
+"""Make Gauge Boy's offline VIN model-name table from NHTSA vPIC (dev only).
 
 vPIC (https://vpic.nhtsa.dot.gov/) is US government data (public domain,
-17 USC 105). GaugeBoy uses it for model names only, by owner decision
+17 USC 105). Gauge Boy uses it for model names only, by owner decision
 (brief 1.15.0, gauge-boy-1hi). The source is the pinned "lite" standalone
 database as plain PostgreSQL SQL; this script reads its COPY blocks
 directly, no database needed:

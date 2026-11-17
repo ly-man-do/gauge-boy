@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Make the QR codes for installing GaugeBoy with FBI (Remote Install >
+"""Make the QR codes for installing Gauge Boy with FBI (Remote Install >
 Scan QR Code).
 
   python3 tools/make_qr.py
       The stable QR for the README: always the newest release,
-      https://github.com/<repo>/releases/latest/download/gaugeboy.cia
+      https://github.com/<repo>/releases/latest/download/gauge-boy.cia
       -> docs/qr-latest.png
 
-  python3 tools/make_qr.py --version 0.0.2 --out gaugeboy-qr.png
+  python3 tools/make_qr.py --version 0.0.2 --out gauge-boy-qr.png
       One release's QR (the release workflow attaches it to the release):
-      https://github.com/<repo>/releases/download/v0.0.2/gaugeboy.cia
+      https://github.com/<repo>/releases/download/v0.0.2/gauge-boy.cia
 
 Needs segno (dev / CI only, never shipped):
   pip install --require-hashes -r tools/requirements-release.txt
@@ -21,7 +21,7 @@ import re
 import sys
 
 DEFAULT_REPO = "ly-man-do/gauge-boy"
-ASSET = "gaugeboy.cia"
+ASSET = "gauge-boy.cia"
 
 
 def install_url(repo, version):
@@ -43,7 +43,7 @@ def main():
         sys.exit("--version must look like 1.2.3")
     if not re.fullmatch(r"[\w.-]+/[\w.-]+", args.repo):
         sys.exit("--repo must look like owner/name")
-    out = args.out or ("docs/qr-latest.png" if args.version is None else "gaugeboy-qr.png")
+    out = args.out or ("docs/qr-latest.png" if args.version is None else "gauge-boy-qr.png")
 
     try:
         import segno

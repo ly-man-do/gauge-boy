@@ -1,5 +1,5 @@
 /*
- * Host integration check: runs the GaugeBoy ELM327 driver, a full DIAG scan
+ * Host integration check: runs the Gauge Boy ELM327 driver, a full DIAG scan
  * and the adapter test actions against a running ELM327 emulator over TCP.
  *
  *   tools/run-emulator.sh            (in another terminal)

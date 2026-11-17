@@ -1,7 +1,7 @@
-"""GaugeBoy's extra ELM327-emulator scenarios (dev only, never shipped).
+"""Gauge Boy's extra ELM327-emulator scenarios (dev only, never shipped).
 
 The emulator package only has CAN cars ('car', 'default') and a K-Line
-motorbike. GaugeBoy's test cars are not CAN, so this adds:
+motorbike. Gauge Boy's test cars are not CAN, so this adds:
 
   ridgeline  ISO 9141-2 (protocol 3, ATDPN A3), like the owner's 2008 Honda
              Ridgeline: a 4.5 s protocol search, PIDs 01-5F, CEL off, no
@@ -17,7 +17,7 @@ motorbike. GaugeBoy's test cars are not CAN, so this adds:
              requests ("010C0D05...") are answered too.
 
 Replies are what an ELM327 prints with headers off (ATH0), which is how
-GaugeBoy runs the adapter: data bytes only, one line per frame, no CAN
+Gauge Boy runs the adapter: data bytes only, one line per frame, no CAN
 header or ISO-TP frame numbers. Values come from the owner's logs
 (gauge-boy-bxf.14, bxf.16).
 
@@ -172,7 +172,7 @@ SCENARIOS = {
 
 def can(data):
     """One CAN reply frame from ECU 7E8, as the emulator's 'car' scenario
-    writes them (headers are off in GaugeBoy, so only the data shows)."""
+    writes them (headers are off in Gauge Boy, so only the data shows)."""
     return "<header>7E8</header><size>%02X</size><data>%s</data>" % (len(data.split()), data)
 
 

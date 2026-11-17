@@ -7,7 +7,7 @@
  * of dropping it with error 003-2002.
  *
  * The test looks up a few Nintendo host names and fetches a page; it
- * passes on HTTP 200 with "X-Organization: Nintendo". GaugeBoy runs a
+ * passes on HTTP 200 with "X-Organization: Nintendo". Gauge Boy runs a
  * tiny DNS server that answers those names with the 3DS's own address
  * and a web server that serves that reply (see tools/fake_conntest.py,
  * the same logic on a computer).

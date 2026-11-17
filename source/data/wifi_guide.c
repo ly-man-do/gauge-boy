@@ -10,7 +10,7 @@ static const char *const titles[WIFI_GUIDE_STEPS] = {
     "Save the adapter's Wi-Fi",
     "Set the IP address",
     "Set the DNS",
-    "Back in GaugeBoy",
+    "Back in Gauge Boy",
 };
 
 const char *wifi_guide_title(int step)
@@ -57,8 +57,8 @@ int wifi_guide_lines(int step, const char *adapter_host, int cols,
                  "Plug the Wi-Fi OBD-II adapter into the car and turn the ignition on: most "
                  "adapters only power up then. The adapter makes its own Wi-Fi network (the "
                  "Vgate iCar Pro calls it V-LINK). It has no internet, so the 3DS fails its "
-                 "connection test there; GaugeBoy answers that test itself once the slot is set "
-                 "up as shown in the next steps. Close GaugeBoy and open System Settings.");
+                 "connection test there; Gauge Boy answers that test itself once the slot is set "
+                 "up as shown in the next steps. Close Gauge Boy and open System Settings.");
         break;
     case 1:
         snprintf(text, sizeof text,
@@ -85,13 +85,13 @@ int wifi_guide_lines(int step, const char *adapter_host, int cols,
                  "  Primary DNS:   %s\n"
                  "  Secondary DNS: 000.000.000.000\n"
                  "\n"
-                 "The primary DNS is the 3DS itself, so the connection test asks GaugeBoy. "
-                 "Save. The test still fails because GaugeBoy isn't running: that's expected.",
+                 "The primary DNS is the 3DS itself, so the connection test asks Gauge Boy. "
+                 "Save. The test still fails because Gauge Boy isn't running: that's expected.",
                  me3);
         break;
     default:
         snprintf(text, sizeof text,
-                 "Open GaugeBoy, SETUP > WI-FI > Wi-Fi slot: tap until it shows the adapter's slot. "
+                 "Open Gauge Boy, SETUP > WI-FI > Wi-Fi slot: tap until it shows the adapter's slot. "
                  "Then come back here and tap CHECK: it reads the slot's settings and tries the "
                  "adapter. When all is OK, go to DIAG and tap SCAN with the engine running.");
         break;

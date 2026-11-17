@@ -227,14 +227,14 @@ static void test_spike_header_text(void)
     char out[128];
     char expected[128];
 
-    snprintf(expected, sizeof expected, "GaugeBoy %s  [offline]", GB_VERSION_TEXT);
+    snprintf(expected, sizeof expected, "Gauge Boy %s  [offline]", GB_VERSION_TEXT);
     CHECK_EQ_STR(spike_format_header(out, sizeof out, false, -1), expected);
 
-    snprintf(expected, sizeof expected, "GaugeBoy %s  [CONNECTED]  BUSY: ATSP0+0100", GB_VERSION_TEXT);
+    snprintf(expected, sizeof expected, "Gauge Boy %s  [CONNECTED]  BUSY: ATSP0+0100", GB_VERSION_TEXT);
     CHECK_EQ_STR(spike_format_header(out, sizeof out, true, SPIKE_SEARCH), expected);
 
     /* Out-of-range busy values show no BUSY label. */
-    snprintf(expected, sizeof expected, "GaugeBoy %s  [CONNECTED]", GB_VERSION);
+    snprintf(expected, sizeof expected, "Gauge Boy %s  [CONNECTED]", GB_VERSION);
     CHECK_EQ_STR(spike_format_header(out, sizeof out, true, SPIKE_ACTION_COUNT), expected);
 }
 
@@ -249,8 +249,8 @@ static void test_spike_log_name(void)
     when.tm_hour = 11;
     when.tm_min = 42;
     when.tm_sec = 5;
-    CHECK_EQ_STR(spike_format_log_name(out, sizeof out, &when), "gaugeboy-log-20261115-114205.txt");
-    CHECK_EQ_STR(spike_format_log_name(out, sizeof out, NULL), "gaugeboy-log.txt");
+    CHECK_EQ_STR(spike_format_log_name(out, sizeof out, &when), "gauge-boy-log-20261115-114205.txt");
+    CHECK_EQ_STR(spike_format_log_name(out, sizeof out, NULL), "gauge-boy-log.txt");
 }
 
 static void test_spike_plan_slot(void)

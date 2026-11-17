@@ -1,4 +1,4 @@
-# makerom spec for gaugeboy.cia. Used by `make cia`; values in $(...) come
+# makerom spec for gauge-boy.cia. Used by `make cia`; values in $(...) come
 # from the Makefile (APP_TITLE, APP_PRODUCT_CODE, APP_UNIQUE_ID, APP_ROMFS,
 # APP_VERSION_MAJOR). The title ID and product code must never change.
 #

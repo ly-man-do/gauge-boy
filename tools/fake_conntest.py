@@ -137,7 +137,7 @@ class TestPageHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def version_string(self):
-        return "GaugeBoyConnTest/1"
+        return "Gauge BoyConnTest/1"
 
     def _reply(self, with_body):
         host = self.headers.get("Host", "?")
@@ -218,7 +218,7 @@ def main():
     except OSError as e:
         sys.exit(f"could not listen on TCP {args.bind}:{args.http_port} (HTTP): {e}\n{hint}")
 
-    print("GaugeBoy fake connection test")
+    print("Gauge Boy fake connection test")
     print(f"  DNS  on UDP {dns_bind}:{args.dns_port}, test names -> "
           f"{args.ip or 'this computer'}, other names -> "
           f"{'this computer' if args.answer_all else 'NXDOMAIN'}")

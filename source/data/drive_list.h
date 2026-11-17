@@ -21,7 +21,7 @@
 typedef struct {
     char name[32];          /* "drive-20261116-171230.csv" */
     uint32_t size;          /* bytes */
-    bool ok;                /* a GaugeBoy drive log header was found */
+    bool ok;                /* a Gauge Boy drive log header was found */
     char date[20];          /* "2026-11-16 17:12:30" */
     char car[48];
     char vin[18];

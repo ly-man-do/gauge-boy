@@ -69,7 +69,7 @@ static void test_drive_log_header_and_rows(void)
     static drive_log_t dl;
     live_values(false);
     CHECK(drive_log_open(&dl, capture_write, &c, &meta, &lv, OBD_UNITS_US, 0, 1000));
-    CHECK(has(&c, "# GaugeBoy drive log\n# version,0.2.0+test\n# date,2026-11-16 17:12:30\n"));
+    CHECK(has(&c, "# Gauge Boy drive log\n# version,0.2.0+test\n# date,2026-11-16 17:12:30\n"));
     CHECK(has(&c, "# car,2023 Subaru Ascent\n# vin,4S4WMAHD0P3000001\n"));
     CHECK(has(&c, "# protocol,\"ISO 15765-4 CAN (11 bit, 500 kbaud)\"\n"));   /* quoted */
     CHECK(has(&c, "# units,US\n# rate_hz,5\n"));
@@ -229,8 +229,14 @@ static void test_drive_list_odd_files(void)
     char row[40];
     drive_info_row(&d, row, sizeof row, 37);
     CHECK(strstr(row, "(not a drive log)") != NULL);
+    /* A log from before the name change ("GaugeBoy") still reads. */
+    const char *old = "# GaugeBoy drive log\n# car,2008 Honda\ntime_s,RPM (rpm)\n0.000,700\n";
+    CHECK(drive_info_parse_head(&d, old, strlen(old)));
+    CHECK_EQ_STR(d.car, "2008 Honda");
+    drive_column_t oc[DRIVE_COL_MAX];
+    CHECK_EQ_INT(drive_columns(old, strlen(old), oc, DRIVE_COL_MAX), 1);
     /* Header only, no rows: length unknown. */
-    const char *empty = "# GaugeBoy drive log\n# car,\ntime_s,RPM (rpm)\n";
+    const char *empty = "# Gauge Boy drive log\n# car,\ntime_s,RPM (rpm)\n";
     CHECK(drive_info_parse_head(&d, empty, strlen(empty)));
     CHECK(drive_info_parse_tail(empty, strlen(empty)) < 0.0f);
     drive_info_row(&d, row, sizeof row, 37);
@@ -251,7 +257,7 @@ static void test_drive_list_odd_files(void)
 
 static void test_drive_columns_and_rows(void)
 {
-    const char *head = "# GaugeBoy drive log\n# units,US\n"
+    const char *head = "# Gauge Boy drive log\n# units,US\n"
                        "time_s,RPM (rpm),Speed (mph),Battery (V),Vacuum (inHg)\n0.000,750,0.0,14.10,20.7\n";
     drive_column_t cols[DRIVE_COL_MAX];
     CHECK_EQ_INT(drive_columns(head, strlen(head), cols, DRIVE_COL_MAX), 4);

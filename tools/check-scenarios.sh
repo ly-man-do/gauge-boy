@@ -31,10 +31,10 @@ for entry in $ALL; do
     proto="${entry##*:}"
     [ -n "$WANT" ] && [ "$WANT" != "$name" ] && continue
     PORT=$((PORT + 1))
-    log="$LOGDIR/gaugeboy-emu-$name.log"
+    log="$LOGDIR/gauge-boy-emu-$name.log"
     echo "=== $name (protocol $proto) on 127.0.0.1:$PORT ==="
     # The emulator stops at end of input, so hold its input open with a fifo.
-    fifo="$LOGDIR/gaugeboy-emu-$name.in"
+    fifo="$LOGDIR/gauge-boy-emu-$name.in"
     rm -f "$fifo"
     mkfifo "$fifo"
     "$VENV/bin/python" -I tools/elm_scenarios.py -n "$PORT" -i 127.0.0.1 -s "$name" \

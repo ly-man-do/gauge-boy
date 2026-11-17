@@ -1,21 +1,21 @@
 name: Adapter / vehicle compatibility report
-description: Tell us how GaugeBoy worked with your Wi-Fi ELM327 adapter, New 3DS and vehicle.
+description: Tell us how Gauge Boy worked with your Wi-Fi ELM327 adapter, New 3DS and vehicle.
 title: "[Compat] <adapter> + <vehicle>"
 labels: ["compatibility"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for testing GaugeBoy. Reports feed the compatibility list in `docs/`.
+        Thanks for testing Gauge Boy. Reports feed the compatibility list in `docs/`.
 
         **Safety:** test parked, or as a passenger. Never operate the 3DS while driving.
 
-        The app saves its log to `sdmc:/3ds/gaugeboy/spike-log.txt` on the SD card. Pasting the relevant part below helps a lot.
+        The app saves its log to `sdmc:/3ds/gauge-boy/spike-log.txt` on the SD card. Pasting the relevant part below helps a lot.
 
   - type: input
     id: gaugeboy_version
     attributes:
-      label: GaugeBoy version
+      label: Gauge Boy version
       description: Shown at the top of the screen, e.g. 0.0.0.
       placeholder: 0.0.0
     validations:
@@ -163,7 +163,7 @@ body:
     id: log
     attributes:
       label: Log excerpt
-      description: The relevant part of sdmc:/3ds/gaugeboy/spike-log.txt.
+      description: The relevant part of sdmc:/3ds/gauge-boy/spike-log.txt.
       render: text
     validations:
       required: false

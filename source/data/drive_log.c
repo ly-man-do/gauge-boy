@@ -120,7 +120,7 @@ bool drive_log_open(drive_log_t *dl, drive_log_write_fn write, void *ctx,
         }
     }
 
-    put(dl, "# GaugeBoy drive log\n");
+    put(dl, "# Gauge Boy drive log\n");
     meta_line(dl, "version", meta->version);
     meta_line(dl, "date", meta->date);
     meta_line(dl, "car", meta->car);

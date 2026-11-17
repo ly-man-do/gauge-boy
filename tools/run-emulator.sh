@@ -1,5 +1,5 @@
 #!/bin/sh
-# Start the ELM327 emulator (dev only) for GaugeBoy testing.
+# Start the ELM327 emulator (dev only) for Gauge Boy testing.
 #
 #   tools/run-emulator.sh          listen on 127.0.0.1:35000 (this computer only)
 #   tools/run-emulator.sh --lan    listen on all interfaces, so a real 3DS on the

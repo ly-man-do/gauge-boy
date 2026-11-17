@@ -74,17 +74,17 @@ void spike_logf(spike_t *s, const char *fmt, ...);
 /* Button label, e.g. "ATSP0+0100". */
 const char *spike_action_label(spike_action_t action);
 
-/* Top-screen header, e.g. "GaugeBoy 0.0.0  [CONNECTED]  BUSY: ATSP0+0100".
+/* Top-screen header, e.g. "Gauge Boy 0.0.0  [CONNECTED]  BUSY: ATSP0+0100".
  * busy is the running action, or -1. Fits SPIKE_HEADER_COLS for any
  * action label. Returns out. */
-/* File name for a saved log, "gaugeboy-log-20261115-114205.txt".
+/* File name for a saved log, "gauge-boy-log-20261115-114205.txt".
  * Returns out. */
 char *spike_format_log_name(char *out, size_t out_len, const struct tm *when);
 
 /* SETUP SLOT plan for the adapter's connection slot: manual IP in the
  * adapter's /24 (.11, or .12 if the adapter itself is .11), mask
  * 255.255.255.0, gateway = the adapter, primary DNS = the 3DS's own IP
- * (so GaugeBoy answers the connection test), secondary DNS 0.0.0.0.
+ * (so Gauge Boy answers the connection test), secondary DNS 0.0.0.0.
  * False if adapter_host isn't a dotted IPv4 address. */
 bool spike_plan_slot(const char *adapter_host, net_ip_settings_t *plan);
 
@@ -112,7 +112,7 @@ char *spike_format_header(char *out, size_t out_len, bool connected, int busy);
 void spike_speed_test(spike_t *s, int n);
 
 /* LIVE TEST: opens the link (reset, protocol, supported PIDs), asks every
- * supported PID GaugeBoy decodes once and logs reply and value (decode
+ * supported PID Gauge Boy decodes once and logs reply and value (decode
  * check), then polls the Engine view's PIDs for poll_ms as LIVE does and
  * logs spike_live_summary (speed check). */
 void spike_live_test(spike_t *s, unsigned poll_ms);

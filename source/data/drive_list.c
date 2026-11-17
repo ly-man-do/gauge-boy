@@ -75,6 +75,13 @@ static void copy(char *dst, size_t size, const char *src)
     dst[n] = '\0';
 }
 
+/* The first line of a drive log; logs from before the name change say
+ * "GaugeBoy". */
+static bool is_magic(const char *line)
+{
+    return strcmp(line, "# Gauge Boy drive log") == 0 || strcmp(line, "# GaugeBoy drive log") == 0;
+}
+
 static void meta(drive_info_t *d, const char *key, const char *value)
 {
     char v[96];
@@ -112,7 +119,7 @@ bool drive_info_parse_head(drive_info_t *d, const char *text, size_t len)
     bool magic = false;
     while (next_line(text, len, &pos, line, sizeof line, &complete)) {
         if (line[0] == '#') {
-            if (strcmp(line, "# GaugeBoy drive log") == 0) {
+            if (is_magic(line)) {
                 magic = true;
                 continue;
             }
@@ -228,7 +235,7 @@ int drive_info_lines(const drive_info_t *d, char lines[][DRIVE_INFO_COLS + 1], i
     char buf[200];
     add(lines, max, &n, "File", d->name);
     if (!d->ok) {
-        add(lines, max, &n, "", "Not a GaugeBoy drive log.");
+        add(lines, max, &n, "", "Not a Gauge Boy drive log.");
         return n;
     }
     add(lines, max, &n, "Date", d->date);
@@ -286,7 +293,7 @@ int drive_columns(const char *head, size_t len, drive_column_t *cols, int max)
     bool magic = false;
     while (next_line(head, len, &pos, line, sizeof line, &complete)) {
         if (line[0] == '#') {
-            magic = magic || strcmp(line, "# GaugeBoy drive log") == 0;
+            magic = magic || is_magic(line);
             continue;
         }
         if (!magic || !complete || strncmp(line, "time_s,", 7) != 0) {

@@ -1,11 +1,11 @@
-# CLAUDE.md: GaugeBoy: OBD-II Deluxe
+# CLAUDE.md: Gauge Boy: OBD-II Deluxe
 
-**Version:** 1.21.0
-**Matches project brief:** 1.16.0 (`docs/gaugeboy-brief.md`)
+**Version:** 1.22.0
+**Matches project brief:** 1.17.0 (`docs/gaugeboy-brief.md`)
 
-You are the developer on GaugeBoy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
+You are the developer on Gauge Boy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
 
-The GaugeBoy rules in this file take precedence over the generic Beads block at the end of it and over any user-level `CLAUDE.md`.
+The Gauge Boy rules in this file take precedence over the generic Beads block at the end of it and over any user-level `CLAUDE.md`.
 
 ---
 
@@ -44,8 +44,9 @@ Use Beads (`bd`) for all task tracking. Do not create markdown TODO lists, plan 
 - Networking: libctru `soc` (BSD sockets), TCP to the adapter (default `192.168.0.10:35000`, configurable).
 - Audio: libctru `ndsp`; Ogg Vorbis music streamed, WAV sound effects.
 - Target: New 3DS family only. Call `osSetSpeedupEnable(true)` at startup. Show an "unsupported device" screen and exit on Old 3DS.
-- Outputs: `.3dsx` and `.cia`. Release asset filenames carry no version number (`gaugeboy.3dsx`, `gaugeboy.cia`) so the "latest release" QR link never breaks.
-- SD card data folder: `sdmc:/3ds/gaugeboy/`.
+- Outputs: `.3dsx` and `.cia`. Release asset filenames carry no version number (`gauge-boy.3dsx`, `gauge-boy.cia`) so the "latest release" QR link never breaks. They were renamed once from `gaugeboy.*` by owner decision (2026-11-17, brief 1.17.0); don't rename them again.
+- The name is written "Gauge Boy" (two words) in everything people read; files, folders and the repo use `gauge-boy`. C identifiers and include guards keep `GAUGEBOY_`.
+- SD card data folder: `sdmc:/3ds/gauge-boy/`.
 
 **Approved tools and dependencies (owner-approved in 1.1.0, 1.7.0 and 1.8.0):**
 - Host unit tests: a minimal hand-rolled assert harness in `tests/` (no third-party test framework).
@@ -113,7 +114,7 @@ docs/          Project brief, compatibility list
 ## 7. Legal and asset rules
 
 - License: MIT. Every dependency and asset must be compatible.
-- "GaugeBoy" lettering and logo must be original and must not imitate the Game Boy logo, fonts or colors.
+- "Gauge Boy" lettering and logo must be original and must not imitate the Game Boy logo, fonts or colors.
 - The 3DS-game look is built from original art only.
 - Fonts: open-licensed (e.g. SIL OFL) only.
 - Music and sounds: original, commissioned or CC0 / CC-BY. Record the source and license of every asset in `CREDITS.md`.
@@ -142,6 +143,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.22.0 | 2026-11-17 | Matches brief 1.17.0: the name is "Gauge Boy"; files and folders `gauge-boy` (sections 2, 7) |
 | 1.21.0 | 2026-11-16 | Matches brief 1.16.0: M3 is Logging and M4 is UI polish (section 1) |
 | 1.20.0 | 2026-11-16 | Matches brief 1.15.0: VIN model names from NHTSA vPIC (section 7) |
 | 1.19.0 | 2026-11-16 | Matches brief 1.14.0: the 8 PIDs at 2 Hz success criterion is for CAN cars |

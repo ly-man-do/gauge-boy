@@ -1,4 +1,4 @@
-# GaugeBoy screen and button map
+# Gauge Boy screen and button map
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
@@ -7,7 +7,7 @@ Every screen and button in the app as it is now. Kept up to date with each UI ch
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
 ```
-GaugeBoy
+Gauge Boy
 ├── Unsupported device screen        (Old 3DS only: tap or START exits)
 └── Safety notice                    (tap the touch screen to continue)
     └── HOME                         (graphics; top screen: car facts, found by itself
@@ -20,7 +20,7 @@ GaugeBoy
         ├── [FUN   · Fun modes]      → notice "comes in version 0.6"
         ├── [LOG   · Record drives]  → LOG (lists the drives on the SD card)
         ├── [SETUP · Settings]       → SETUP
-        └── [START Close bar]        → closes GaugeBoy            [START]
+        └── [START Close bar]        → closes Gauge Boy            [START]
         │
         ├── LIVE view list           (top: the last view's values)
         │   ├── [Engine] [Idle & vacuum] [Air & fuel]
@@ -80,7 +80,7 @@ GaugeBoy
         │   │   ├── [ATZ] [ATSP0+0100] [ATDPN]
         │   │   ├── [ATRV] [0902 VIN] [SPEED TEST]
         │   │   ├── [LIVE TEST]      every supported PID once, then 10 s of the Engine view
-        │   │   ├── [SAVE LOG]       → logs/gaugeboy-log-<date>.txt
+        │   │   ├── [SAVE LOG]       → logs/gauge-boy-log-<date>.txt
         │   │   └── [BACK → SETUP] [OLDER ^] [NEWER v]   (scroll the log)  [B, Up/Down, L/R]
         │   ├── [WI-FI]              → SETUP > WI-FI
         │   │   ├── [Connect to the adapter      Connected/Not connected]
@@ -100,7 +100,7 @@ GaugeBoy
         │   │   └── [BACK]           → SETUP                                      [B]
         │   ├── [OTHER]              → SETUP > OTHER
         │   │   ├── [Units        US/Metric]     toggles, saved (LIVE and the log use it)
-        │   │   ├── [About GaugeBoy >]           → About (top: version, license, sources)
+        │   │   ├── [About Gauge Boy >]           → About (top: version, license, sources)
         │   │   │   └── [BACK]       → SETUP > OTHER                              [B]
         │   │   └── [BACK]           → SETUP                                      [B]
         │   └── [BACK]               → HOME                                       [B]

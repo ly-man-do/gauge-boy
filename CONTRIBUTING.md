@@ -1,10 +1,10 @@
-# Contributing to GaugeBoy
+# Contributing to Gauge Boy
 
-Thanks for your interest. GaugeBoy is in early development (M0 spike), so the most useful help right now is testing adapters and cars.
+Thanks for your interest. Gauge Boy is in early development (M0 spike), so the most useful help right now is testing adapters and cars.
 
 ## Compatibility reports
 
-If you try GaugeBoy with a Wi-Fi ELM327 adapter or a vehicle, please file a
+If you try Gauge Boy with a Wi-Fi ELM327 adapter or a vehicle, please file a
 [compatibility report](https://github.com/ly-man-do/gauge-boy/issues/new?template=compatibility-report.yml).
 The form asks for:
 
@@ -14,7 +14,7 @@ The form asks for:
 - Vehicle make, model, year and engine, and the protocol shown by `ATDPN`.
 - What worked, what didn't, and any error messages.
 
-Paste the relevant part of `sdmc:/3ds/gaugeboy/spike-log.txt` if you can. Results feed the compatibility list in `docs/`.
+Paste the relevant part of `sdmc:/3ds/gauge-boy/spike-log.txt` if you can. Results feed the compatibility list in `docs/`.
 
 ## Before you change code
 
@@ -35,7 +35,7 @@ Paste the relevant part of `sdmc:/3ds/gaugeboy/spike-log.txt` if you can. Result
 2. In `CHANGELOG.md`, move the Unreleased entries under `## [x.y.z] - YYYY-MM-DD`.
 3. Commit, push, then tag and push the tag: `git tag vx.y.z && git push origin vx.y.z`.
 
-The Release workflow checks that the tag, `source/version.h` and the changelog agree, runs the tests, builds `gaugeboy.3dsx` and `gaugeboy.cia`, and publishes them on a GitHub release. The file names never change, so `https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.cia` always gets the newest version.
+The Release workflow checks that the tag, `source/version.h` and the changelog agree, runs the tests, builds `gauge-boy.3dsx` and `gauge-boy.cia`, and publishes them on a GitHub release. The file names never change, so `https://github.com/ly-man-do/gauge-boy/releases/latest/download/gauge-boy.cia` always gets the newest version.
 
 ## Issue tracking
 

@@ -324,7 +324,7 @@ bool net_slot_ip_settings(int slot, char *out, size_t len)
 
 /* Writing slot settings through ac:i was tried (gauge-boy-7v5.31) and
  * removed: the IP setter refused every request layout tried, and probing
- * more layouts crashed the 3DS. GaugeBoy only reads slot settings and
+ * more layouts crashed the 3DS. Gauge Boy only reads slot settings and
  * tells the user what to enter in System Settings. */
 
 static void join_failed(char *msg, size_t len, const char *what, Result r)

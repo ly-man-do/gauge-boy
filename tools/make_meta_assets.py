@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate GaugeBoy's HOME menu icon, banner image and banner sound.
+"""Generate Gauge Boy's HOME menu icon, banner image and banner sound.
 
 All three are original: drawn and synthesized here with the Python standard
 library only, no fonts or third-party art. Output goes to meta/:
@@ -193,10 +193,10 @@ def make_banner():
     c.gradient(BG_TOP, BG_BOTTOM)
     draw_gauge(c, 62, 64, 52, 0.68)
 
-    title = "GAUGEBOY"
-    tx = 124
-    draw_text(c, tx, 45, title, 2.5, TEXT, slant=0.25)
-    c.rect(tx, 66, text_width(title, 2.5), 2, ACCENT)
+    title = "GAUGE BOY"
+    tx = 122
+    draw_text(c, tx, 46, title, 2.2, TEXT, slant=0.25)
+    c.rect(tx, 66, text_width(title, 2.2), 2, ACCENT)
     draw_text(c, tx, 72, "OBD-II DELUXE", 1.5, ACCENT, slant=0.25)
     return c.downsample()
 

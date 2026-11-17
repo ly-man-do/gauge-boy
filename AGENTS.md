@@ -1,6 +1,6 @@
 # Agent Instructions
 
-**GaugeBoy project rules (scope, safety, git policy, Beads usage) are in `CLAUDE.md` and the brief in `docs/gaugeboy-brief.md`. Read both first; they take precedence over the generic Beads guidance below.**
+**Gauge Boy project rules (scope, safety, git policy, Beads usage) are in `CLAUDE.md` and the brief in `docs/gaugeboy-brief.md`. Read both first; they take precedence over the generic Beads guidance below.**
 
 This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
 

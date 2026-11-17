@@ -2,7 +2,7 @@
 #define GAUGEBOY_CONNTEST_SERVER_H
 
 /*
- * 3DS only: answers the system's internet connection test from GaugeBoy
+ * 3DS only: answers the system's internet connection test from Gauge Boy
  * itself (DNS on UDP 53, test page on TCP 80), so the 3DS keeps a Wi-Fi
  * OBD-II adapter's network. Runs on its own thread; while the network is
  * down it keeps retrying, so it starts listening as soon as the 3DS

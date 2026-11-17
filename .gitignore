@@ -11,7 +11,7 @@ build/
 *.smdh
 *.elf
 *.cia
-gaugeboy-qr.png
+gauge-boy-qr.png
 tests/build/
 
 # macOS

@@ -1,7 +1,7 @@
-# Project Brief: GaugeBoy: OBD-II Deluxe
+# Project Brief: Gauge Boy: OBD-II Deluxe
 
-**Version:** 1.16.0
-**Product name:** GaugeBoy: OBD-II Deluxe (short name: GaugeBoy)
+**Version:** 1.17.0
+**Product name:** Gauge Boy: OBD-II Deluxe (short name: Gauge Boy)
 **Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
 **Team:** Solo developer (project owner), with code written by Claude Code
@@ -12,7 +12,7 @@
 
 ## 1. Summary
 
-Build GaugeBoy: OBD-II Deluxe, a homebrew Nintendo 3DS application that connects to a car's OBD-II port through a wireless adapter. It reads live engine data and diagnostic trouble codes (DTCs) and shows them on the 3DS's two screens. The goal is a real tool that works in a real car, not a mock-up.
+Build Gauge Boy: OBD-II Deluxe, a homebrew Nintendo 3DS application that connects to a car's OBD-II port through a wireless adapter. It reads live engine data and diagnostic trouble codes (DTCs) and shows them on the 3DS's two screens. The goal is a real tool that works in a real car, not a mock-up.
 
 ## 2. Goals
 
@@ -53,7 +53,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 **Early risk spike:** Test 2 to 3 Wi-Fi ELM327 adapters for 3DS compatibility before building the UI.
 
-**OBD-II protocols:** GaugeBoy supports every protocol the ELM327 handles, found by auto-detect (`ATSP0`) and named from `ATDPN`. The tested adapter, the Vgate iCar Pro Wi-Fi (ELM327 v2.3, Wi-Fi network `V-LINK`), supports all OBD-II protocols: SAE J1850 PWM (41.6 kbaud), SAE J1850 VPW (10.4 kbaud), ISO 9141-2 (5 baud init, 10.4 kbaud), ISO 14230-4 KWP (5 baud init or fast init, 10.4 kbaud), ISO 15765-4 CAN (11-bit or 29-bit ID, 500 or 250 kbaud), SAE J1939 CAN (29-bit, 250 kbaud), and USER1 / USER2 CAN (11-bit, 125 / 50 kbaud by default, adjustable). Replies are parsed both with CAN headers (ISO-TP multi-frame, e.g. `0:`/`1:` lines) and without (J1850 / ISO 9141 / KWP, e.g. one `49 02 0N ...` line per frame). J1939 is a heavy-truck protocol with its own message format: GaugeBoy detects and names it, but reading J1939 data is not in v1.
+**OBD-II protocols:** Gauge Boy supports every protocol the ELM327 handles, found by auto-detect (`ATSP0`) and named from `ATDPN`. The tested adapter, the Vgate iCar Pro Wi-Fi (ELM327 v2.3, Wi-Fi network `V-LINK`), supports all OBD-II protocols: SAE J1850 PWM (41.6 kbaud), SAE J1850 VPW (10.4 kbaud), ISO 9141-2 (5 baud init, 10.4 kbaud), ISO 14230-4 KWP (5 baud init or fast init, 10.4 kbaud), ISO 15765-4 CAN (11-bit or 29-bit ID, 500 or 250 kbaud), SAE J1939 CAN (29-bit, 250 kbaud), and USER1 / USER2 CAN (11-bit, 125 / 50 kbaud by default, adjustable). Replies are parsed both with CAN headers (ISO-TP multi-frame, e.g. `0:`/`1:` lines) and without (J1850 / ISO 9141 / KWP, e.g. one `49 02 0N ...` line per frame). J1939 is a heavy-truck protocol with its own message format: Gauge Boy detects and names it, but reading J1939 data is not in v1.
 
 **M0 Wi-Fi checklist (per adapter):**
 - The 3DS radio is 2.4 GHz 802.11b/g only and cannot join ad-hoc networks; note each adapter's mode and security (open / WEP / WPA2).
@@ -74,7 +74,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
   5. UI (top screen gauges, bottom screen touch menus)
 - **Threading:** Polling runs on its own thread so the UI stays smooth.
 - **Target hardware:** New 3DS family only. The app enables the 804 MHz clock and L2 cache (`osSetSpeedupEnable`) and may use the extra memory and CPU core. On an Old 3DS it shows an "unsupported device" message and exits.
-- **Config:** Saved to `sdmc:/3ds/gaugeboy/config.ini` (adapter IP/port, units, selected PIDs, per-vehicle settings such as engine displacement).
+- **Config:** Saved to `sdmc:/3ds/gauge-boy/config.ini` (adapter IP/port, units, selected PIDs, per-vehicle settings such as engine displacement).
 - **Connection loss:** Wi-Fi drops when the 3DS sleeps (lid closed); the transport reconnects on wake without restarting the app.
 
 ## 5a. Open Source Setup
@@ -88,7 +88,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 ## 5b. Visual Direction: 3DS Game
 
-**Mood:** GaugeBoy should look and feel like a game made for the Nintendo 3DS: bright, clean and playful, with chunky low-poly 3D models, colorful textures and big, friendly touch menus.
+**Mood:** Gauge Boy should look and feel like a game made for the Nintendo 3DS: bright, clean and playful, with chunky low-poly 3D models, colorful textures and big, friendly touch menus.
 
 **Reference points (for mood only):**
 - 3DS games' menus, HOME menu banners and vehicle models (triangle counts, texture sizes, how models are split into parts)
@@ -141,7 +141,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 4. FBI downloads and installs the `.cia`; the app appears on the HOME Menu.
 
 **Setup:**
-- **Stable link:** QR code points to a permanent "latest release" URL (GitHub's `releases/latest/download/<file>.cia` form), so the same QR code always installs the newest version. This only works if release asset filenames never change, so they carry no version number (`gaugeboy.cia`, `gaugeboy.3dsx`).
+- **Stable link:** QR code points to a permanent "latest release" URL (GitHub's `releases/latest/download/<file>.cia` form), so the same QR code always installs the newest version. This only works if release asset filenames never change, so they carry no version number (`gauge-boy.cia`, `gauge-boy.3dsx`).
 - **Title ID:** The `.cia` uses a unique title ID chosen once in M0 (owner decision) and never changed, so updates install over the previous version. Built with `makerom` and `bannertool`.
 - **Per-release QR:** CI also creates a QR code for each tagged version, attached to the release, for users who want a specific version.
 - **Placement:** QR code shown at the top of the README and on each release page.
@@ -211,7 +211,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 **Music:**
 - Separate tracks for the main menu, gauge screens, fun modes, results screens and attract mode.
 - In-app jukebox in SETUP to pick, skip or shuffle tracks.
-- Users can add their own tracks by putting `.ogg` files in `sdmc:/3ds/gaugeboy/music/`.
+- Users can add their own tracks by putting `.ogg` files in `sdmc:/3ds/gauge-boy/music/`.
 - Music keeps playing across menu changes and loops cleanly.
 
 **Sound effects:**
@@ -295,7 +295,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
   - Run `0100`/`0120`/`0140` supported-PID scans in M1 and record the results in the compatibility list.
   - Honda-specific data (e.g. VTEC status, transmission temperature) needs enhanced PIDs and stays out of v1.
 - **Second test vehicle: 1996 Geo Tracker** (owner's, Suzuki-built twin of the Sidekick; naturally aspirated). Notes:
-  - First OBD-II model year: tests the oldest cars GaugeBoy supports (fewer supported PIDs and readiness monitors, slower ECUs).
+  - First OBD-II model year: tests the oldest cars Gauge Boy supports (fewer supported PIDs and readiness monitors, slower ECUs).
   - Expected protocol: ISO 9141-2 (Suzuki engine computer) or possibly J1850; confirm with `ATDPN` after auto-detect.
   - The VIN is probably not readable over OBD (Mode 09 was optional then), so the make must come from elsewhere (a make choice in SETUP) for manufacturer-specific codes to get descriptions.
   - Still no turbo; the third test vehicle covers boost.
@@ -318,11 +318,11 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 | Driver distraction | Safety | Startup warning; passenger and parked use only |
 | Clearing codes by mistake | Turns off check-engine light, resets readiness monitors | Confirmation dialog with explanation |
 | QR install link fails in FBI (old TLS) | Users can't install by QR | Test in M0; fall back to a redirecting short link or HTTP mirror |
-| "GaugeBoy" name is close to Nintendo's Game Boy trademark | Trademark complaint or repo takedown | Original logo and lettering only (no Game Boy-style logo, fonts, colors or console art); README states the project is unofficial and not affiliated with Nintendo; keep a backup name ready |
+| "Gauge Boy" name is close to Nintendo's Game Boy trademark | Trademark complaint or repo takedown | Original logo and lettering only (no Game Boy-style logo, fonts, colors or console art); README states the project is unofficial and not affiliated with Nintendo; keep a backup name ready |
 | Claude Code marks hardware-dependent work as done without a real test | Bugs only found in the car | `needs-hardware` label; only the owner closes those issues |
 | Agent loses track of long-running work across sessions | Repeated or half-finished work | Beads as the single task list; `bd ready` at the start of every session |
 | UI looks too close to a real brand | Trademark complaints, repo takedown | Original logo and art only; no brand names or marks; open-licensed fonts |
-| 3DS-game look plus the GaugeBoy name reads as an official Nintendo app | Trademark complaint or repo takedown | Original models, art and fonts only; nothing copied, traced or converted from Nintendo games; no Nintendo characters or UI elements; README disclaimer |
+| 3DS-game look plus the Gauge Boy name reads as an official Nintendo app | Trademark complaint or repo takedown | Original models, art and fonts only; nothing copied, traced or converted from Nintendo games; no Nintendo characters or UI elements; README disclaimer |
 | Solo developer scope creep (3D models and art are time-consuming) | Delayed release | Keep text dashboard working first (M2) and finish the features before the visual style (logging is M3; the visual style is M4, built on every screen at once); build one finished gauge in full detail before making the rest; stretch items stay out of 1.0 |
 | Fun modes encourage street racing | Safety, reputation | Closed-course warning, no online leaderboards, Rev Sync locked unless stopped, no touch input needed while moving |
 | Slow OBD speed updates | Inaccurate timers | Poll speed only during timer runs; label results as estimates |
@@ -361,6 +361,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.17.0 | 2026-11-17 | Owner decision: the name is written "Gauge Boy" (two words), full name "Gauge Boy: OBD-II Deluxe"; files and folders use `gauge-boy` (`gauge-boy.cia`, `gauge-boy.3dsx`, `sdmc:/3ds/gauge-boy/`), and the app moves an old `sdmc:/3ds/gaugeboy/` folder's files once; `CLAUDE.md` updated to 1.22.0 |
 | 1.16.0 | 2026-11-16 | Owner decision: Logging and UI polish swap places, so features come before the visual style: M3 is Logging (0.3.x), M4 is UI polish (0.4.x) (section 8); `CLAUDE.md` updated to 1.21.0 |
 | 1.15.0 | 2026-11-16 | Owner decision: VIN model names from NHTSA vPIC (public domain), offline table of model names only, model years 1996 and later (section 5e, Garage card); `CLAUDE.md` updated to 1.20.0 |
 | 1.14.0 | 2026-11-16 | Owner decision: the "8 live PIDs at 2 Hz" success criterion applies to CAN cars; ISO 9141-2 tops out around 5.5 requests a second (Ridgeline speed test) (section 9); `CLAUDE.md` updated to 1.19.0 |

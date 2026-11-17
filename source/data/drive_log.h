@@ -7,7 +7,7 @@
  * a write callback (drive_log_stdio_write for a FILE *), so host tests can
  * capture it. The app writes on its worker thread, never the render loop.
  *
- *   # GaugeBoy drive log
+ *   # Gauge Boy drive log
  *   # version,0.2.0+13b94ad
  *   # date,2026-11-16 17:12:30
  *   # car,2023 Subaru Ascent

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Check gaugeboy.cia: title ID, product code and version match the Makefile
+"""Check gauge-boy.cia: title ID, product code and version match the Makefile
 and source/version.h. Run by CI after `make cia`; also handy locally:
 
-  python3 tools/check_cia.py gaugeboy.cia 0004000003DEDF00 CTR-P-GBOY 0.0.0
+  python3 tools/check_cia.py gauge-boy.cia 0004000003DEDF00 CTR-P-GBOY 0.0.0
 """
 
 import struct

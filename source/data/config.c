@@ -337,7 +337,7 @@ bool config_save(const gb_config_t *cfg, const char *path)
         strcpy(slot, "any");
     }
     int rc = fprintf(f,
-        "; GaugeBoy settings\n"
+        "; Gauge Boy settings\n"
         ";\n"
         "; Wi-Fi ELM327 adapter address. Most adapters use 192.168.0.10\n"
         "; port 35000; check your adapter's manual if yours differs.\n"

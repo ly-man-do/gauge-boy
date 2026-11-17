@@ -1,8 +1,8 @@
 #---------------------------------------------------------------------------------
-# GaugeBoy: OBD-II Deluxe
+# Gauge Boy: OBD-II Deluxe
 #
-#   make         build gaugeboy.3dsx (needs devkitPro / devkitARM)
-#   make cia     build gaugeboy.cia (downloads makerom and bannertool into
+#   make         build gauge-boy.3dsx (needs devkitPro / devkitARM)
+#   make cia     build gauge-boy.cia (downloads makerom and bannertool into
 #                tools/bin on first use; Linux x86_64, i.e. the devkitPro image)
 #   make clean   remove build output
 #   make test    build and run host unit tests (host C compiler, no devkitPro)
@@ -71,7 +71,7 @@ include $(DEVKITARM)/3ds_rules
 #     - icon.png
 #     - <libctru folder>/default_icon.png
 #---------------------------------------------------------------------------------
-TARGET		:=	gaugeboy
+TARGET		:=	gauge-boy
 BUILD		:=	build
 # Sources are flattened into one build folder (VPATH), so .c file names
 # must be unique across all of these folders.
@@ -90,7 +90,7 @@ FONT_TTF	:=	assets/fonts/Nunito-Bold.ttf
 FONT_CHARS	:=	assets/fonts/ascii.txt
 FONT_SIZES	:=	13 8
 
-APP_TITLE		:=	GaugeBoy
+APP_TITLE		:=	Gauge Boy
 APP_DESCRIPTION	:=	OBD-II Deluxe
 APP_AUTHOR		:=	ly-man-do
 
@@ -107,7 +107,7 @@ APP_PRODUCT_CODE	:=	CTR-P-GBOY
 ICON		:=	meta/icon.png
 BANNER_IMAGE	:=	meta/banner.png
 BANNER_AUDIO	:=	meta/banner.wav
-RSF		:=	meta/gaugeboy.rsf
+RSF		:=	meta/gauge-boy.rsf
 
 MAKEROM		?=	$(TOPDIR)/tools/bin/makerom
 BANNERTOOL	?=	$(TOPDIR)/tools/bin/bannertool
@@ -265,7 +265,7 @@ $(DEPSDIR):
 endif
 
 #---------------------------------------------------------------------------------
-# gaugeboy.cia: the same .elf as the .3dsx, packaged with makerom. The title ID
+# gauge-boy.cia: the same .elf as the .3dsx, packaged with makerom. The title ID
 # check stops a typo in APP_UNIQUE_ID from shipping under a different title.
 #---------------------------------------------------------------------------------
 cia: all

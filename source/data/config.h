@@ -2,7 +2,7 @@
 #define GAUGEBOY_CONFIG_H
 
 /*
- * Settings from sdmc:/3ds/gaugeboy/config.ini. Platform-free (stdio only).
+ * Settings from sdmc:/3ds/gauge-boy/config.ini. Platform-free (stdio only).
  *
  * Format: "key = value" lines, optional [section] headers, comments start
  * with ';' or '#'. Unknown sections and keys are ignored; bad values keep
@@ -29,7 +29,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define CONFIG_DIR  "sdmc:/3ds/gaugeboy"
+#define CONFIG_DIR  "sdmc:/3ds/gauge-boy"
 #define CONFIG_PATH CONFIG_DIR "/config.ini"
 
 #define CONFIG_DEFAULT_HOST "192.168.0.10"

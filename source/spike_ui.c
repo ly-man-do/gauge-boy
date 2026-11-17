@@ -1,5 +1,5 @@
 /*
- * GaugeBoy app, 3DS side: consoles, touch screens and the worker thread.
+ * Gauge Boy app, 3DS side: consoles, touch screens and the worker thread.
  *
  * Screens: DIAG (default: scan, codes, readiness), SETUP (Wi-Fi slot,
  * SAVE LOG, the adapter test screen) and TEST (the M0 adapter test
@@ -18,6 +18,7 @@
 #include <math.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "data/code_history.h"
 #include "data/config.h"
@@ -235,7 +236,7 @@ static const button_t vehicle_buttons[] = {
 
 static const button_t other_buttons[] = {
     { "Units",          BTN_UNITS, 0, 2, 39, 5 },
-    { "About GaugeBoy", BTN_ABOUT, 0, 8, 39, 5 },
+    { "About Gauge Boy", BTN_ABOUT, 0, 8, 39, 5 },
     { "BACK",           BTN_BACK,  0, 25, 8, 5 },
 };
 #define OTHER_BUTTON_COUNT ((int)(sizeof other_buttons / sizeof other_buttons[0]))
@@ -638,7 +639,7 @@ static void set_units(spike_t *s)
 }
 
 /* SETUP SLOT (worker): read the chosen slot and, if it differs from what
- * GaugeBoy needs, show NOW / NEW so the user can enter NEW in System
+ * Gauge Boy needs, show NOW / NEW so the user can enter NEW in System
  * Settings. Read-only: writing slot settings from the app crashed the
  * 3DS (gauge-boy-7v5.31). */
 static void setup_slot_preview(spike_t *s)
@@ -669,7 +670,7 @@ static void setup_slot_preview(spike_t *s)
         return;
     }
     if (spike_slot_matches(&now, &plan)) {
-        spike_logf(s, "= Slot %d \"%s\" is set up for GaugeBoy", slot, name);
+        spike_logf(s, "= Slot %d \"%s\" is set up for Gauge Boy", slot, name);
         return;
     }
 
@@ -1158,7 +1159,7 @@ static void graph_load(spike_t *s)
         size_t got = fread(buf, 1, DRIVE_HEAD_BYTES, f);
         ncols = drive_columns(buf, got, cols, DRIVE_COL_MAX);
         if (ncols == 0) {
-            msg = "Not a GaugeBoy drive log.";
+            msg = "Not a Gauge Boy drive log.";
         } else {
             if (col >= ncols || col < 0) {
                 col = 0;
@@ -1658,7 +1659,7 @@ static void draw_diag_top(bool home, diag_tab_t tab, int selected, int busy, boo
     if (scanning) {
         snprintf(title, sizeof title, ">> Scanning: %s...", obd_diag_step_str(step));
     } else if (home) {
-        snprintf(title, sizeof title, "GaugeBoy: OBD-II Deluxe");
+        snprintf(title, sizeof title, "Gauge Boy: OBD-II Deluxe");
     } else {
         snprintf(title, sizeof title, "DIAG: %s (%d)", diag_tab_name(tab), n);
     }
@@ -2099,7 +2100,7 @@ static void draw_log_top(int selected, int busy, bool connected)
         for (int i = 0; i < n; i++) {
             print_row(4 + i, TOP_COLS, lines[i]);
         }
-        print_row(TOP_ROWS - 1, TOP_COLS, "On the SD card: sdmc:/3ds/gaugeboy/drives/");
+        print_row(TOP_ROWS - 1, TOP_COLS, "On the SD card: sdmc:/3ds/gauge-boy/drives/");
         return;
     }
     snprintf(title, sizeof title, "LOG: %s", !listed ? "reading the SD card..."
@@ -2107,7 +2108,7 @@ static void draw_log_top(int selected, int busy, bool connected)
     print_row(2, TOP_COLS, title);
     print_row(4, TOP_COLS, "Record a drive with REC on the LIVE screen: it");
     print_row(5, TOP_COLS, "saves that view's values to a CSV file, 5 rows");
-    print_row(6, TOP_COLS, "a second, in sdmc:/3ds/gaugeboy/drives/.");
+    print_row(6, TOP_COLS, "a second, in sdmc:/3ds/gauge-boy/drives/.");
     print_row(8, TOP_COLS, count > 0 ? "Tap a drive for its details." : "");
 }
 
@@ -2294,7 +2295,7 @@ static void bar_value(int action, const gb_config_t *cfg, char *out, size_t len)
     LightLock_Unlock(&shared.lock);
 }
 
-/* About GaugeBoy (top screen). */
+/* About Gauge Boy (top screen). */
 static void draw_about_top(int busy, bool connected)
 {
     char header[TOP_COLS + 1];
@@ -2304,7 +2305,7 @@ static void draw_about_top(int busy, bool connected)
     print_row(0, TOP_COLS, header);
     static const char *const about[] = {
         "",
-        "GaugeBoy: OBD-II Deluxe",
+        "Gauge Boy: OBD-II Deluxe",
         "Version " GB_VERSION_TEXT,
         "",
         "Reads a car's OBD-II data (check engine light,",
@@ -2523,7 +2524,7 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
     if (ui->screen == SCREEN_ABOUT) {
         clear_rows(1, 29);
         print_row(1, BOTTOM_COLS, "SETUP > OTHER > About");
-        print_row(3, BOTTOM_COLS, "About GaugeBoy is on the top screen.");
+        print_row(3, BOTTOM_COLS, "About Gauge Boy is on the top screen.");
         draw_list(about_buttons, ABOUT_BUTTON_COUNT, now, busy, 0, false);
         return;
     }
@@ -2747,7 +2748,7 @@ static void open_log_file(void)
         if (tm != NULL) {
             strftime(when, sizeof when, "%Y-%m-%d %H:%M:%S", tm);
         }
-        fprintf(log_file, "\n=== GaugeBoy %s session, %s ===\n", GB_VERSION_TEXT, when);
+        fprintf(log_file, "\n=== Gauge Boy %s session, %s ===\n", GB_VERSION_TEXT, when);
         fflush(log_file);
     }
 }
@@ -2781,6 +2782,58 @@ static bool edit_model(gb_config_t *cfg)
     return true;
 }
 
+/* The SD card folder was sdmc:/3ds/gaugeboy/ before the app was named
+ * "Gauge Boy": move its files (settings, logs, drives, code history) to
+ * CONFIG_DIR once. A .3dsx stays: it may be the copy that is running. */
+#define OLD_DIR "sdmc:/3ds/gaugeboy"
+static char migrate_note[200];
+
+static void migrate_old_folder(void)
+{
+    struct stat st;
+    if (stat(OLD_DIR, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        return;
+    }
+    static char names[64][64];
+    int n = 0;
+    DIR *dir = opendir(OLD_DIR);
+    if (dir == NULL) {
+        return;
+    }
+    struct dirent *e;
+    while ((e = readdir(dir)) != NULL && n < 64) {
+        if (e->d_name[0] != '.') {
+            snprintf(names[n++], sizeof names[0], "%.63s", e->d_name);
+        }
+    }
+    closedir(dir);
+    mkdir(CONFIG_DIR, 0777);
+    int moved = 0, kept = 0, failed = 0;
+    for (int i = 0; i < n; i++) {
+        size_t len = strlen(names[i]);
+        bool program = len > 5 && (strcmp(names[i] + len - 5, ".3dsx") == 0 ||
+                                   strcmp(names[i] + len - 5, ".smdh") == 0);
+        char from[96], to[96];
+        snprintf(from, sizeof from, "%s/%.63s", OLD_DIR, names[i]);
+        snprintf(to, sizeof to, "%s/%.63s", CONFIG_DIR, names[i]);
+        if (program || stat(to, &st) == 0) {
+            kept++;   /* the program, or the new folder already has one */
+        } else if (rename(from, to) == 0) {
+            moved++;
+        } else {
+            failed++;
+        }
+    }
+    rmdir(OLD_DIR);   /* only if nothing is left */
+    if (moved + failed > 0) {
+        snprintf(migrate_note, sizeof migrate_note,
+                 "%sMoved %d item%s from %s/ to %s/ (the new name)%s%s", failed ? "! " : "",
+                 moved, moved == 1 ? "" : "s", OLD_DIR, CONFIG_DIR,
+                 failed ? "; some could not be moved" : "",
+                 kept ? "; the old folder still has the .3dsx" : "");
+    }
+}
+
 static void load_config(spike_t *spike, gb_config_t *cfg)
 {
     int warnings = 0;
@@ -2812,9 +2865,13 @@ void spike_ui_run(void)
     shared.busy = -1;
     shared.quit = false;
 
+    migrate_old_folder();
     open_log_file();
     spike_init(&spike, &transport, &elm, log_sink, NULL);
-    spike_logf(&spike, "GaugeBoy %s", GB_VERSION_TEXT);
+    spike_logf(&spike, "Gauge Boy %s", GB_VERSION_TEXT);
+    if (migrate_note[0] != '\0') {
+        spike_logf(&spike, "%s", migrate_note);
+    }
     home_gfx = home_draw_init();
     graph_gfx = home_gfx && graph_draw_init();
     if (!home_gfx) {

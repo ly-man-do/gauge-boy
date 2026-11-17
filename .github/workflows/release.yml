@@ -1,9 +1,9 @@
 name: Release
 
-# Pushing a tag like v0.0.1 builds gaugeboy.3dsx and gaugeboy.cia and publishes
-# them on a GitHub release, with gaugeboy-qr.png: an FBI QR code for that
+# Pushing a tag like v0.0.1 builds gauge-boy.3dsx and gauge-boy.cia and publishes
+# them on a GitHub release, with gauge-boy-qr.png: an FBI QR code for that
 # version's .cia, also shown in the release notes. Asset names never carry a version, so
-#   https://github.com/ly-man-do/gauge-boy/releases/latest/download/gaugeboy.cia
+#   https://github.com/ly-man-do/gauge-boy/releases/latest/download/gauge-boy.cia
 # always points at the newest release (the FBI QR install link).
 #
 # Before tagging: set the version in source/version.h and move the CHANGELOG
@@ -50,19 +50,19 @@ jobs:
         run: |
           docker run --rm -v "$PWD":/src -w /src devkitpro/devkitarm:latest \
             sh -c 'make test && make test-clean && make cia'
-          ls -l gaugeboy.3dsx gaugeboy.cia
+          ls -l gauge-boy.3dsx gauge-boy.cia
 
       # FBI install QR for this version's .cia (segno, hash-pinned, CI only).
       - name: QR code for this release
         run: |
           python3 -m venv "$RUNNER_TEMP/qr-venv"
           "$RUNNER_TEMP/qr-venv/bin/pip" install --quiet --require-hashes -r tools/requirements-release.txt
-          "$RUNNER_TEMP/qr-venv/bin/python" tools/make_qr.py --version "$VERSION" --out gaugeboy-qr.png
+          "$RUNNER_TEMP/qr-venv/bin/python" tools/make_qr.py --version "$VERSION" --out gauge-boy-qr.png
           {
             echo
             echo "### Install with FBI"
             echo
-            echo "![QR code for GaugeBoy $VERSION](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/gaugeboy-qr.png)"
+            echo "![QR code for Gauge Boy $VERSION](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/gauge-boy-qr.png)"
             echo
             echo "In FBI choose *Remote Install* > *Scan QR Code* and scan this code to install exactly this version. The QR code in the README always installs the newest release."
           } >> "$RUNNER_TEMP/notes.md"
@@ -72,11 +72,11 @@ jobs:
       - name: Publish release
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" gaugeboy.3dsx gaugeboy.cia gaugeboy-qr.png --clobber
+            gh release upload "$TAG" gauge-boy.3dsx gauge-boy.cia gauge-boy-qr.png --clobber
             gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
           else
-            gh release create "$TAG" gaugeboy.3dsx gaugeboy.cia gaugeboy-qr.png \
-              --verify-tag --title "GaugeBoy $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+            gh release create "$TAG" gauge-boy.3dsx gauge-boy.cia gauge-boy-qr.png \
+              --verify-tag --title "Gauge Boy $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
           fi
 
       - name: Check the latest-release links
@@ -86,7 +86,7 @@ jobs:
             echo "::warning::Latest release is $latest, not $TAG; the releases/latest links point there."
             exit 0
           fi
-          for f in gaugeboy.3dsx gaugeboy.cia; do
+          for f in gauge-boy.3dsx gauge-boy.cia; do
             url="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/$f"
             curl -fsSL -o "$RUNNER_TEMP/$f" "$url"
             cmp "$RUNNER_TEMP/$f" "$f"

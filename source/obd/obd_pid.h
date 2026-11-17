@@ -46,7 +46,7 @@ typedef struct {
     uint32_t refresh_ms;     /* desired refresh time; 0 = as often as possible */
 } obd_pid_info_t;
 
-/* PIDs GaugeBoy decodes (fuel trims, live data). NULL for others. */
+/* PIDs Gauge Boy decodes (fuel trims, live data). NULL for others. */
 const obd_pid_info_t *obd_pid_info(uint8_t pid);
 int obd_pid_count(void);
 const obd_pid_info_t *obd_pid_at(int index);

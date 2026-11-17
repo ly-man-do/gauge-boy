@@ -1,6 +1,6 @@
 # Credits
 
-Every asset and borrowed file in GaugeBoy, with its source and license. GaugeBoy itself is [MIT](LICENSE).
+Every asset and borrowed file in Gauge Boy, with its source and license. Gauge Boy itself is [MIT](LICENSE).
 
 ## Art and sound
 
@@ -23,11 +23,11 @@ Every asset and borrowed file in GaugeBoy, with its source and license. GaugeBoy
 
 | File | Source | License |
 |---|---|---|
-| `meta/gaugeboy.rsf` | Based on `3ds/template.rsf` from [Steveice10/buildtools](https://github.com/Steveice10/buildtools) (commit 89612c4). Copyright (C) 2016-2020 Steveice10. | MIT |
+| `meta/gauge-boy.rsf` | Based on `3ds/template.rsf` from [Steveice10/buildtools](https://github.com/Steveice10/buildtools) (commit 89612c4). Copyright (C) 2016-2020 Steveice10. | MIT |
 
 ## Build tools (not shipped)
 
-These run at build time only; nothing from them is included in GaugeBoy's source.
+These run at build time only; nothing from them is included in Gauge Boy's source.
 
 | Tool | Version | Source | License |
 |---|---|---|---|

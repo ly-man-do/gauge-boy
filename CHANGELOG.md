@@ -1,8 +1,12 @@
 # Changelog
 
-All notable changes to GaugeBoy are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). Milestone releases: M0 = 0.0.x, M1 = 0.1.x, ... M7 = 1.0.0.
+All notable changes to Gauge Boy are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/). Milestone releases: M0 = 0.0.x, M1 = 0.1.x, ... M7 = 1.0.0.
 
 ## [Unreleased]
+
+### Changed
+
+- **The name is now "Gauge Boy"** (two words), full name "Gauge Boy: OBD-II Deluxe", on the HOME menu, the banner, every screen, the logs and the docs. Files and folders follow: the release files are `gauge-boy.cia` and `gauge-boy.3dsx`, and the SD card folder is `sdmc:/3ds/gauge-boy/`. On its first start, Gauge Boy moves the settings, logs, drives and code history from the old `sdmc:/3ds/gaugeboy/` folder (an old `.3dsx` stays there; delete it once the new one runs). The `.cia` keeps its title ID, so it installs over the old one. Drive logs recorded before the change still open in LOG.
 
 ### Added
 

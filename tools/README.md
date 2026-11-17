@@ -2,7 +2,7 @@
 
 ## ELM327 emulator
 
-A simulated Wi-Fi OBD-II adapter, so GaugeBoy can be tested without a car. It uses the
+A simulated Wi-Fi OBD-II adapter, so Gauge Boy can be tested without a car. It uses the
 [ELM327-emulator](https://github.com/Ircama/ELM327-emulator) Python package (dev only, never
 shipped), pinned in `requirements-dev.txt`.
 
@@ -30,7 +30,7 @@ Scenarios (`ELM_SCENARIO=...`):
 | `default` | CAN (A6) | Two ECUs (CAN multi-response), no fuel trims or codes |
 
 `ridgeline`, `tracker` and `j1850` are defined in `tools/elm_scenarios.py`. They answer the way
-an ELM327 does with headers off (`ATH0`, as GaugeBoy runs it): data bytes only, one line per
+an ELM327 does with headers off (`ATH0`, as Gauge Boy runs it): data bytes only, one line per
 frame, no CAN header or ISO-TP frame numbers.
 
 Options:
@@ -68,11 +68,11 @@ tools/check-scenarios.sh            # or: tools/check-scenarios.sh tracker
 ### Use it with the app
 
 - **Azahar (3DS emulator on this computer):** set `host = 127.0.0.1` and `port = 35000` under
-  `[adapter]` in Azahar's emulated SD card, `sdmc/3ds/gaugeboy/config.ini` (on macOS:
+  `[adapter]` in Azahar's emulated SD card, `sdmc/3ds/gauge-boy/config.ini` (on macOS:
   `~/Library/Application Support/Azahar/sdmc/`). Azahar passes the app's sockets through to this
   computer. Set System Model to New 3DS.
 - **Real New 3DS on your home Wi-Fi:** start with `tools/run-emulator.sh --lan` and set `host` in the
-  3DS's `sdmc:/3ds/gaugeboy/config.ini` to this computer's IP address.
+  3DS's `sdmc:/3ds/gauge-boy/config.ini` to this computer's IP address.
 
 ### Limits
 
@@ -128,7 +128,7 @@ Needs a Mac laptop in the truck.
 2. Run `python3 tools/fake_conntest.py` and note the IP it prints (a `192.168.0.x` address).
 3. The 3DS's `V-LINK` slot > **Change Settings**: IP Address Auto-Obtain **Yes**; DNS Auto-Obtain **No**,
    Primary DNS = the Mac's IP. Save, then **Test Connection**: it should now pass.
-4. Open GaugeBoy (adapter `192.168.0.10:35000`) and tap **CONNECT**, then **ATZ**.
+4. Open Gauge Boy (adapter `192.168.0.10:35000`) and tap **CONNECT**, then **ATZ**.
 
 If step 4 connects, the 3DS can use the adapter directly once something on its network answers the
 test. The long-term helper would be a tiny device (e.g. an ESP32) joined to `V-LINK` at a fixed IP
@@ -166,12 +166,12 @@ doing the same job, pending the owner's go / no-go decision (`gauge-boy-7v5.13`)
 ```sh
 python3 -m venv /tmp/qr && /tmp/qr/bin/pip install --require-hashes -r tools/requirements-release.txt
 /tmp/qr/bin/python tools/make_qr.py                      # docs/qr-latest.png: newest release (README)
-/tmp/qr/bin/python tools/make_qr.py --version 0.0.2 --out gaugeboy-qr.png
+/tmp/qr/bin/python tools/make_qr.py --version 0.0.2 --out gauge-boy-qr.png
 ```
 
-The stable code points at `releases/latest/download/gaugeboy.cia`, so it only needs remaking if
+The stable code points at `releases/latest/download/gauge-boy.cia`, so it only needs remaking if
 the repository moves. The release workflow makes each release's code and attaches it as
-`gaugeboy-qr.png`.
+`gauge-boy-qr.png`.
 
 ## Releases
 

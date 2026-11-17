@@ -4,7 +4,7 @@
 /*
  * The in-app Wi-Fi setup guide (SETUP > Wi-Fi setup guide): the steps for
  * saving the adapter's network in System Settings with the manual IP and
- * DNS GaugeBoy needs (so it can answer the 3DS connection test), with the
+ * DNS Gauge Boy needs (so it can answer the 3DS connection test), with the
  * values worked out from the adapter's address in config.ini and written
  * the way the 3DS shows them (three digits per part). Platform-free.
  */

@@ -3,7 +3,7 @@
 
 /*
  * Code history: every scan and every clear is appended to a CSV file on
- * the SD card (sdmc:/3ds/gaugeboy/code-history.csv), so the codes are
+ * the SD card (sdmc:/3ds/gauge-boy/code-history.csv), so the codes are
  * kept after they're cleared (brief section 5d). One row per code; a scan
  * with no codes writes one "none" row. Platform-free text formatting; the
  * app does the file I/O on its worker thread.
