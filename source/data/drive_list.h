@@ -54,4 +54,22 @@ void drive_info_row(const drive_info_t *d, char *out, size_t len, int cols);
 /* The details for the top screen. Returns the line count. */
 int drive_info_lines(const drive_info_t *d, char lines[][DRIVE_INFO_COLS + 1], int max);
 
+/* ---------- graph replay ---------- */
+
+#define DRIVE_COL_MAX 24          /* value columns read for GRAPH */
+
+typedef struct {
+    char name[24];                /* "RPM" */
+    char unit[10];                /* "rpm" ("" if none) */
+} drive_column_t;
+
+/* The value columns from the start of a drive file (time not counted).
+ * Returns how many (0 if it isn't a drive log). */
+int drive_columns(const char *head, size_t len, drive_column_t *cols, int max);
+
+/* One data line: its time and the value in value column col (0 = the
+ * first after time; v is NaN for an empty cell). False for a line that
+ * isn't a data row (header, comment, cut off). */
+bool drive_row_value(const char *line, int col, double *t, float *v);
+
 #endif

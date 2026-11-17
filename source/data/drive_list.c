@@ -1,5 +1,6 @@
 #include "drive_list.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -275,4 +276,68 @@ int drive_info_lines(const drive_info_t *d, char lines[][DRIVE_INFO_COLS + 1], i
         add(lines, max, &n, "Recorded", d->version);
     }
     return n;
+}
+
+int drive_columns(const char *head, size_t len, drive_column_t *cols, int max)
+{
+    size_t pos = 0;
+    char line[512];
+    bool complete = false;
+    bool magic = false;
+    while (next_line(head, len, &pos, line, sizeof line, &complete)) {
+        if (line[0] == '#') {
+            magic = magic || strcmp(line, "# GaugeBoy drive log") == 0;
+            continue;
+        }
+        if (!magic || !complete || strncmp(line, "time_s,", 7) != 0) {
+            return 0;
+        }
+        int n = 0;
+        for (char *col = strtok(line + 7, ","); col != NULL && n < max; col = strtok(NULL, ",")) {
+            drive_column_t *c = &cols[n++];
+            c->unit[0] = '\0';
+            char *open = strstr(col, " (");
+            if (open != NULL) {
+                *open = '\0';
+                char *close = strchr(open + 2, ')');
+                if (close != NULL) {
+                    *close = '\0';
+                }
+                copy(c->unit, sizeof c->unit, open + 2);
+            }
+            copy(c->name, sizeof c->name, col);
+        }
+        return n;
+    }
+    return 0;
+}
+
+bool drive_row_value(const char *line, int col, double *t, float *v)
+{
+    if (line[0] == '#' || line[0] == '\0') {
+        return false;
+    }
+    char *end = NULL;
+    *t = strtod(line, &end);
+    if (end == line || *end != ',') {
+        return false;   /* the column header, or a cut-off line */
+    }
+    const char *p = end + 1;
+    for (int i = 0; i < col; i++) {
+        p = strchr(p, ',');
+        if (p == NULL) {
+            *v = NAN;
+            return true;
+        }
+        p++;
+    }
+    if (*p == ',' || *p == '\0' || *p == '\r' || *p == '\n') {
+        *v = NAN;
+        return true;
+    }
+    *v = strtof(p, &end);
+    if (end == p) {
+        *v = NAN;
+    }
+    return true;
 }

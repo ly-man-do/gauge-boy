@@ -1,4 +1,5 @@
 /* The CSV drive logger (source/data/drive_log). */
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -248,6 +249,29 @@ static void test_drive_list_odd_files(void)
     CHECK_EQ_STR(names[2], "drive-20261115-080000.csv");
 }
 
+static void test_drive_columns_and_rows(void)
+{
+    const char *head = "# GaugeBoy drive log\n# units,US\n"
+                       "time_s,RPM (rpm),Speed (mph),Battery (V),Vacuum (inHg)\n0.000,750,0.0,14.10,20.7\n";
+    drive_column_t cols[DRIVE_COL_MAX];
+    CHECK_EQ_INT(drive_columns(head, strlen(head), cols, DRIVE_COL_MAX), 4);
+    CHECK_EQ_STR(cols[0].name, "RPM");
+    CHECK_EQ_STR(cols[0].unit, "rpm");
+    CHECK_EQ_STR(cols[3].name, "Vacuum");
+    CHECK_EQ_STR(cols[3].unit, "inHg");
+    CHECK_EQ_INT(drive_columns("a,b\n1,2\n", 8, cols, DRIVE_COL_MAX), 0);
+
+    double t;
+    float v;
+    CHECK(drive_row_value("12.400,750,,14.10,-3.5", 0, &t, &v) && t > 12.39 && v == 750.0f);
+    CHECK(drive_row_value("12.400,750,,14.10,-3.5", 1, &t, &v) && isnan(v));   /* empty */
+    CHECK(drive_row_value("12.400,750,,14.10,-3.5", 3, &t, &v) && v == -3.5f);
+    CHECK(drive_row_value("12.400,750", 3, &t, &v) && isnan(v));               /* short row */
+    CHECK(!drive_row_value("time_s,RPM (rpm)", 0, &t, &v));
+    CHECK(!drive_row_value("# car,x", 0, &t, &v));
+    CHECK(!drive_row_value("12.4", 0, &t, &v));                                 /* cut off */
+}
+
 void suite_drive_log(void)
 {
     RUN_TEST(test_drive_log_header_and_rows);
@@ -256,4 +280,5 @@ void suite_drive_log(void)
     RUN_TEST(test_drive_log_file_name);
     RUN_TEST(test_drive_list_from_a_log);
     RUN_TEST(test_drive_list_odd_files);
+    RUN_TEST(test_drive_columns_and_rows);
 }

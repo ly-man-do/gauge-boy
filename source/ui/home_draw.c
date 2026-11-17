@@ -348,3 +348,8 @@ void home_draw(const home_view_t *v)
 
     C3D_FrameEnd(0);
 }
+
+void *home_draw_font_small(void)
+{
+    return font_small;
+}

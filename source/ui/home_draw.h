@@ -19,4 +19,8 @@ void home_draw(const home_view_t *v);
 
 void home_draw_exit(void);
 
+/* HOME's small font (a C2D_Font), for other citro2d screens; NULL if
+ * home_draw_init failed. */
+void *home_draw_font_small(void);
+
 #endif

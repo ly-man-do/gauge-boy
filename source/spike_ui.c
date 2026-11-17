@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
+#include <math.h>
 #include <sys/stat.h>
 #include <time.h>
 
@@ -33,6 +34,7 @@
 #include "transport/conntest_server.h"
 #include "transport/net.h"
 #include "transport/tcp_transport.h"
+#include "ui/graph_draw.h"
 #include "ui/home_draw.h"
 #include "obd/dtc.h"
 #include "obd/obd_diag.h"
@@ -70,6 +72,13 @@
 #define BTN_IDENTIFY     111   /* worker (not a button): find the car after a connect */
 #define BTN_LOG_SCAN     112   /* worker: list the drive logs */
 #define BTN_LOG_DELETE   113   /* worker: delete shared.drive_delete, then list again */
+#define BTN_GRAPH_LOAD   114   /* worker: read the graph shared.graph_req asks for */
+#define BTN_LOG_GRAPH    (-120) /* UI: LOG -> GRAPH of the selected drive */
+#define BTN_GRAPH_EARLY  (-121) /* UI: GRAPH: move the window back in time */
+#define BTN_GRAPH_LATE   (-122)
+#define BTN_GRAPH_IN     (-123) /* zoom in / out on the time axis */
+#define BTN_GRAPH_OUT    (-124)
+#define BTN_GRAPH_ALL    (-125) /* the whole drive */
 #define BTN_LOG_ASK      (-37) /* UI: LOG: open the delete question */
 #define BTN_LOG_NO       (-38)
 #define BTN_LOG_YES      (-39)
@@ -246,7 +255,8 @@ typedef enum {
     SCREEN_SETUP_VEHICLE,      /* SETUP > VEHICLE */
     SCREEN_SETUP_OTHER,        /* SETUP > OTHER */
     SCREEN_ABOUT,              /* SETUP > OTHER > About */
-    SCREEN_LOG                 /* LOG: recorded drives */
+    SCREEN_LOG,                /* LOG: recorded drives */
+    SCREEN_GRAPH               /* LOG > GRAPH: one value of a drive against time */
 } screen_t;
 
 /* TRIM: BACK and START / STOP (the bars and hints are on the top screen). */
@@ -379,9 +389,23 @@ static const button_t log_buttons[] = {
     { "BACK",   BTN_BACK,      0,  25, 8, 5 },
     { "<",      BTN_PAGE_PREV, 9,  25, 5, 5 },
     { ">",      BTN_PAGE_NEXT, 17, 25, 5, 5 },
-    { "DELETE", BTN_LOG_ASK,   27, 25, 12, 5 },
+    { "GRAPH",  BTN_LOG_GRAPH, 23, 25, 8, 5 },
+    { "DELETE", BTN_LOG_ASK,   32, 25, 7, 5 },
 };
 #define LOG_BUTTON_COUNT ((int)(sizeof log_buttons / sizeof log_buttons[0]))
+/* GRAPH: move and zoom the time window, pick the value, the whole drive. */
+static const button_t graph_buttons[] = {
+    { "<<",     BTN_GRAPH_EARLY, 0,  3, 9, 6 },
+    { "ZOOM -", BTN_GRAPH_OUT,   10, 3, 9, 6 },
+    { "ZOOM +", BTN_GRAPH_IN,    20, 3, 9, 6 },
+    { ">>",     BTN_GRAPH_LATE,  30, 3, 9, 6 },
+    { "BACK",   BTN_BACK,        0,  25, 8, 5 },
+    { "<",      BTN_PAGE_PREV,   9,  25, 5, 5 },
+    { ">",      BTN_PAGE_NEXT,   17, 25, 5, 5 },
+    { "ALL",    BTN_GRAPH_ALL,   28, 25, 11, 5 },
+};
+#define GRAPH_BUTTON_COUNT ((int)(sizeof graph_buttons / sizeof graph_buttons[0]))
+
 static const button_t log_delete_buttons[] = {
     { "CANCEL", BTN_LOG_NO,  0,  23, 15, 6 },
     { "DELETE", BTN_LOG_YES, 17, 23, 22, 6 },
@@ -446,6 +470,18 @@ static struct {
     bool drives_listed;        /* the list has been read at least once */
     unsigned drive_version;    /* bumped when the list changes */
     char drive_delete[32];     /* LOG: the file to delete */
+    struct {
+        char file[32];
+        int col;
+        double t0, t1;
+    } graph_req;               /* GRAPH: what to load */
+    graph_cols_t graph;        /* GRAPH: the loaded columns */
+    drive_column_t graph_columns[DRIVE_COL_MAX];
+    int graph_ncols;           /* value columns in the file */
+    int graph_col;             /* the one loaded */
+    bool graph_loading;
+    char graph_msg[48];        /* an error, or "" */
+    unsigned graph_version;
     bool rec_want;             /* UI: record the LIVE view (REC) */
     bool rec_active;           /* worker: a drive log is open */
     uint64_t rec_started_ms;   /* when it was opened */
@@ -1095,6 +1131,82 @@ static void log_delete(spike_t *s)
 /* Recent values of the polled PIDs (worker): for live graphs and fun modes. */
 static history_t live_history;
 
+/* GRAPH (worker): one value of a drive file, squeezed into the plot's
+ * pixel columns for the requested window. Read in chunks, line by line. */
+static void graph_load(spike_t *s)
+{
+    static graph_cols_t g;
+    static drive_column_t cols[DRIVE_COL_MAX];
+    static char buf[4096 + 512];
+    char file[32];
+    LightLock_Lock(&shared.lock);
+    memcpy(file, shared.graph_req.file, sizeof file);
+    file[sizeof file - 1] = '\0';
+    int col = shared.graph_req.col;
+    double t0 = shared.graph_req.t0, t1 = shared.graph_req.t1;
+    LightLock_Unlock(&shared.lock);
+
+    char path[96];
+    snprintf(path, sizeof path, "%s/%s", DRIVES_DIR, file);
+    graph_cols_init(&g, t0, t1, GRAPH_PLOT_W);
+    const char *msg = NULL;
+    int ncols = 0;
+    FILE *f = drive_list_is_log_name(file) ? fopen(path, "rb") : NULL;
+    if (f == NULL) {
+        msg = "Can't open this drive.";
+    } else {
+        size_t got = fread(buf, 1, DRIVE_HEAD_BYTES, f);
+        ncols = drive_columns(buf, got, cols, DRIVE_COL_MAX);
+        if (ncols == 0) {
+            msg = "Not a GaugeBoy drive log.";
+        } else {
+            if (col >= ncols || col < 0) {
+                col = 0;
+            }
+            /* Lines from the start of the file; a partial last line waits
+             * for the next chunk. */
+            fseek(f, 0, SEEK_SET);
+            size_t keep = 0;
+            for (;;) {
+                size_t n = fread(buf + keep, 1, 4096, f);
+                size_t len = keep + n;
+                size_t start = 0;
+                for (size_t i = 0; i < len; i++) {
+                    if (buf[i] != '\n') {
+                        continue;
+                    }
+                    buf[i] = '\0';
+                    double t;
+                    float v;
+                    if (drive_row_value(buf + start, col, &t, &v) && !isnan(v)) {
+                        graph_cols_add(&g, t, v);
+                    }
+                    start = i + 1;
+                }
+                keep = len - start;
+                if (keep > 512) {
+                    keep = 0;   /* a line this long isn't ours: skip it */
+                }
+                memmove(buf, buf + start, keep);
+                if (n == 0) {
+                    break;
+                }
+            }
+        }
+        fclose(f);
+    }
+    LightLock_Lock(&shared.lock);
+    shared.graph = g;
+    memcpy(shared.graph_columns, cols, sizeof cols);
+    shared.graph_ncols = ncols;
+    shared.graph_col = col;
+    shared.graph_loading = false;
+    snprintf(shared.graph_msg, sizeof shared.graph_msg, "%s", msg != NULL ? msg : "");
+    shared.graph_version++;
+    LightLock_Unlock(&shared.lock);
+    (void)s;
+}
+
 /* ---------- REC: drive logs (worker) ---------- */
 
 static drive_log_t rec_log;
@@ -1385,6 +1497,8 @@ static void worker_main(void *arg)
                 guide_check(spike);
             } else if (action == BTN_SET_MAKE || action == BTN_SET_VEHICLE) {
                 set_vehicle(spike);
+            } else if (action == BTN_GRAPH_LOAD) {
+                graph_load(spike);
             } else if (action == BTN_LOG_SCAN) {
                 log_scan(spike);
             } else if (action == BTN_LOG_DELETE) {
@@ -1626,9 +1740,13 @@ typedef struct {
     int live_view;             /* live_view_id_t shown on SCREEN_LIVE */
     screen_t trim_back;        /* where BACK goes from TRIM (HOME or DIAG) */
     bool delete_dialog;        /* LOG: delete question showing */
+    int graph_col;             /* GRAPH: the value shown */
+    double graph_t0, graph_t1; /* GRAPH: the time window, seconds */
+    double graph_len;          /* GRAPH: the drive's length */
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
+static bool graph_gfx;         /* GRAPH drawn with citro2d (else a text summary) */
 
 /* The action for a HOME card. */
 static int home_item_action(int item)
@@ -1993,6 +2111,65 @@ static void draw_log_top(int selected, int busy, bool connected)
     print_row(8, TOP_COLS, count > 0 ? "Tap a drive for its details." : "");
 }
 
+/* GRAPH: ask the worker for ui's window and value. */
+static void graph_request(const ui_state_t *ui, const char *file)
+{
+    LightLock_Lock(&shared.lock);
+    snprintf(shared.graph_req.file, sizeof shared.graph_req.file, "%.31s", file);
+    shared.graph_req.col = ui->graph_col;
+    shared.graph_req.t0 = ui->graph_t0;
+    shared.graph_req.t1 = ui->graph_t1;
+    shared.graph_loading = true;
+    shared.graph_version++;
+    LightLock_Unlock(&shared.lock);
+    enqueue(BTN_GRAPH_LOAD);
+}
+
+/* GRAPH top screen (citro2d; a text summary without graphics). */
+static void draw_graph_top(const ui_state_t *ui)
+{
+    static graph_cols_t g;
+    char title[48], sub[64], place[32], msg[48];
+    LightLock_Lock(&shared.lock);
+    bool loading = shared.graph_loading;
+    g = shared.graph;
+    int ncols = shared.graph_ncols;
+    int col = shared.graph_col;
+    if (ncols > 0) {
+        const drive_column_t *c = &shared.graph_columns[col];
+        snprintf(title, sizeof title, c->unit[0] ? "%s (%s)" : "%s%s", c->name, c->unit);
+    } else {
+        snprintf(title, sizeof title, "GRAPH");
+    }
+    snprintf(place, sizeof place, ncols > 0 ? "value %d of %d" : " ", col + 1, ncols);
+    sub[0] = '\0';
+    if (ui->selected >= 0 && ui->selected < shared.drive_count) {
+        drive_info_row(&shared.drives[ui->selected], sub, sizeof sub, 44);
+    }
+    snprintf(msg, sizeof msg, "%s", shared.graph_msg);
+    LightLock_Unlock(&shared.lock);
+
+    if (graph_gfx) {
+        graph_view_t v = { title, sub, place, loading ? NULL : &g,
+                           loading ? "Loading..." : msg[0] ? msg : NULL };
+        graph_draw(&v);
+        return;
+    }
+    consoleSelect(&top_console);
+    printf("\x1b[0m\x1b[2J");
+    print_row(0, TOP_COLS, title);
+    print_row(1, TOP_COLS, sub);
+    if (loading || msg[0]) {
+        print_row(3, TOP_COLS, loading ? "Loading..." : msg);
+        return;
+    }
+    char line[TOP_COLS + 8];
+    snprintf(line, sizeof line, "min %.2f  max %.2f  avg %.2f  (%u values)", (double)g.vmin,
+             (double)g.vmax, (double)graph_cols_avg(&g), (unsigned)g.n);
+    print_row(3, TOP_COLS, line);
+    print_row(5, TOP_COLS, "(no graphics: the fonts didn't load)");
+}
+
 static void draw_log_delete_dialog(const char *name)
 {
     consoleSelect(&bottom_console);
@@ -2252,6 +2429,32 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         }
         draw_list(guide_buttons, GUIDE_BUTTON_COUNT, now, busy, 0, false);
         snprintf(line, sizeof line, "%d/%d", ui->page + 1, WIFI_GUIDE_STEPS);
+        printf("\x1b[%d;15H%-3.3s", 27 + 1, line);
+        return;
+    }
+    if (ui->screen == SCREEN_GRAPH) {
+        LightLock_Lock(&shared.lock);
+        int ncols = shared.graph_ncols;
+        bool loading = shared.graph_loading;
+        LightLock_Unlock(&shared.lock);
+        clear_rows(1, 24);
+        print_row(1, BOTTOM_COLS, "GRAPH: one value against time");
+        char a[16], b[16], c[16];
+        unsigned t0 = (unsigned)(ui->graph_t0 + 0.5), t1 = (unsigned)(ui->graph_t1 + 0.5);
+        unsigned len = (unsigned)(ui->graph_len + 0.5);
+        snprintf(a, sizeof a, "%u:%02u", t0 / 60, t0 % 60);
+        snprintf(b, sizeof b, "%u:%02u", t1 / 60, t1 % 60);
+        snprintf(c, sizeof c, "%u:%02u", len / 60, len % 60);
+        char showing[64];
+        snprintf(showing, sizeof showing, "Showing %s to %s of %s", a, b, c);
+        print_row(11, BOTTOM_COLS, loading ? "Loading..." : showing);
+        print_row(13, BOTTOM_COLS, "<< >>: earlier / later");
+        print_row(14, BOTTOM_COLS, "ZOOM - / +: more / less of the drive");
+        print_row(15, BOTTOM_COLS, "< >: other values; ALL: whole drive");
+        print_row(17, BOTTOM_COLS, "Each column shows the lowest and");
+        print_row(18, BOTTOM_COLS, "highest value in it, so spikes show.");
+        draw_list(graph_buttons, GRAPH_BUTTON_COUNT, now, busy, 0, false);
+        snprintf(line, sizeof line, "%d/%d", ui->graph_col + 1, ncols);
         printf("\x1b[%d;15H%-3.3s", 27 + 1, line);
         return;
     }
@@ -2613,6 +2816,7 @@ void spike_ui_run(void)
     spike_init(&spike, &transport, &elm, log_sink, NULL);
     spike_logf(&spike, "GaugeBoy %s", GB_VERSION_TEXT);
     home_gfx = home_draw_init();
+    graph_gfx = home_gfx && graph_draw_init();
     if (!home_gfx) {
         spike_logf(&spike, "! HOME graphics could not start (fonts in romfs); using text HOME");
     }
@@ -2676,7 +2880,7 @@ void spike_ui_run(void)
     }
 
     ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false, -1, SCREEN_SETUP,
-                      false, LIVE_VIEW_ENGINE, SCREEN_HOME, false };
+                      false, LIVE_VIEW_ENGINE, SCREEN_HOME, false, 0, 0.0, 0.0, 0.0 };
     live_menu_count();
     uint64_t notice_until = 0;
     int scroll = 0;                /* log (SETUP, TEST) */
@@ -2685,6 +2889,7 @@ void spike_ui_run(void)
     unsigned drawn_live_version = ~0u;
     unsigned drawn_live_ui_version = ~0u;
     unsigned drawn_drive_version = ~0u;
+    unsigned drawn_graph_version = ~0u;
     uint64_t live_drawn_at = 0;
     int drawn_scroll = -1;
     int drawn_busy = -2;
@@ -2774,6 +2979,7 @@ void spike_ui_run(void)
                 break;
             case SCREEN_SETUP: list = setup_buttons; count = SETUP_BUTTON_COUNT; break;
             case SCREEN_LOG:   list = log_buttons;   count = LOG_BUTTON_COUNT;   break;
+            case SCREEN_GRAPH: list = graph_buttons; count = GRAPH_BUTTON_COUNT; break;
             case SCREEN_SETUP_WIFI:    list = wifi_buttons;    count = WIFI_BUTTON_COUNT;    break;
             case SCREEN_SETUP_VEHICLE: list = vehicle_buttons; count = VEHICLE_BUTTON_COUNT; break;
             case SCREEN_SETUP_OTHER:   list = other_buttons;   count = OTHER_BUTTON_COUNT;   break;
@@ -2836,8 +3042,8 @@ void spike_ui_run(void)
         } else if (!confirming && !tapped && !ui.clear_dialog && !ui.delete_dialog) {
             if ((down & KEY_B) && ui.screen != SCREEN_HOME) { action = BTN_BACK; tapped = true; }
             else if ((down & KEY_X) && ui.screen == SCREEN_DIAG) { action = BTN_DIAG_SCAN; tapped = true; }
-            else if ((down & KEY_L) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE || ui.screen == SCREEN_LIVE || ui.screen == SCREEN_LIVE_EDIT || ui.screen == SCREEN_LOG)) { action = BTN_PAGE_PREV; tapped = true; }
-            else if ((down & KEY_R) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE || ui.screen == SCREEN_LIVE || ui.screen == SCREEN_LIVE_EDIT || ui.screen == SCREEN_LOG)) { action = BTN_PAGE_NEXT; tapped = true; }
+            else if ((down & KEY_L) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE || ui.screen == SCREEN_LIVE || ui.screen == SCREEN_LIVE_EDIT || ui.screen == SCREEN_LOG || ui.screen == SCREEN_GRAPH)) { action = BTN_PAGE_PREV; tapped = true; }
+            else if ((down & KEY_R) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE || ui.screen == SCREEN_LIVE || ui.screen == SCREEN_LIVE_EDIT || ui.screen == SCREEN_LOG || ui.screen == SCREEN_GRAPH)) { action = BTN_PAGE_NEXT; tapped = true; }
         }
 
         if (tapped) {
@@ -2924,6 +3130,68 @@ void spike_ui_run(void)
                 }
                 bottom_full = top_dirty = true;
                 break;
+            case BTN_LOG_GRAPH: {
+                char file[32] = "";
+                double len = -1.0;
+                LightLock_Lock(&shared.lock);
+                if (ui.selected >= 0 && ui.selected < shared.drive_count) {
+                    memcpy(file, shared.drives[ui.selected].name, sizeof file);
+                    file[sizeof file - 1] = '\0';
+                    len = shared.drives[ui.selected].duration_s;
+                }
+                LightLock_Unlock(&shared.lock);
+                if (file[0] == '\0') {
+                    ui.notice = "GRAPH: tap a drive first";
+                    notice_until = now + 3000;
+                    break;
+                }
+                ui.graph_len = len > 1.0 ? len : 1.0;
+                ui.graph_t0 = 0.0;
+                ui.graph_t1 = ui.graph_len;
+                ui.graph_col = 0;
+                ui.screen = SCREEN_GRAPH;
+                if (worker != NULL) {
+                    graph_request(&ui, file);
+                }
+                bottom_full = top_dirty = true;
+                break;
+            }
+            case BTN_GRAPH_EARLY:
+            case BTN_GRAPH_LATE:
+            case BTN_GRAPH_IN:
+            case BTN_GRAPH_OUT:
+            case BTN_GRAPH_ALL: {
+                double w = ui.graph_t1 - ui.graph_t0;
+                double mid = (ui.graph_t0 + ui.graph_t1) / 2;
+                if (action == BTN_GRAPH_IN) {
+                    w = w / 2 < 5.0 ? 5.0 : w / 2;
+                } else if (action == BTN_GRAPH_OUT) {
+                    w *= 2;
+                } else if (action == BTN_GRAPH_ALL) {
+                    w = ui.graph_len;
+                    mid = w / 2;
+                } else {
+                    mid += action == BTN_GRAPH_LATE ? w / 2 : -w / 2;
+                }
+                if (w > ui.graph_len) {
+                    w = ui.graph_len;
+                }
+                double t0 = mid - w / 2;
+                t0 = t0 < 0.0 ? 0.0 : t0 + w > ui.graph_len ? ui.graph_len - w : t0;
+                if (t0 != ui.graph_t0 || t0 + w != ui.graph_t1) {
+                    ui.graph_t0 = t0;
+                    ui.graph_t1 = t0 + w;
+                    LightLock_Lock(&shared.lock);
+                    char file[32];
+                    memcpy(file, shared.graph_req.file, sizeof file);
+                    LightLock_Unlock(&shared.lock);
+                    if (worker != NULL) {
+                        graph_request(&ui, file);
+                    }
+                    top_dirty = true;
+                }
+                break;
+            }
             case BTN_LOG_ASK:
                 if (ui.selected >= 0) {
                     ui.delete_dialog = true;
@@ -2947,6 +3215,26 @@ void spike_ui_run(void)
                 top_dirty = true;
                 break;
             case BTN_PAGE_PREV:
+            case BTN_PAGE_NEXT:
+                if (ui.screen == SCREEN_GRAPH) {   /* another value of the drive */
+                    LightLock_Lock(&shared.lock);
+                    int ncols = shared.graph_ncols;
+                    char file[32];
+                    memcpy(file, shared.graph_req.file, sizeof file);
+                    LightLock_Unlock(&shared.lock);
+                    if (ncols > 1) {
+                        ui.graph_col = (ui.graph_col + (action == BTN_PAGE_NEXT ? 1 : ncols - 1)) %
+                                       ncols;
+                        if (worker != NULL) {
+                            graph_request(&ui, file);
+                        }
+                        top_dirty = true;
+                    }
+                    break;
+                }
+                if (action == BTN_PAGE_NEXT) {
+                    goto page_next;
+                }
                 if (ui.screen == SCREEN_LIVE) {   /* the previous view */
                     live_select_view(&ui, (ui.live_view + LIVE_VIEW_COUNT - 1) % LIVE_VIEW_COUNT);
                     bottom_full = top_dirty = true;
@@ -2955,7 +3243,7 @@ void spike_ui_run(void)
                 if (ui.page > 0) { ui.page--; ui.selected = -1; top_dirty = true; }
                 bottom_full |= ui.screen == SCREEN_MAKE;   /* the last page is shorter */
                 break;
-            case BTN_PAGE_NEXT: {
+            page_next: {
                 if (ui.screen == SCREEN_LIVE) {   /* the next view */
                     live_select_view(&ui, (ui.live_view + 1) % LIVE_VIEW_COUNT);
                     bottom_full = top_dirty = true;
@@ -3056,6 +3344,11 @@ void spike_ui_run(void)
                     ui.screen == SCREEN_MAKE || ui.screen == SCREEN_LOG) {
                     ui.page = 0;
                     ui.selected = ui.screen == SCREEN_LOG ? -1 : ui.selected;
+                }
+                if (ui.screen == SCREEN_GRAPH) {
+                    ui.screen = SCREEN_LOG;   /* keep the page and the selection */
+                    bottom_full = top_dirty = true;
+                    break;
                 }
                 ui.screen = ui.screen == SCREEN_GUIDE ? ui.guide_back
                           : ui.screen == SCREEN_TRIM ? ui.trim_back
@@ -3186,6 +3479,15 @@ void spike_ui_run(void)
         unsigned drive_version = shared.drive_version;
         int drive_count = shared.drive_count;
         LightLock_Unlock(&shared.lock);
+        LightLock_Lock(&shared.lock);
+        unsigned graph_version = shared.graph_version;
+        LightLock_Unlock(&shared.lock);
+        if (graph_version != drawn_graph_version) {
+            drawn_graph_version = graph_version;
+            if (ui.screen == SCREEN_GRAPH) {
+                top_dirty = bottom_dirty = true;
+            }
+        }
         if (drive_version != drawn_drive_version) {
             drawn_drive_version = drive_version;
             if (ui.screen == SCREEN_LOG) {
@@ -3218,6 +3520,8 @@ void spike_ui_run(void)
                 draw_about_top(busy, connected);
             } else if (ui.screen == SCREEN_LOG) {
                 draw_log_top(ui.selected, busy, connected);
+            } else if (ui.screen == SCREEN_GRAPH) {
+                draw_graph_top(&ui);
             } else if (shows_log) {
                 draw_top(scroll, busy, connected);
             } else {
@@ -3257,6 +3561,7 @@ void spike_ui_run(void)
     if (net_ok) {
         net_exit();
     }
+    graph_draw_exit();
     home_draw_exit();
     spike_logf(&spike, "Session end");
     if (log_file != NULL) {

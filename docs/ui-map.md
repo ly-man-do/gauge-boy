@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-16, LOG lists recorded drives (gauge-boy-43v.4; M3 in progress)
+**As of:** 2026-11-16, LOG > GRAPH replays a recorded drive (gauge-boy-43v.5; M3 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -63,6 +63,14 @@ GaugeBoy
         │   │                        tap → details on top (green = selected)
         │   ├── [BACK]               → HOME                                       [B]
         │   ├── [<] page n/m [>]                                                  [L/R]
+        │   ├── [GRAPH]              (a drive selected) → GRAPH
+        │   │   ├── (top: one value against time, drawn with graphics: axes, times,
+        │   │   │    min / max per pixel column, the window's min / max / average)
+        │   │   ├── [<<] [>>]        earlier / later (half a window)
+        │   │   ├── [ZOOM -] [ZOOM +] more / less of the drive (5 s at the least)
+        │   │   ├── [<] value n/m [>] the drive's other values                    [L/R]
+        │   │   ├── [ALL]            the whole drive
+        │   │   └── [BACK]           → LOG (same drive selected)                  [B]
         │   └── [DELETE]             (a drive selected) → Delete question
         │       ├── [CANCEL]         → LOG                                        [B]
         │       └── [DELETE]         removes the file from the SD card, lists again
@@ -107,5 +115,5 @@ GaugeBoy
 
 - SETUP is a menu of four pages (owner layout, gauge-boy-cib): TESTS (adapter and car tests, the log's buttons), WI-FI (connection), VEHICLE (make, model, year, VIN) and OTHER (units, About).
 - LIVE views and the PIDs in each: Engine (RPM, speed, coolant, throttle, load), Idle & vacuum (RPM, MAP (PID 0B or 87) + vacuum or boost, short-term trims, timing, baro), Air & fuel (MAF, MAP (0B or 87), intake air, throttle, short- and long-term trims, baro), Warm-up (coolant, intake air, oil, outside air, run time, RPM), Drive (RPM, speed, throttle, load, timing), All (every supported PID), Custom (your pick). Each view only shows what the car supports.
-- Only HOME is drawn with graphics (citro2d). Every other screen is still the text console until M4 (UI polish).
+- Only HOME (bottom screen) and LOG > GRAPH (top screen) are drawn with graphics (citro2d). Every other screen is still the text console until M4 (UI polish).
 - The code for these screens is in `source/spike_ui.c` (screens, buttons, actions) and `source/ui/` (HOME layout and drawing).
