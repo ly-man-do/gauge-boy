@@ -102,6 +102,26 @@ static void put_value(drive_log_t *dl, float value, int places)
     put(dl, num);
 }
 
+static bool has_pid(const drive_log_t *dl, uint8_t pid)
+{
+    for (int i = 0; i < dl->count; i++) {
+        if (dl->pid[i] == pid) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* ",<short + long>" for a bank, or "," if either isn't read yet. */
+static void put_total(drive_log_t *dl, const obd_live_t *lv, uint8_t stft, uint8_t ltft)
+{
+    float s = 0.0f, l = 0.0f;
+    put(dl, ",");
+    if (obd_live_value(lv, stft, &s) && obd_live_value(lv, ltft, &l)) {
+        put_value(dl, obd_trim_total(s, l), 1);
+    }
+}
+
 bool drive_log_open(drive_log_t *dl, drive_log_write_fn write, void *ctx,
                     const drive_log_meta_t *meta, const obd_live_t *lv, obd_units_t units,
                     uint32_t period_ms, uint64_t now_ms)
@@ -119,6 +139,9 @@ bool drive_log_open(drive_log_t *dl, drive_log_write_fn write, void *ctx,
             dl->vacuum = true;
         }
     }
+
+    dl->total_b1 = has_pid(dl, OBD_PID_STFT_B1) && has_pid(dl, OBD_PID_LTFT_B1);
+    dl->total_b2 = has_pid(dl, OBD_PID_STFT_B2) && has_pid(dl, OBD_PID_LTFT_B2);
 
     put(dl, "# Gauge Boy drive log\n");
     meta_line(dl, "version", meta->version);
@@ -139,6 +162,12 @@ bool drive_log_open(drive_log_t *dl, drive_log_write_fn write, void *ctx,
         snprintf(name, sizeof name, "%s (%s)", info->label, obd_unit_label(info->unit, units));
         put(dl, ",");
         put_field(dl, name);
+    }
+    if (dl->total_b1) {
+        put(dl, ",Total B1 (%)");
+    }
+    if (dl->total_b2) {
+        put(dl, ",Total B2 (%)");
     }
     putf(dl, ",Battery (V)");
     if (dl->vacuum) {
@@ -166,6 +195,12 @@ bool drive_log_sample(drive_log_t *dl, const obd_live_t *lv, uint64_t now_ms)
             const obd_pid_info_t *info = obd_pid_info(dl->pid[i]);
             put_value(dl, obd_unit_convert(info->unit, v, dl->units), decimals(info->unit));
         }
+    }
+    if (dl->total_b1) {
+        put_total(dl, lv, OBD_PID_STFT_B1, OBD_PID_LTFT_B1);
+    }
+    if (dl->total_b2) {
+        put_total(dl, lv, OBD_PID_STFT_B2, OBD_PID_LTFT_B2);
     }
     put(dl, ",");
     if (lv->have_volts) {

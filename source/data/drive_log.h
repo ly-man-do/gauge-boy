@@ -20,6 +20,8 @@
  *   0.200,752,0,,14.10,18.3
  *
  * A value not read yet is an empty cell. Vacuum is negative under boost.
+ * When both trims of a bank are polled, a Total B1 / B2 column (short +
+ * long term) follows the PIDs.
  * Battery is the adapter's ATRV; Vacuum appears when MAP is polled.
  */
 
@@ -56,6 +58,7 @@ typedef struct {
     uint8_t pid[OBD_LIVE_MAX];   /* the columns, in order */
     int count;
     bool vacuum;                 /* a Vacuum column (MAP polled) */
+    bool total_b1, total_b2;     /* Total B1 / B2 columns (both trims of a bank polled) */
     uint64_t start_ms;
     uint64_t next_ms;
     uint32_t rows;

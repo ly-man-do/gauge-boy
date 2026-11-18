@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-17, GRAPH draws smooth curves (gauge-boy-43v.7; M3 in progress)
+**As of:** 2026-11-17, REC on the TRIM screen (gauge-boy-43v.8; M3 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -43,7 +43,9 @@ Gauge Boy
         │   │                        colored center-zero bars, engine state, hints)
         │   ├── (bottom: what trims mean, the color zones, how to check them)
         │   ├── [BACK]               → HOME (or DIAG, if opened from there), stops polling [B]
-        │   └── [START / STOP]       pauses or resumes polling
+        │   ├── [REC / REC m:ss]     records the trims (with totals, RPM, MAP / MAF, load)
+        │   │                        to drives/; red while recording; tap again to stop
+        │   └── [START / STOP]       pauses or resumes polling (STOP also ends a recording)
         │
         ├── DIAG                     (top: car facts or the selected code's text)
         │   ├── [STORED] [PENDING] [PERM] [READY]   tabs (PERM hidden if unsupported)

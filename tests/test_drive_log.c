@@ -151,6 +151,37 @@ static void test_drive_log_buffering_and_errors(void)
     CHECK(!drive_log_sample(&dl, &lv, 1000000));
 }
 
+static void test_drive_log_total_trims(void)
+{
+    static capture_t c;
+    memset(&c, 0, sizeof c);
+    static drive_log_t dl;
+    static obd_live_t t;
+    memset(&t, 0, sizeof t);
+    static const uint8_t pids[] = { 0x06, 0x08, 0x07, 0x09, 0x0C };   /* as TRIM polls */
+    for (int i = 0; i < 5; i++) {
+        t.pid[i].pid = pids[i];
+    }
+    t.count = 5;
+    t.pid[0].have = true; t.pid[0].value = 16.4f;   /* STFT B1 */
+    t.pid[1].have = true; t.pid[1].value = 13.3f;   /* STFT B2 */
+    t.pid[2].have = true; t.pid[2].value = 4.7f;    /* LTFT B1 */
+    t.pid[4].have = true; t.pid[4].value = 700.0f;
+    CHECK(drive_log_open(&dl, capture_write, &c, &meta, &t, OBD_UNITS_US, 0, 0));
+    CHECK(has(&c, "time_s,STFT B1 (%),STFT B2 (%),LTFT B1 (%),LTFT B2 (%),RPM (rpm),"
+                  "Total B1 (%),Total B2 (%),Battery (V)\n"));
+    drive_log_sample(&dl, &t, 0);
+    drive_log_flush(&dl);
+    CHECK(has(&c, "0.000,16.4,13.3,4.7,,700,21.1,,\n"));   /* B2's long term not read yet */
+
+    /* One bank only (inline engines): no Total B2. */
+    memset(&c, 0, sizeof c);
+    t.count = 2;
+    t.pid[1].pid = 0x07;
+    CHECK(drive_log_open(&dl, capture_write, &c, &meta, &t, OBD_UNITS_US, 0, 0));
+    CHECK(has(&c, "time_s,STFT B1 (%),LTFT B1 (%),Total B1 (%),Battery (V)\n"));
+}
+
 static void test_drive_log_file_name(void)
 {
     struct tm t = { 0 };
@@ -288,6 +319,7 @@ void suite_drive_log(void)
     RUN_TEST(test_drive_log_header_and_rows);
     RUN_TEST(test_drive_log_metric_boost_and_no_map);
     RUN_TEST(test_drive_log_buffering_and_errors);
+    RUN_TEST(test_drive_log_total_trims);
     RUN_TEST(test_drive_log_file_name);
     RUN_TEST(test_drive_list_from_a_log);
     RUN_TEST(test_drive_list_odd_files);

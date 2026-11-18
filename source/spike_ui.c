@@ -264,6 +264,7 @@ typedef enum {
 /* TRIM: BACK and START / STOP (the bars and hints are on the top screen). */
 static const button_t trim_buttons[] = {
     { "BACK", BTN_BACK,        0,  25, 8, 5 },
+    { NULL,   BTN_LIVE_REC,    12, 25, 12, 5 },   /* REC / REC m:ss */
     { NULL,   BTN_LIVE_TOGGLE, 26, 25, 13, 5 },   /* START / STOP */
 };
 #define TRIM_BUTTON_COUNT ((int)(sizeof trim_buttons / sizeof trim_buttons[0]))
@@ -1955,9 +1956,12 @@ static void live_start_locked(const uint8_t *pids, const uint32_t *periods, int 
 /* TRIM: the four trims fast enough to watch, RPM and speed for the hints. */
 static void trim_start(void)
 {
+    /* The trims, then context for recordings (MAP, MAF and load slowly;
+     * the car's unsupported ones are skipped). */
     static const uint8_t pids[] = { OBD_PID_STFT_B1, OBD_PID_STFT_B2, OBD_PID_LTFT_B1,
-                                    OBD_PID_LTFT_B2, 0x0C, 0x0D };
-    static const uint32_t periods[] = { 0, 0, 1000, 1000, 1000, 2000 };
+                                    OBD_PID_LTFT_B2, 0x0C, 0x0D, OBD_PID_MAP, OBD_PID_MAP_WIDE,
+                                    0x10, 0x04 };
+    static const uint32_t periods[] = { 0, 0, 1000, 1000, 1000, 2000, 2000, 2000, 2000, 2000 };
     LightLock_Lock(&shared.lock);
     live_start_locked(pids, periods, (int)sizeof pids);
     LightLock_Unlock(&shared.lock);
@@ -2070,7 +2074,15 @@ static void draw_trim_top(int busy, bool connected)
         print_row(row++, TOP_COLS, "");
     }
     print_row(TOP_ROWS - 2, TOP_COLS, nh > 0 ? "Hints, not diagnoses." : "");
+    LightLock_Lock(&shared.lock);
+    bool rec = shared.rec_active;
+    unsigned rec_secs = rec ? (unsigned)((tp_now_ms() - shared.rec_started_ms) / 1000u) : 0;
+    char rec_line[TOP_COLS + 8];
+    snprintf(rec_line, sizeof rec_line, "REC %u:%02u  %s", rec_secs / 60, rec_secs % 60,
+             shared.rec_file);
+    LightLock_Unlock(&shared.lock);
     print_row(TOP_ROWS - 1, TOP_COLS, msg[0] != '\0' ? msg
+                                      : rec ? rec_line
                                       : on ? "Polling." : "Stopped. Tap START to poll.");
 }
 
@@ -2637,12 +2649,33 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         print_row(14, BOTTOM_COLS, "at the end means beyond that.");
         print_row(16, BOTTOM_COLS, "Check trims warm, at idle, then at");
         print_row(17, BOTTOM_COLS, "a steady 2500 rpm (parked).");
+        LightLock_Lock(&shared.lock);
+        bool rec = shared.rec_active;
+        bool rec_want = shared.rec_want;
+        unsigned rec_secs = rec ? (unsigned)((now - shared.rec_started_ms) / 1000u) : 0;
+        char rec_file[sizeof shared.rec_file];
+        memcpy(rec_file, shared.rec_file, sizeof rec_file);
+        LightLock_Unlock(&shared.lock);
+        if (rec) {
+            print_row(19, BOTTOM_COLS, "Recording the trims to drives/");
+            print_row(20, BOTTOM_COLS, rec_file);
+            print_row(22, BOTTOM_COLS, "Safe to leave running; REC to stop.");
+        } else {
+            print_row(19, BOTTOM_COLS, "REC saves the trims to the SD card");
+            print_row(20, BOTTOM_COLS, "(LOG lists it, GRAPH replays it).");
+            print_row(22, BOTTOM_COLS, "");
+        }
+        char rec_label[16];
+        snprintf(rec_label, sizeof rec_label, "REC %u:%02u", rec_secs / 60, rec_secs % 60);
         for (int i = 0; i < TRIM_BUTTON_COUNT; i++) {
             button_t b = trim_buttons[i];
             if (b.action == BTN_LIVE_TOGGLE) {
                 b.label = on ? "STOP" : "START";
             }
-            draw_button_ex(&b, flashing(b.action, now), false,
+            if (b.action == BTN_LIVE_REC) {
+                b.label = rec ? rec_label : rec_want ? "REC ..." : "REC";
+            }
+            draw_button_ex(&b, flashing(b.action, now), b.action == BTN_LIVE_REC && rec,
                            b.action == BTN_LIVE_TOGGLE && on);
         }
         return;
