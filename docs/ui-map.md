@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, TRACK > REV SYNC (gauge-boy-356.7; M4 in progress)
+**As of:** 2026-11-18, TRACK > ECO CHALLENGE, SETUP > VEHICLE engine size (gauge-boy-356.8; M4 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -24,7 +24,14 @@ Gauge Boy
         │   │   ├── [SHIFT LIGHT]    → SHIFT LIGHT
         │   │   ├── [G-METER]        → G-METER
         │   │   ├── [REV SYNC]       → REV SYNC
+        │   │   ├── [ECO]            → ECO CHALLENGE
         │   │   └── [BACK]           → HOME                                       [B]
+        │   ├── ECO CHALLENGE        (polls speed, RPM, MAF or MAP, intake temp; top: trip
+        │   │   │                     score in big digits and its rank once ranked, economy now
+        │   │   │                     and for the trip, distance, fuel, driving / idling time,
+        │   │   │                     hard starts / stops, a tip, this car's best trip score)
+        │   │   ├── [RESET TRIP]     a new trip; refused while moving
+        │   │   └── [BACK]           → TRACK (a ranked trip's score is offered as the best)
         │   ├── REV SYNC             (polls RPM, speed twice a second; top: tach bar 0-7000
         │   │   │                     with the target marked and the blip's peak, big target /
         │   │   │                     GO! / blip / score, the grade, the rounds so far, this
@@ -134,7 +141,9 @@ Gauge Boy
         │   │   │   └── [<] page n/3 [>]                                          [L/R]
         │   │   ├── [Model        Auto/<model>]  → 3DS keyboard; empty = Auto; saved
         │   │   ├── [Year  Auto/<year>] [<] [>]  steps Auto, 1996 ... next year; saved
-        │   │   ├── [VIN (tap to read)  <VIN>/not read]  runs a DIAG scan
+        │   │   ├── [Engine  Unknown/<n.n> L] [<] [>]  0.6-8.0 L by 0.1 (from Unknown: 2.0); saved;
+        │   │   │                    for ECO's fuel estimate on cars without a MAF
+        │   │   ├── [VIN  <VIN>/tap to read]  (next to BACK) runs a DIAG scan
         │   │   └── [BACK]           → SETUP                                      [B]
         │   ├── [OTHER]              → SETUP > OTHER
         │   │   ├── [Units        US/Metric]     toggles, saved (LIVE and the log use it)
@@ -151,7 +160,7 @@ Gauge Boy
 
 ## Notes
 
-- SETUP is a menu of four pages (owner layout, gauge-boy-cib): TESTS (adapter and car tests, the log's buttons), WI-FI (connection), VEHICLE (make, model, year, VIN) and OTHER (units, About).
+- SETUP is a menu of four pages (owner layout, gauge-boy-cib): TESTS (adapter and car tests, the log's buttons), WI-FI (connection), VEHICLE (make, model, year, engine size, VIN) and OTHER (units, About).
 - LIVE views and the PIDs in each: Engine (RPM, speed, coolant, throttle, load), Idle & vacuum (RPM, MAP (PID 0B or 87) + vacuum or boost, short-term trims, timing, baro), Air & fuel (MAF, MAP (0B or 87), intake air, throttle, short- and long-term trims, baro), Warm-up (coolant, intake air, oil, outside air, run time, RPM), Drive (RPM, speed, throttle, load, timing), All (every supported PID), Custom (your pick). Each view only shows what the car supports.
 - Only HOME (bottom screen) and LOG > GRAPH (top screen) are drawn with graphics (citro2d). Every other screen is still the text console until M5 (UI polish).
 - The code for these screens is in `source/spike_ui.c` (screens, buttons, actions) and `source/ui/` (HOME layout and drawing).

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "fun/eco.h"
 #include "fun/gmeter.h"
 #include "fun/rev_sync.h"
 #include "fun/shift_light.h"
@@ -450,8 +451,112 @@ static void test_rev_sync_locks(void)
     CHECK_EQ_STR(rs_rank(999), "D");
 }
 
+static eco_t eco;
+
+/* Drives a speed profile: readings every 500 ms from t, speed(k) for
+ * k = 0 .. n-1; returns the time after. */
+static uint64_t eco_drive(uint64_t t, int n, float (*kmh)(int), float rpm, float maf)
+{
+    for (int k = 0; k < n; k++, t += 500) {
+        eco_input_t in = { true, true, true, false, false, kmh(k), rpm, maf, 0, 0 };
+        eco_step(&eco, t, &in, 0.0f);
+    }
+    return t;
+}
+
+static float eco_stopped(int k) { (void)k; return 0.0f; }
+static float eco_gentle_up(int k) { return fminf(k * 1.8f, 80.0f); }       /* 1 m/s^2 */
+static float eco_cruise(int k) { (void)k; return 80.0f; }
+static float eco_gentle_down(int k) { return fmaxf(80.0f - k * 1.8f, 0.0f); }
+static float eco_hard_up(int k) { return fminf(k * 5.4f, 80.0f); }         /* 3 m/s^2 */
+static float eco_hard_down(int k) { return fmaxf(80.0f - k * 6.3f, 0.0f); } /* 3.5 m/s^2 */
+
+static void test_eco_fuel(void)
+{
+    float lph = 0.0f;
+    eco_input_t maf = { true, true, true, false, false, 50, 2000, 10.0f, 0, 0 };
+    CHECK(eco_fuel_lph(&maf, 0.0f, &lph));
+    CHECK(fabsf(lph - 3.287f) < 0.01f);                   /* 10 g/s of air */
+    /* Speed-density: a 3.5 L at 700 rpm, 30 kPa, 25 C: about 6.1 g/s of air. */
+    eco_input_t sd = { true, true, false, true, true, 0, 700, 0, 30.0f, 25.0f };
+    CHECK(eco_fuel_lph(&sd, 3.5f, &lph));
+    CHECK(fabsf(lph - 2.00f) < 0.05f);
+    CHECK(!eco_fuel_lph(&sd, 0.0f, &lph));                /* no engine size */
+    sd.have_iat = false;
+    CHECK(eco_fuel_lph(&sd, 3.5f, &lph));                 /* 25 C assumed */
+    CHECK(fabsf(lph - 2.00f) < 0.05f);
+}
+
+static void test_eco_smooth_trip(void)
+{
+    eco_reset(&eco);
+    CHECK_EQ_INT(eco_score(&eco), 100);
+    uint64_t t = eco_drive(1000, 40, eco_stopped, 750, 4.0f);          /* 20 s idle */
+    t = eco_drive(t, 50, eco_gentle_up, 2000, 12.0f);
+    t = eco_drive(t, 240, eco_cruise, 1900, 15.0f);                  /* 2 minutes */
+    t = eco_drive(t, 50, eco_gentle_down, 1000, 3.0f);
+    CHECK_EQ_INT(eco_score(&eco), 100);
+    CHECK(eco_ranked(&eco));
+    CHECK_EQ_STR(eco_rank(eco_score(&eco)), "S");
+    CHECK_EQ_INT(eco.harsh_accel, 0);
+    CHECK_EQ_INT(eco.harsh_brake, 0);
+    CHECK(eco.dist_km > 3.0 && eco.dist_km < 3.4);        /* 2 min at 80 plus the ends */
+    float avg = 0.0f, now = 0.0f;
+    CHECK(eco_avg_l100(&eco, &avg) && avg > 5.0f && avg < 7.0f);
+    CHECK(!eco_now_l100(&eco, &now));                     /* stopped now */
+    (void)t;
+}
+
+static void test_eco_harsh_and_idle(void)
+{
+    eco_reset(&eco);
+    uint64_t t = eco_drive(1000, 2, eco_stopped, 750, 4.0f);
+    t = eco_drive(t, 20, eco_hard_up, 3600, 25.0f);       /* hard, and over 3500 rpm */
+    CHECK_EQ_INT(eco.harsh_accel, 1);                     /* one event, not one per reading */
+    t = eco_drive(t, 20, eco_cruise, 2000, 15.0f);
+    float now = 0.0f;
+    CHECK(eco_now_l100(&eco, &now) && now > 6.0f && now < 6.4f);   /* 4.93 L/h at 80 */
+    t = eco_drive(t, 20, eco_hard_down, 1500, 2.0f);
+    CHECK_EQ_INT(eco.harsh_brake, 1);
+    CHECK(eco.tip == ECO_TIP_BRAKE);
+    CHECK(eco_score(&eco) < 80);
+    CHECK(!eco_ranked(&eco));                             /* too short */
+
+    /* Many readings a second in whole km/h (a fast CAN car) are not jolts:
+     * a gentle 1 m/s^2 read every 50 ms still scores 100. */
+    eco_reset(&eco);
+    for (int k = 0; k <= 440; k++) {
+        eco_input_t in = { true, true, true, false, false, floorf(k * 0.05f * 3.6f), 2000, 10, 0, 0 };
+        eco_step(&eco, 1000 + (uint64_t)k * 50, &in, 0.0f);
+    }
+    CHECK_EQ_INT(eco.harsh_accel, 0);
+    CHECK_EQ_INT(eco_score(&eco), 100);
+
+    /* Two minutes stopped, engine running: the first one is free. */
+    eco_reset(&eco);
+    eco_drive(1000, 241, eco_stopped, 750, 4.0f);
+    CHECK_EQ_INT(eco_score(&eco), 65);
+    CHECK(eco.tip == ECO_TIP_IDLE);
+    CHECK(eco.fuel_l > 0.0);
+
+    /* A gap in the readings isn't counted; engine off isn't scored. */
+    eco_reset(&eco);
+    eco_input_t in = { true, true, true, false, false, 0, 0, 0, 0, 0 };
+    eco_step(&eco, 1000, &in, 0.0f);
+    eco_step(&eco, 1500, &in, 0.0f);
+    CHECK(eco.points_s == 0.0);
+    in.rpm = 750;
+    eco_step(&eco, 9000, &in, 0.0f);
+    CHECK(eco.points_s == 0.0 && eco.idle_s == 0.0);
+    CHECK_EQ_STR(eco_rank(89), "A");
+    CHECK_EQ_STR(eco_rank(64), "C");
+}
+
 void suite_track(void)
 {
+    RUN_TEST(test_eco_fuel);
+    RUN_TEST(test_eco_smooth_trip);
+    RUN_TEST(test_eco_harsh_and_idle);
     RUN_TEST(test_rev_sync_game);
     RUN_TEST(test_rev_sync_locks);
     RUN_TEST(test_gmeter_flat);

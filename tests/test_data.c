@@ -63,6 +63,33 @@ static void test_config_car_make(void)
     remove(path);
 }
 
+static void test_config_engine(void)
+{
+    gb_config_t c;
+    config_defaults(&c);
+    CHECK_EQ_INT(c.engine_dl, 0);
+    CHECK_EQ_INT(config_parse(&c, "[vehicle]\nengine = 3.5\n"), 0);
+    CHECK_EQ_INT(c.engine_dl, 35);
+    CHECK_EQ_INT(config_parse(&c, "[vehicle]\nengine = 12\n[vehicle]\nengine = big\n"), 2);
+    CHECK_EQ_INT(c.engine_dl, 35);
+    CHECK_EQ_INT(config_parse(&c, "[vehicle]\nengine = Auto\n"), 0);
+    CHECK_EQ_INT(c.engine_dl, 0);
+    char path[] = "gaugeboy_test_engine.tmp.ini";
+    c.engine_dl = 16;
+    CHECK(config_save(&c, path));
+    gb_config_t back;
+    int w = -1;
+    CHECK(config_load(&back, path, &w));
+    CHECK_EQ_INT(w, 0);
+    CHECK_EQ_INT(back.engine_dl, 16);
+    remove(path);
+    CHECK_EQ_INT(config_engine_step(0, 1), 20);
+    CHECK_EQ_INT(config_engine_step(0, -1), 20);
+    CHECK_EQ_INT(config_engine_step(35, 1), 36);
+    CHECK_EQ_INT(config_engine_step(6, -1), 0);
+    CHECK_EQ_INT(config_engine_step(80, 1), 80);
+}
+
 static void test_config_shift_rpm(void)
 {
     gb_config_t c;
@@ -439,6 +466,7 @@ void suite_data(void)
     RUN_TEST(test_config_defaults);
     RUN_TEST(test_config_wifi_slot);
     RUN_TEST(test_config_car_make);
+    RUN_TEST(test_config_engine);
     RUN_TEST(test_config_shift_rpm);
     RUN_TEST(test_config_vehicle_and_units);
     RUN_TEST(test_config_live_pids);

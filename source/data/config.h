@@ -17,6 +17,7 @@
  *   make = auto            ; or a make name (e.g. Geo) for cars with no VIN over OBD
  *   model = auto           ; or a model name (e.g. Tracker), typed in SETUP
  *   year = auto            ; or a model year (1980-2100) for cars with no VIN
+ *   engine = auto          ; or the engine size in litres (0.6-8.0), for fuel estimates
  *
  *   [display]
  *   units = us             ; or metric
@@ -51,6 +52,7 @@ typedef struct {
     char car_make[24];       /* "" = auto (from the VIN), else a DTC make name */
     char car_model[24];      /* "" = auto (from the VIN), else typed in SETUP */
     uint16_t car_year;       /* 0 = auto (from the VIN), else a model year */
+    uint16_t engine_dl;      /* engine size in tenths of a litre, 0 = unknown */
     bool metric;             /* units: false = US, true = metric */
     uint8_t live_pids[CONFIG_LIVE_PIDS_MAX];  /* LIVE screen PIDs, in order */
     uint8_t live_pid_count;
@@ -62,6 +64,9 @@ typedef struct {
 #define CONFIG_YEAR_MIN 1980
 #define CONFIG_YEAR_MAX 2100
 #define CONFIG_SHIFT_DEFAULT 6000
+#define CONFIG_ENGINE_MIN_DL 6
+#define CONFIG_ENGINE_MAX_DL 80
+#define CONFIG_ENGINE_FIRST_DL 20   /* where the stepper starts from unknown */
 #define CONFIG_SHIFT_MIN 2000
 #define CONFIG_SHIFT_MAX 9900
 
@@ -93,5 +98,9 @@ int config_year_step(int year, int dir, int last);
 
 /* True for a dotted-quad IPv4 address such as "192.168.0.10". */
 bool config_valid_ipv4(const char *s);
+
+/* The SETUP engine size stepper (tenths of a litre): 0 (unknown) steps
+ * to 2.0 L, then by 0.1 L between 0.6 and 8.0; below 0.6 is unknown again. */
+int config_engine_step(int dl, int dir);
 
 #endif

@@ -16,6 +16,7 @@ void config_defaults(gb_config_t *cfg)
     cfg->car_make[0] = '\0';
     cfg->car_model[0] = '\0';
     cfg->car_year = 0;
+    cfg->engine_dl = 0;
     cfg->metric = false;
     static const uint8_t live[] = CONFIG_LIVE_DEFAULT_PIDS;
     memcpy(cfg->live_pids, live, sizeof live);
@@ -239,6 +240,19 @@ int config_parse(gb_config_t *cfg, const char *text)
                 }
                 continue;
             }
+            if (strcmp(key, "engine") == 0) {
+                char *end = NULL;
+                double l = strtod(value, &end);
+                if (value[0] == '\0' || is_auto) {
+                    cfg->engine_dl = 0;
+                } else if (end != NULL && *end == '\0' && l * 10.0 >= CONFIG_ENGINE_MIN_DL - 0.01 &&
+                           l * 10.0 <= CONFIG_ENGINE_MAX_DL + 0.01) {
+                    cfg->engine_dl = (uint16_t)(l * 10.0 + 0.5);
+                } else {
+                    warnings++;
+                }
+                continue;
+            }
             if (strcmp(key, "model") == 0) {
                 size_t n = strlen(value);
                 bool ok = n < sizeof cfg->car_model;
@@ -341,6 +355,11 @@ bool config_save(const gb_config_t *cfg, const char *path)
                  (unsigned)cfg->live_pids[i]);
     }
     char year[8] = "auto";
+    char engine[8] = "auto";
+    if (cfg->engine_dl != 0) {
+        snprintf(engine, sizeof engine, "%u.%u", (unsigned)(cfg->engine_dl / 10) % 100u,
+                 (unsigned)(cfg->engine_dl % 10));
+    }
     if (cfg->car_year != 0) {
         snprintf(year, sizeof year, "%u", (unsigned)cfg->car_year);
     }
@@ -367,12 +386,14 @@ bool config_save(const gb_config_t *cfg, const char *path)
         "; make: \"auto\" reads it from the VIN; set a make (e.g. Geo) for cars\n"
         "; that don't report a VIN, so DIAG shows that make's own code meanings.\n"
         "; model and year: \"auto\" reads them from the VIN; set them (SETUP >\n"
-        "; VEHICLE) for cars that don't report a VIN.\n"
+        "; VEHICLE) for cars that don't report a VIN. engine: the engine size in\n"
+        "; litres (e.g. 3.5), for TRACK's fuel estimates on cars without a MAF.\n"
         "\n"
         "[vehicle]\n"
         "make = %s\n"
         "model = %s\n"
         "year = %s\n"
+        "engine = %s\n"
         "\n"
         "; units: us (mph, F, psi, inHg) or metric (km/h, C, kPa).\n"
         "\n"
@@ -393,7 +414,7 @@ bool config_save(const gb_config_t *cfg, const char *path)
         "view = %s\n",
         cfg->adapter_host, (unsigned)cfg->adapter_port, slot,
         cfg->car_make[0] != '\0' ? cfg->car_make : "auto",
-        cfg->car_model[0] != '\0' ? cfg->car_model : "auto", year,
+        cfg->car_model[0] != '\0' ? cfg->car_model : "auto", year, engine,
         cfg->metric ? "metric" : "us", (unsigned)cfg->shift_rpm, pids, cfg->live_view);
     bool ok = rc > 0;
     if (fclose(f) != 0) {
@@ -444,4 +465,16 @@ int config_year_step(int year, int dir, int last)
         return 0;
     }
     return y;
+}
+
+int config_engine_step(int dl, int dir)
+{
+    if (dl == 0) {
+        return CONFIG_ENGINE_FIRST_DL;
+    }
+    dl += dir > 0 ? 1 : -1;
+    if (dl < CONFIG_ENGINE_MIN_DL) {
+        return 0;
+    }
+    return dl > CONFIG_ENGINE_MAX_DL ? CONFIG_ENGINE_MAX_DL : dl;
 }

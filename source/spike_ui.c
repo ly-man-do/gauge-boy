@@ -32,6 +32,7 @@
 #include "data/trim_view.h"
 #include "data/wifi_guide.h"
 #include "data/textlog.h"
+#include "fun/eco.h"
 #include "fun/gmeter.h"
 #include "fun/rev_sync.h"
 #include "fun/shift_light.h"
@@ -127,6 +128,9 @@
 #define BTN_UNITS         (-117) /* UI: Other: US / metric */
 #define BTN_ABOUT         (-118) /* UI: Other -> About */
 #define BTN_NONE          (-119) /* a bar that only shows a value */
+#define BTN_ENGINE_BAR    (-141) /* Vehicle: the engine size (shows the value) */
+#define BTN_ENGINE_PREV   (-142) /* UI: Vehicle: engine size down / up */
+#define BTN_ENGINE_NEXT   (-143)
 #define BTN_TRACK_TA      (-126) /* UI: TRACK -> TIME ATTACK */
 #define BTN_TA_WARN_OK    (-127) /* UI: TIME ATTACK closed-course notice: OK */
 #define BTN_TA_WARN_NO    (-128) /*     ... BACK */
@@ -140,7 +144,9 @@
 #define BTN_GM_RESET      (-138) /* UI: G-METER: reset the peaks (parked) */
 #define BTN_TRACK_REVSYNC (-139) /* UI: TRACK -> REV SYNC */
 #define BTN_RS_START      (-140) /* UI: REV SYNC: START / AGAIN */
-#define BTN_RS_BEST       116    /* worker: Rev Sync high score: save the new one, read it */
+#define BTN_RS_BEST       116    /* worker: high score (shared.hs_run): save the new one, read it */
+#define BTN_TRACK_ECO     (-144) /* UI: TRACK -> ECO CHALLENGE */
+#define BTN_ECO_RESET     (-145) /* UI: ECO: a new trip (parked) */
 
 /* Bottom-screen buttons in 8x8 console cells: 12-13x6 cells = 96-104x48 px.
  * The third row has the Wi-Fi slot buttons, the last one the log ones. */
@@ -244,13 +250,16 @@ static const button_t wifi_buttons[] = {
 #define WIFI_BUTTON_COUNT ((int)(sizeof wifi_buttons / sizeof wifi_buttons[0]))
 
 static const button_t vehicle_buttons[] = {
-    { "Make",              BTN_MAKE_SCREEN, 0,  2, 39, 5 },
-    { "Model",             BTN_MODEL_EDIT,  0,  8, 39, 5 },
-    { "Year",              BTN_NONE,        0, 14, 27, 5 },
-    { "<",                 BTN_YEAR_PREV,   28, 14, 5, 5 },
-    { ">",                 BTN_YEAR_NEXT,   34, 14, 5, 5 },
-    { "VIN (tap to read)", BTN_DIAG_SCAN,   0, 20, 39, 5 },
-    { "BACK",              BTN_BACK,        0, 25, 8, 5 },
+    { "Make",   BTN_MAKE_SCREEN, 0,  2, 39, 5 },
+    { "Model",  BTN_MODEL_EDIT,  0,  7, 39, 5 },
+    { "Year",   BTN_NONE,        0, 12, 27, 5 },
+    { "<",      BTN_YEAR_PREV,   28, 12, 5, 5 },
+    { ">",      BTN_YEAR_NEXT,   34, 12, 5, 5 },
+    { "Engine", BTN_ENGINE_BAR,  0, 17, 27, 5 },
+    { "<",      BTN_ENGINE_PREV, 28, 17, 5, 5 },
+    { ">",      BTN_ENGINE_NEXT, 34, 17, 5, 5 },
+    { "VIN",    BTN_DIAG_SCAN,   9, 25, 30, 5 },   /* tap to read */
+    { "BACK",   BTN_BACK,        0, 25, 8, 5 },
 };
 #define VEHICLE_BUTTON_COUNT ((int)(sizeof vehicle_buttons / sizeof vehicle_buttons[0]))
 
@@ -282,7 +291,8 @@ typedef enum {
     SCREEN_TIME_ATTACK,        /* TRACK > TIME ATTACK: speed alone, timed runs */
     SCREEN_SHIFT,              /* TRACK > SHIFT LIGHT: RPM, LEDs on the top screen */
     SCREEN_GMETER,             /* TRACK > G-METER: the 3DS accelerometer */
-    SCREEN_REVSYNC             /* TRACK > REV SYNC: parked-only throttle blip game */
+    SCREEN_REVSYNC,            /* TRACK > REV SYNC: parked-only throttle blip game */
+    SCREEN_ECO                 /* TRACK > ECO CHALLENGE: fuel economy and a smooth-driving score */
 } screen_t;
 
 /* TRACK: one button per mode built so far, then BACK. */
@@ -291,6 +301,7 @@ static const button_t track_buttons[] = {
     { "SHIFT LIGHT", BTN_TRACK_SHIFT, 20, 4, 19, 5 },
     { "G-METER",     BTN_TRACK_GMETER,  0,  10, 19, 5 },
     { "REV SYNC",    BTN_TRACK_REVSYNC, 20, 10, 19, 5 },
+    { "ECO",         BTN_TRACK_ECO,     0,  16, 19, 5 },
     { "BACK",        BTN_BACK,     0, 25, 8, 5 },
 };
 #define TRACK_BUTTON_COUNT ((int)(sizeof track_buttons / sizeof track_buttons[0]))
@@ -319,6 +330,13 @@ static const button_t gm_buttons[] = {
     { "BACK",        BTN_BACK,     0,  25, 8, 5 },
 };
 #define GM_BUTTON_COUNT ((int)(sizeof gm_buttons / sizeof gm_buttons[0]))
+
+/* ECO CHALLENGE: RESET TRIP, then BACK. */
+static const button_t eco_buttons[] = {
+    { "RESET TRIP", BTN_ECO_RESET, 0, 19, 19, 5 },
+    { "BACK",       BTN_BACK,      0, 25, 8, 5 },
+};
+#define ECO_BUTTON_COUNT ((int)(sizeof eco_buttons / sizeof eco_buttons[0]))
 
 /* REV SYNC: START, then BACK. */
 static const button_t rs_buttons[] = {
@@ -567,6 +585,8 @@ static struct {
     bool shift_on;             /* SHIFT LIGHT: RPM (and speed slowly), no ATRV */
     bool gmeter_on;            /* G-METER: speed, no ATRV */
     bool revsync_on;           /* REV SYNC: RPM and speed, no ATRV */
+    bool eco_on;               /* ECO: speed, RPM, MAF / MAP, intake temperature, no ATRV */
+    const char *hs_run;        /* UI: which high score BTN_RS_BEST handles ("revsync", "eco") */
     int rs_save_score;         /* UI: a finished game's score for the worker, 0 = none */
     bool rs_car_known;         /* worker: the high score can be saved */
     bool rs_have_best;
@@ -714,9 +734,14 @@ static void set_vehicle(spike_t *s)
     if (copy.car_year != 0) {
         snprintf(year, sizeof year, "%u", (unsigned)copy.car_year);
     }
-    spike_logf(s, "Vehicle: make %s, model %s, year %s%s%s",
+    char engine[16] = "unknown";
+    if (copy.engine_dl != 0) {
+        snprintf(engine, sizeof engine, "%u.%u L", (unsigned)(copy.engine_dl / 10) % 100u,
+                 (unsigned)(copy.engine_dl % 10));
+    }
+    spike_logf(s, "Vehicle: make %s, model %s, year %s, engine %s%s%s",
                copy.car_make[0] != '\0' ? copy.car_make : "Auto",
-               copy.car_model[0] != '\0' ? copy.car_model : "Auto", year,
+               copy.car_model[0] != '\0' ? copy.car_model : "Auto", year, engine,
                vin_wins ? "; this car's VIN gives its make, so that is used" : "",
                saved ? "" : " (! not saved to config.ini)");
 }
@@ -1618,7 +1643,8 @@ static void live_poll(spike_t *s)
     uint32_t periods[OBD_LIVE_MAX];
     int n = shared.live_want_count;
     bool speed_only = shared.ta_on;
-    bool no_volts = shared.ta_on || shared.shift_on || shared.gmeter_on || shared.revsync_on;
+    bool no_volts = shared.ta_on || shared.shift_on || shared.gmeter_on || shared.revsync_on ||
+                    shared.eco_on;
     memcpy(pids, shared.live_want, sizeof pids);
     memcpy(periods, shared.live_want_period, sizeof periods);
     LightLock_Unlock(&shared.lock);
@@ -1735,14 +1761,16 @@ static void rs_best_io(spike_t *s)
                    sizeof key);
     int score = shared.rs_save_score;
     shared.rs_save_score = 0;
+    const char *run = shared.hs_run != NULL ? shared.hs_run : "revsync";
     LightLock_Unlock(&shared.lock);
+    bool eco_run = strcmp(run, "eco") == 0;
     read_small_file(BESTS_PATH, text, sizeof text);
     bool record = false, saved = false;
     if (score > 0 && key[0] != '\0') {
         char date[24];
         now_text(date, sizeof date);
         date[10] = '\0';
-        size_t n = track_bests_offer_high(text, key, "revsync", (float)score, date, &record, out,
+        size_t n = track_bests_offer_high(text, key, run, (float)score, date, &record, out,
                                           sizeof out);
         if (record && n > 0) {
             FILE *f = fopen(BESTS_PATH, "wb");
@@ -1754,11 +1782,12 @@ static void rs_best_io(spike_t *s)
         }
     }
     if (score > 0) {
-        spike_logf(s, "TRACK: Rev Sync %d points, rank %s%s", score, rs_rank(score),
+        spike_logf(s, "TRACK: %s %d points, rank %s%s", eco_run ? "Eco Challenge" : "Rev Sync",
+                   score, eco_run ? eco_rank(score) : rs_rank(score),
                    record ? (saved ? ", new high score" : ", new high score (! not saved)") : "");
     }
     track_best_t best;
-    bool have = key[0] != '\0' && track_bests_get(text, key, "revsync", &best);
+    bool have = key[0] != '\0' && track_bests_get(text, key, run, &best);
     LightLock_Lock(&shared.lock);
     shared.rs_car_known = key[0] != '\0';
     shared.rs_have_best = have;
@@ -2380,6 +2409,7 @@ static void revsync_start(int shift_rpm, uint64_t now)
     LightLock_Lock(&shared.lock);
     shared.ta_on = shared.shift_on = shared.gmeter_on = false;
     shared.revsync_on = true;
+    shared.hs_run = "revsync";
     shared.rs_record = false;
     live_start_locked(pids, periods, 2);
     LightLock_Unlock(&shared.lock);
@@ -2423,6 +2453,63 @@ static bool revsync_frame(uint64_t now)
     }
     rs_tick(&revsync, now);
     return before != RS_DONE && revsync.state == RS_DONE;
+}
+
+/* ECO CHALLENGE: speed and RPM fast, the air flow (MAF, or MAP for
+ * speed-density) fast, intake air temperature slowly. */
+static eco_t eco;
+
+static void eco_start(void)
+{
+    static const uint8_t pids[] = { 0x0D, 0x0C, 0x10, 0x0B, 0x87, 0x0F };
+    static const uint32_t periods[] = { 0, 0, 0, 0, 0, 2000 };
+    eco_reset(&eco);
+    LightLock_Lock(&shared.lock);
+    shared.ta_on = shared.shift_on = shared.gmeter_on = shared.revsync_on = false;
+    shared.eco_on = true;
+    shared.hs_run = "eco";
+    shared.rs_record = false;
+    live_start_locked(pids, periods, (int)sizeof pids);
+    LightLock_Unlock(&shared.lock);
+    LightEvent_Signal(&shared.wake);
+}
+
+static void eco_stop(void)
+{
+    LightLock_Lock(&shared.lock);
+    shared.eco_on = false;
+    shared.live_on = false;
+    shared.live_ui_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
+/* ECO, every frame: on each new speed reading, a step with the latest
+ * other values. */
+static void eco_frame(float engine_l)
+{
+    static uint32_t speed_seen;
+    eco_input_t in;
+    memset(&in, 0, sizeof in);
+    uint64_t at = 0;
+    LightLock_Lock(&shared.lock);
+    const obd_live_t *lv = &shared.live;
+    const obd_live_pid_t *v = shared.live_have ? obd_live_get(lv, 0x0D) : NULL;
+    bool fresh = v != NULL && v->have && v->reads != speed_seen;
+    if (fresh) {
+        speed_seen = v->reads;
+        at = v->at_ms;
+        in.have_speed = true;
+        in.kmh = v->value;
+        in.have_rpm = obd_live_value(lv, 0x0C, &in.rpm);
+        in.have_maf = obd_live_value(lv, 0x10, &in.maf_gs);
+        in.have_map = obd_live_value(lv, 0x0B, &in.map_kpa) ||
+                      obd_live_value(lv, 0x87, &in.map_kpa);
+        in.have_iat = obd_live_value(lv, 0x0F, &in.iat_c);
+    }
+    LightLock_Unlock(&shared.lock);
+    if (fresh) {
+        eco_step(&eco, at, &in, engine_l);
+    }
 }
 
 /* The car is moving (speed read in the last few seconds above 0). */
@@ -2489,9 +2576,11 @@ static void draw_track_top(int busy, bool connected)
         "",
         "REV SYNC     blip the throttle to a target RPM",
         "             (parked only)",
+        "ECO          fuel economy and a score for",
+        "             smooth driving",
         "",
-        "Coming in version 0.4: Eco Challenge, garage",
-        "card, achievements and attract mode.",
+        "Coming in version 0.4: garage card,",
+        "achievements and attract mode.",
         "",
         "For closed courses, track days and passengers",
         "only. Nothing here needs a touch while moving:",
@@ -2996,6 +3085,129 @@ static void draw_revsync_top(int busy, bool connected, bool full)
     print_row(TOP_ROWS - 1, TOP_COLS, "Parked only: it stops if the car moves.");
 }
 
+/* ECO CHALLENGE top screen: the score and rank, economy now and for the
+ * trip, the trip's numbers, a tip. */
+static void draw_eco_top(int busy, bool connected, const gb_config_t *cfg, uint64_t now,
+                         bool full)
+{
+    static obd_live_t lv;
+    LightLock_Lock(&shared.lock);
+    lv = shared.live;
+    bool have_live = shared.live_have;
+    bool car_known = shared.rs_car_known, have_best = shared.rs_have_best;
+    track_best_t best = shared.rs_best;
+    char msg[sizeof shared.live_msg];
+    memcpy(msg, shared.live_msg, sizeof msg);
+    LightLock_Unlock(&shared.lock);
+
+    char header[TOP_COLS + 1], line[TOP_COLS + 32];
+    spike_format_header(header, sizeof header, connected, busy);
+    consoleSelect(&top_console);
+    printf(full ? "\x1b[0m\x1b[2J" : "\x1b[0m");
+    print_row(0, TOP_COLS, header);
+    print_row(1, TOP_COLS, "-------------------------------------------------");
+    bool maf = have_live && obd_live_get(&lv, 0x10) != NULL;
+    bool map = have_live && (obd_live_get(&lv, 0x0B) != NULL || obd_live_get(&lv, 0x87) != NULL);
+    if (!have_live) {
+        snprintf(line, sizeof line, "ECO CHALLENGE");
+    } else if (maf) {
+        snprintf(line, sizeof line, "ECO CHALLENGE   fuel from the MAF");
+    } else if (map && cfg->engine_dl != 0) {
+        snprintf(line, sizeof line, "ECO CHALLENGE   fuel from MAP, %u.%u L",
+                 (unsigned)(cfg->engine_dl / 10), (unsigned)(cfg->engine_dl % 10));
+    } else {
+        snprintf(line, sizeof line, "ECO CHALLENGE   no fuel estimate");
+    }
+    print_row(2, TOP_COLS, line);
+    print_row(3, TOP_COLS, "");
+
+    int score = eco_score(&eco);
+    bool ranked = eco_ranked(&eco);
+    const char *rank = eco_rank(score);
+    const char *color = !ranked ? "\x1b[47m" : rank[0] == 'S' ? "\x1b[45m"
+                      : rank[0] == 'A' ? "\x1b[42m" : rank[0] == 'B' ? "\x1b[43m" : "\x1b[41m";
+    for (int r = 4; r < 10; r++) {
+        print_row(r, TOP_COLS, "");
+    }
+    snprintf(line, sizeof line, "%d", score);
+    big_print(4, 6, line, color);
+    if (ranked) {
+        printf("\x1b[%d;30HRANK %s", 5 + 1, rank);
+    } else {
+        printf("\x1b[%d;30HKeep driving:", 5 + 1);
+        printf("\x1b[%d;30Hranked after 1 min", 6 + 1);
+        printf("\x1b[%d;30Hand 0.5 km", 7 + 1);
+    }
+
+    bool us = !cfg->metric;
+    float l100 = 0.0f;
+    if (eco_now_l100(&eco, &l100)) {
+        if (us) {
+            snprintf(line, sizeof line, "Now   %5.1f mpg", (double)(ECO_L100_PER_MPG / l100));
+        } else {
+            snprintf(line, sizeof line, "Now   %5.1f L/100 km", (double)l100);
+        }
+    } else if (eco.have_lph) {
+        if (us) {
+            snprintf(line, sizeof line, "Now   %5.2f gal/h", (double)(eco.lph / ECO_L_PER_GAL));
+        } else {
+            snprintf(line, sizeof line, "Now   %5.2f L/h", (double)eco.lph);
+        }
+    } else {
+        snprintf(line, sizeof line, "Now   -");
+    }
+    print_row(10, TOP_COLS, line);
+    double dist = us ? eco.dist_km / 1.609344 : eco.dist_km;
+    double fuel = us ? eco.fuel_l / ECO_L_PER_GAL : eco.fuel_l;
+    if (eco_avg_l100(&eco, &l100)) {
+        if (us) {
+            snprintf(line, sizeof line, "Trip  %5.1f mpg   %.1f mi   %.2f gal",
+                     (double)(ECO_L100_PER_MPG / l100), dist, fuel);
+        } else {
+            snprintf(line, sizeof line, "Trip  %5.1f L/100 km   %.1f km   %.2f L", (double)l100,
+                     dist, fuel);
+        }
+    } else {
+        snprintf(line, sizeof line, "Trip  %.1f %s", dist, us ? "mi" : "km");
+    }
+    print_row(11, TOP_COLS, line);
+    snprintf(line, sizeof line, "Driving %d:%02d   idling %d:%02d", (int)eco.moving_s / 60,
+             (int)eco.moving_s % 60, (int)eco.idle_s / 60, (int)eco.idle_s % 60);
+    print_row(12, TOP_COLS, line);
+    snprintf(line, sizeof line, "Hard starts %d   hard stops %d", eco.harsh_accel,
+             eco.harsh_brake);
+    print_row(13, TOP_COLS, line);
+    print_row(14, TOP_COLS, "");
+    if (eco.tip != ECO_TIP_NONE && now - eco.tip_ms < 10000) {
+        print_row(15, TOP_COLS, "");
+        printf("\x1b[%d;1H\x1b[33m%s\x1b[0m", 15 + 1, eco_tip_text(eco.tip));
+    } else {
+        print_row(15, TOP_COLS, "");
+    }
+    if (have_live && !maf && !(map && cfg->engine_dl != 0)) {
+        print_row(16, TOP_COLS, map ? "Set the engine size in SETUP > VEHICLE"
+                                    : "This car reports neither MAF nor MAP.");
+        print_row(17, TOP_COLS, map ? "for a fuel estimate; the score works now."
+                                    : "The score still works.");
+    } else {
+        print_row(16, TOP_COLS, msg);
+        print_row(17, TOP_COLS, "");
+    }
+    for (int r = 18; r < TOP_ROWS - 3; r++) {
+        print_row(r, TOP_COLS, "");
+    }
+    if (!car_known) {
+        print_row(TOP_ROWS - 3, TOP_COLS, "Best: not saved (car unknown)");
+    } else if (have_best) {
+        snprintf(line, sizeof line, "Best trip score %d  (%s)", (int)best.seconds, best.date);
+        print_row(TOP_ROWS - 3, TOP_COLS, line);
+    } else {
+        print_row(TOP_ROWS - 3, TOP_COLS, "Best trip score: none yet");
+    }
+    print_row(TOP_ROWS - 2, TOP_COLS, "Fuel figures are estimates.");
+    print_row(TOP_ROWS - 1, TOP_COLS, "Display only: no touch needed while moving.");
+}
+
 static void draw_ta_dialog(void)
 {
     static const char *const text[] = {
@@ -3411,7 +3623,15 @@ static void bar_value(int action, const gb_config_t *cfg, char *out, size_t len)
         break;
     case BTN_DIAG_SCAN:
         snprintf(out, len, "%s", shared.scanning ? "reading..." : d->have_vin ? d->vin
-                                                                              : "not read");
+                                                                              : "tap to read");
+        break;
+    case BTN_ENGINE_BAR:
+        if (cfg->engine_dl != 0) {
+            snprintf(out, len, "%u.%u L", (unsigned)(cfg->engine_dl / 10),
+                     (unsigned)(cfg->engine_dl % 10));
+        } else {
+            snprintf(out, len, "Unknown");
+        }
         break;
     case BTN_UNITS:
         snprintf(out, len, "%s", cfg->metric ? "Metric" : "US");
@@ -3539,12 +3759,21 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
     if (ui->screen == SCREEN_TRACK) {
         print_row(2, BOTTOM_COLS, "TRACK  Track modes");
         draw_list(track_buttons, TRACK_BUTTON_COUNT, now, busy, 0, false);
-        print_row(16, BOTTOM_COLS, "TIME ATTACK: 0-60, 60-0, 1/4 mile.");
-        print_row(17, BOTTOM_COLS, "SHIFT LIGHT: LEDs that flash at your");
-        print_row(18, BOTTOM_COLS, "shift point. G-METER: G-forces.");
-        print_row(19, BOTTOM_COLS, "REV SYNC: blip to a target RPM.");
-        print_row(21, BOTTOM_COLS, "More modes come in version 0.4.");
+        print_row(22, BOTTOM_COLS, "The top screen says what each one does.");
         print_row(23, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        return;
+    }
+    if (ui->screen == SCREEN_ECO) {
+        print_row(2, BOTTOM_COLS, "ECO CHALLENGE");
+        print_row(4, BOTTOM_COLS, "Drive smoothly for a high score:");
+        print_row(5, BOTTOM_COLS, "gentle starts and stops, RPM under");
+        print_row(6, BOTTOM_COLS, "2800, and no long idling (the first");
+        print_row(7, BOTTOM_COLS, "minute of a stop is free).");
+        print_row(9, BOTTOM_COLS, "Rank: S 90+, A 80+, B 65+, else C.");
+        print_row(10, BOTTOM_COLS, "The trip runs while this screen is");
+        print_row(11, BOTTOM_COLS, "open; BACK keeps a best score.");
+        print_row(16, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        draw_list(eco_buttons, ECO_BUTTON_COUNT, now, busy, 0, false);
         return;
     }
     if (ui->screen == SCREEN_REVSYNC) {
@@ -3725,7 +3954,7 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         for (int i = 0; i < count; i++) {
             const button_t *b = &list[i];
             bool active = flashing(b->action, now) || (b->action >= 0 && b->action == busy);
-            if (b->w < 39 && b->action != BTN_NONE) {
+            if (b->w < 20) {   /* < > BACK: buttons; the rest are bars with values */
                 draw_button(b, flashing(b->action, now), b->action >= 0 && b->action == busy);
                 continue;
             }
@@ -3734,9 +3963,9 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
             draw_bar(b, value, active);
         }
         if (ui->screen == SCREEN_SETUP_VEHICLE) {
-            printf("\x1b[27;11H%-28.28s", "Values from the VIN win;");
-            printf("\x1b[28;11H%-28.28s", "yours are for cars with no");
-            printf("\x1b[29;11H%-28.28s", "VIN. Tap a row to change it.");
+            print_row(22, BOTTOM_COLS, "Values from the VIN win; yours are for");
+            print_row(23, BOTTOM_COLS, "cars with no VIN. Engine: for TRACK's");
+            print_row(24, BOTTOM_COLS, "fuel estimate on cars without a MAF.");
         } else {
             printf("\x1b[28;11H%-28.28s", "L/R: scroll the log above");
         }
@@ -4209,6 +4438,25 @@ void spike_ui_run(void)
         if (ui.screen == SCREEN_GMETER) {
             gmeter_frame(now, &gm_raw);
         }
+        if (ui.screen == SCREEN_ECO) {
+            eco_frame((float)cfg.engine_dl / 10.0f);
+        }
+        if (ui.screen == SCREEN_ECO || ui.screen == SCREEN_REVSYNC) {
+            /* The car may be identified after the screen opened: read its
+             * best score again once it is. */
+            static bool asked;
+            LightLock_Lock(&shared.lock);
+            bool unknown = !shared.rs_car_known, have_car = shared.diag.have_vin ||
+                           cfg.car_make[0] != '\0' || cfg.car_model[0] != '\0';
+            LightLock_Unlock(&shared.lock);
+            if (unknown && have_car && !asked && worker != NULL) {
+                asked = true;
+                enqueue(BTN_RS_BEST);
+            }
+            if (!unknown) {
+                asked = false;
+            }
+        }
         if (ui.screen == SCREEN_REVSYNC) {
             static rs_state_t rs_drawn = RS_LOCKED;
             if (revsync_frame(now) && worker != NULL) {
@@ -4336,6 +4584,7 @@ void spike_ui_run(void)
             case SCREEN_SHIFT:     list = shift_buttons;     count = SHIFT_BUTTON_COUNT;     break;
             case SCREEN_GMETER:    list = gm_buttons;        count = GM_BUTTON_COUNT;        break;
             case SCREEN_REVSYNC:   list = rs_buttons;        count = RS_BUTTON_COUNT;        break;
+            case SCREEN_ECO:       list = eco_buttons;       count = ECO_BUTTON_COUNT;       break;
             case SCREEN_TEST:  break;
             }
             int i = ui.screen == SCREEN_HOME && home_gfx ? -1 : button_at(list, count, tp.px, tp.py);
@@ -4562,6 +4811,23 @@ void spike_ui_run(void)
                 shift_start();
                 bottom_full = top_dirty = true;
                 break;
+            case BTN_TRACK_ECO:
+                ui.screen = SCREEN_ECO;
+                eco_start();
+                if (worker != NULL) {
+                    enqueue(BTN_RS_BEST);   /* this car's best trip score */
+                }
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_ECO_RESET:
+                if (car_moving(now)) {
+                    ui.notice = "Reset the trip while parked.";
+                    notice_until = now + 3000;
+                    break;
+                }
+                eco_reset(&eco);
+                top_dirty = true;
+                break;
             case BTN_TRACK_REVSYNC:
                 ui.screen = SCREEN_REVSYNC;
                 revsync_start(cfg.shift_rpm, now);
@@ -4710,6 +4976,16 @@ void spike_ui_run(void)
                 }
                 bottom_full = top_dirty = true;   /* the keyboard covered both screens */
                 break;
+            case BTN_ENGINE_PREV:
+            case BTN_ENGINE_NEXT:
+                LightLock_Lock(&shared.lock);
+                cfg.engine_dl = (uint16_t)config_engine_step(cfg.engine_dl,
+                                                             action == BTN_ENGINE_NEXT ? 1 : -1);
+                LightLock_Unlock(&shared.lock);
+                if (worker != NULL) {
+                    enqueue(BTN_SET_VEHICLE);
+                }
+                break;
             case BTN_YEAR_PREV:
             case BTN_YEAR_NEXT: {
                 time_t t = time(NULL);
@@ -4751,6 +5027,19 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
+                if (ui.screen == SCREEN_ECO) {
+                    eco_stop();
+                    if (eco_ranked(&eco) && worker != NULL) {
+                        LightLock_Lock(&shared.lock);
+                        shared.hs_run = "eco";
+                        shared.rs_save_score = eco_score(&eco);
+                        LightLock_Unlock(&shared.lock);
+                        enqueue(BTN_RS_BEST);
+                    }
+                    ui.screen = SCREEN_TRACK;
+                    bottom_full = top_dirty = true;
+                    break;
+                }
                 if (ui.screen == SCREEN_REVSYNC) {
                     revsync_stop();
                     ui.screen = SCREEN_TRACK;
@@ -4934,7 +5223,7 @@ void spike_ui_run(void)
         /* TIME ATTACK: the countdown and the running time move on their own. */
         bool ta_due = (ui.screen == SCREEN_TIME_ATTACK && now - live_drawn_at >= 100) ||
                       ((ui.screen == SCREEN_SHIFT || ui.screen == SCREEN_GMETER ||
-                        ui.screen == SCREEN_REVSYNC) &&
+                        ui.screen == SCREEN_REVSYNC || ui.screen == SCREEN_ECO) &&
                        now - live_drawn_at >= 30);
 
         LightLock_Lock(&shared.lock);
@@ -4970,6 +5259,9 @@ void spike_ui_run(void)
                        : !live_screen && diag_version != drawn_diag_version)) {
             if (ui.screen == SCREEN_TIME_ATTACK) {
                 draw_ta_top(busy, connected, cfg.metric, now);
+                live_drawn_at = now;
+            } else if (ui.screen == SCREEN_ECO) {
+                draw_eco_top(busy, connected, &cfg, now, top_dirty);
                 live_drawn_at = now;
             } else if (ui.screen == SCREEN_REVSYNC) {
                 draw_revsync_top(busy, connected, top_dirty);
