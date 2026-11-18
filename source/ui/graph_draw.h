@@ -5,7 +5,7 @@
  * LOG's graph replay on the top screen, drawn with citro2d (3DS only):
  * one value against time, with min / max per pixel column, axes, labels
  * and the window's min / max / average. A plain look; the toy style comes
- * in M4. The top screen is otherwise the text console: the screen after
+ * in M5. The top screen is otherwise the text console: the screen after
  * the graph clears it.
  */
 

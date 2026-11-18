@@ -2,7 +2,7 @@
 #define GAUGEBOY_LIVE_VIEW_H
 
 /*
- * LIVE screen text (M2 text dashboard; the toy-like gauges come in M4) and
+ * LIVE screen text (M2 text dashboard; the toy-like gauges come in M5) and
  * the PID choice behind its toggles. Platform-free.
  */
 

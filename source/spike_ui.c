@@ -3336,7 +3336,7 @@ void spike_ui_run(void)
                 }
                 break;
             case BTN_MENU_FUN:
-                ui.notice = "FUN: fun modes come in version 0.6";
+                ui.notice = "FUN: track modes come in version 0.4";
                 notice_until = now + 3000;
                 break;
             case BTN_TAB_STORED:
