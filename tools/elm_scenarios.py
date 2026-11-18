@@ -16,6 +16,8 @@ motorbike. Gauge Boy's test cars are not CAN, so this adds:
              pressure in PID 87 (idle vacuum and boost), baro in PID 33.
              Built on the emulator's own CAN 'car' scenario, so combined
              requests ("010C0D05...") are answered too.
+  track      the ridgeline with its speed going round a 50 s loop (stop,
+             0-130 km/h, cruise, hard stop) for testing Time Attack.
 
 Replies are what an ELM327 prints with headers off (ATH0), which is how
 Gauge Boy runs the adapter: data bytes only, one line per frame, no CAN
@@ -29,6 +31,7 @@ Run through tools/run-emulator.sh (ELM_SCENARIO=ridgeline ...), or directly:
 import copy
 import re
 import sys
+import time
 
 from elm import __main__ as elm_main
 from elm.obd_message import ObdMessage
@@ -212,6 +215,44 @@ def ascent():
 
 
 SCENARIOS["ascent"] = ascent()
+
+
+# Time Attack test loop (50 s, repeating): stopped 12 s, 0-130 km/h at
+# 3 m/s^2 (10.8 km/h a second), 6 s at 130, then a 30 km/h-a-second stop.
+# Expected: 0-60 mph 8.94 s, 0-100 km/h 9.26 s, 60-0 mph 3.22 s / 43 m,
+# 100-0 km/h 3.33 s / 46 m, 1/4 mile 17.2 s at 130 km/h.
+TRACK_LOOP_S = 50.0
+_track_t0 = time.monotonic()
+
+
+def track_kmh(t):
+    t %= TRACK_LOOP_S
+    top = 130.0
+    accel_end = 12.0 + top / 10.8
+    brake_at = accel_end + 6.0
+    if t < 12.0:
+        return 0.0
+    if t < accel_end:
+        return (t - 12.0) * 10.8
+    if t < brake_at:
+        return top
+    return max(0.0, top - (t - brake_at) * 30.0)
+
+
+def track_speed(self, cmd, pid, uc_val):
+    kmh = int(track_kmh(time.monotonic() - _track_t0))
+    return ST("41 0D %02X" % min(kmh, 255))
+
+
+def track():
+    """The ridgeline with its speed going round the test loop above."""
+    s = copy.deepcopy(SCENARIOS["ridgeline"])
+    s[default_key("010D")] = {"Request": "^010D[0-9]?$", "Descr": "Vehicle speed (test loop)",
+                              "ResponseHeader": track_speed, "Response": ""}
+    return s
+
+
+SCENARIOS["track"] = track()
 
 # A freeze frame for the j1850 truck's stored P0171 (Mode 02, frame 0):
 # running lean, warm, at idle.

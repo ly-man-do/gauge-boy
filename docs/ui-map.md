@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, FUN renamed TRACK (gauge-boy-356.3; M4 in progress)
+**As of:** 2026-11-18, TRACK > TIME ATTACK (gauge-boy-356.4; M4 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -17,7 +17,18 @@ Gauge Boy
         ├── [LIVE  · Dash gauges]    → LIVE view list
         ├── [DIAG  · Codes & CEL]    → DIAG
         ├── [TRIM  · Fuel trims]     → TRIM (starts polling)
-        ├── [TRACK · Track modes]    → notice "track modes come in version 0.4"
+        ├── [TRACK · Track modes]    → TRACK
+        │   ├── TRACK                (top: the modes, closed-course rules)
+        │   │   ├── [TIME ATTACK]    → closed-course notice (once a session), then TIME ATTACK
+        │   │   │                      notice: [BACK] → TRACK [B]   [I UNDERSTAND] → TIME ATTACK
+        │   │   └── [BACK]           → HOME                                       [B]
+        │   └── TIME ATTACK          (polls speed alone; top: run, speed readings a second,
+        │       │                     state in big text: stop the car / 3 2 1 / GO! / time /
+        │       │                     result with NEW RECORD!, speed, this car's best)
+        │       ├── [0-60] [60-0] [1/4 MILE]   pick the run (0-100 / 100-0 in metric);
+        │       │                     green = picked; refused while moving ("Pick a run
+        │       │                     while parked."); starts and re-arms by itself
+        │       └── [BACK]           → TRACK (stops polling)                      [B]
         ├── [LOG   · Record drives]  → LOG (lists the drives on the SD card)
         ├── [SETUP · Settings]       → SETUP
         └── [START Close bar]        → closes Gauge Boy            [START]

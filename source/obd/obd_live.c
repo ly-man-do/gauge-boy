@@ -340,7 +340,7 @@ obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trac
         lv->started_ms = t0;
     }
 
-    if (!lv->volts_failed && (!lv->have_volts || t0 - lv->volts_at_ms >= OBD_LIVE_VOLTS_MS)) {
+    if (!lv->volts_failed && !lv->no_volts && (!lv->have_volts || t0 - lv->volts_at_ms >= OBD_LIVE_VOLTS_MS)) {
         return read_volts(lv, elm, t0, trace, ctx);
     }
 

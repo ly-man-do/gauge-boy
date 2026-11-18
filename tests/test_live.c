@@ -100,6 +100,25 @@ static void test_live_volts_again_after_5_s(void)
     CHECK_EQ_INT(f.unexpected_writes, 0);
 }
 
+static void test_live_no_volts(void)
+{
+    /* Time Attack: speed alone, never ATRV in between. */
+    static const uint8_t car[] = { 0x0D, 0 };
+    setup(car);
+    static const uint8_t want[] = { 0x0D };
+    obd_live_init(&lv, &link, want, 1);
+    lv.no_volts = true;
+    for (int i = 0; i < 6; i++) {
+        fake_io_reply(&f, "010D", "41 0D 32\r\r>", 1500, 0);
+    }
+    for (int i = 0; i < 6; i++) {
+        CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    }
+    CHECK(!lv.have_volts);
+    CHECK_EQ_INT(lv.pid[0].reads, 6);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+}
+
 static void test_live_drops_no_data_pids(void)
 {
     static const uint8_t car[] = { 0x0C, 0x0D, 0 };
@@ -714,6 +733,7 @@ void suite_live(void)
     RUN_TEST(test_live_init_keeps_supported_known_pids);
     RUN_TEST(test_live_round_robin_and_volts);
     RUN_TEST(test_live_volts_again_after_5_s);
+    RUN_TEST(test_live_no_volts);
     RUN_TEST(test_live_drops_no_data_pids);
     RUN_TEST(test_live_a_good_read_resets_misses);
     RUN_TEST(test_live_all_dropped_is_idle);

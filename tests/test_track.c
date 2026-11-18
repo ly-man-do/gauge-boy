@@ -1,0 +1,189 @@
+/* Time Attack timers and personal bests (source/fun). */
+#include <math.h>
+#include <string.h>
+
+#include "harness.h"
+#include "fun/time_attack.h"
+#include "fun/track_bests.h"
+
+static ta_t ta;
+
+/* Speed as the car reports it: whole km/h. */
+static float obd_kmh(double kmh)
+{
+    return kmh <= 0.0 ? 0.0f : (float)floor(kmh);
+}
+
+/* Feeds standing-still readings from t to before `until`, ticking too. */
+static uint64_t feed_still(uint64_t t, uint64_t until, uint64_t step)
+{
+    for (; t < until; t += step) {
+        ta_speed(&ta, t, 0.0f);
+        ta_tick(&ta, t);
+    }
+    return t;
+}
+
+static void test_ta_launch(void)
+{
+    ta_arm(&ta, TA_RUN_LAUNCH, false, 0);
+    CHECK_EQ_INT(ta.state, TA_STOP_FIRST);
+    uint64_t t = feed_still(0, 1200, 200);
+    CHECK_EQ_INT(ta.state, TA_COUNTDOWN);                 /* still for 1 s */
+    CHECK_EQ_INT(ta_countdown(&ta, ta.state_ms), 3);
+    CHECK_EQ_INT(ta_countdown(&ta, ta.state_ms + 2500), 1);
+    t = feed_still(t, 5200, 200);
+    CHECK_EQ_INT(ta.state, TA_GO);
+
+    /* Leaves at 5150 ms, 10 km/h a second; 60 mph (96.56 km/h) at 9.656 s. */
+    const double launch = 5150.0;
+    bool done = false;
+    for (; t < 30000 && !done; t += 230) {
+        done = ta_speed(&ta, t, obd_kmh((t - launch) * 0.01));
+    }
+    CHECK(done && ta.state == TA_DONE && ta.result.have);
+    CHECK(fabsf(ta.result.seconds - 9.656f) < 0.15f);
+    CHECK(ta.result.hz > 3.5f && ta.result.hz < 5.0f);
+
+    /* Stays on screen; re-arms after standing still again. */
+    uint64_t done_at = ta.state_ms;
+    t += 5000;
+    t = feed_still(t, t + 1200, 200);
+    CHECK(ta.state == TA_COUNTDOWN && ta.result.have);   /* the result is kept */
+    CHECK(ta.state_ms - done_at >= TA_REARM_MS);
+}
+
+static void test_ta_false_start_and_give_up(void)
+{
+    ta_arm(&ta, TA_RUN_LAUNCH, true, 0);
+    CHECK(fabsf(ta.target_kmh - 100.0f) < 0.01f);
+    uint64_t t = feed_still(0, 1400, 200);
+    CHECK_EQ_INT(ta.state, TA_COUNTDOWN);
+    ta_speed(&ta, t, 3.0f);                               /* moved during 3, 2, 1 */
+    CHECK_EQ_INT(ta.state, TA_STOP_FIRST);
+    CHECK(ta.note != NULL && strstr(ta.note, "False start") != NULL);
+
+    t = feed_still(t + 200, t + 6000, 200);
+    CHECK_EQ_INT(ta.state, TA_GO);
+    ta_speed(&ta, t, 5.0f);
+    ta_speed(&ta, t + 200, 9.0f);
+    CHECK_EQ_INT(ta.state, TA_RUNNING);
+    ta_speed(&ta, t + 400, 0.0f);                         /* stopped short */
+    CHECK_EQ_INT(ta.state, TA_STOP_FIRST);
+    CHECK(!ta.result.have);
+
+    /* Readings stop mid-run. */
+    t = feed_still(t + 600, t + 6000, 200);
+    ta_speed(&ta, t, 4.0f);
+    CHECK_EQ_INT(ta.state, TA_RUNNING);
+    CHECK(ta_tick(&ta, t + TA_GAP_MS + 1));
+    CHECK_EQ_INT(ta.state, TA_STOP_FIRST);
+    CHECK_EQ_STR(ta.note, "Speed readings stopped");
+
+    /* Stale zeros don't count as standing still. */
+    CHECK(!ta_tick(&ta, t + 20000));
+    CHECK_EQ_INT(ta.state, TA_STOP_FIRST);
+}
+
+static void test_ta_quarter(void)
+{
+    ta_arm(&ta, TA_RUN_QUARTER, false, 0);
+    uint64_t t = feed_still(0, 4400, 200);
+    CHECK_EQ_INT(ta.state, TA_GO);
+    /* 3 m/s^2 from 4520 ms: the 1/4 mile in 16.38 s at 49.1 m/s (176.9 km/h);
+     * 60 mph (26.82 m/s) at 8.94 s. */
+    const double launch = 4520.0;
+    bool done = false;
+    for (; t < 40000 && !done; t += 300) {
+        done = ta_speed(&ta, t, obd_kmh(t > launch ? (t - launch) / 1000.0 * 3.0 * 3.6 : 0.0));
+    }
+    CHECK(done && ta.result.have && ta.result.run == TA_RUN_QUARTER);
+    CHECK(fabsf(ta.result.seconds - 16.38f) < 0.2f);
+    CHECK(fabsf(ta.result.trap_kmh - 176.9f) < 3.0f);
+    CHECK(fabsf(ta.result.split_s - 8.94f) < 0.2f);
+}
+
+static void test_ta_brake(void)
+{
+    ta_arm(&ta, TA_RUN_BRAKE, false, 0);
+    uint64_t t = feed_still(0, 4400, 200);
+    CHECK_EQ_INT(ta.state, TA_BUILD_UP);
+    /* Up to 120 km/h, cruise, then brake at 30 km/h a second from 20 s:
+     * 60 mph to 0 in 3.219 s and 43.2 m. */
+    bool done = false;
+    for (; t < 40000 && !done; t += 210) {
+        double kmh;
+        if (t < 16000) {
+            kmh = (t - 4400) / 1000.0 * 12.0;
+            kmh = kmh > 120.0 ? 120.0 : kmh;
+        } else if (t < 20000) {
+            kmh = 120.0;
+        } else {
+            kmh = 120.0 - (t - 20000) / 1000.0 * 30.0;
+        }
+        done = ta_speed(&ta, t, obd_kmh(kmh));
+        if (t > 15000 && t < 20000) {
+            CHECK_EQ_INT(ta.state, TA_BRAKE_READY);
+        }
+    }
+    CHECK(done && ta.result.have && ta.result.run == TA_RUN_BRAKE);
+    CHECK(fabsf(ta.result.seconds - 3.219f) < 0.15f);
+    CHECK(fabsf(ta.result.distance_m - 43.2f) < 2.5f);
+}
+
+static void test_ta_names(void)
+{
+    CHECK_EQ_STR(ta_run_name(TA_RUN_LAUNCH, false), "0-60 mph");
+    CHECK_EQ_STR(ta_run_name(TA_RUN_BRAKE, true), "100-0 km/h");
+    CHECK_EQ_STR(ta_run_key(TA_RUN_QUARTER, true), "quarter");
+    CHECK_EQ_STR(ta_run_key(TA_RUN_LAUNCH, false), "0-60");
+    ta_t off;
+    memset(&off, 0, sizeof off);
+    CHECK(!ta_speed(&off, 100, 50.0f));                   /* not armed: ignored */
+}
+
+static void test_track_bests(void)
+{
+    static char a[4096], b[4096];
+    bool rec = false;
+    size_t n = track_bests_offer("", "Geo/Tracker/1996", "0-60", 14.62f, 0.0f, "2026-11-18", &rec,
+                                 a, sizeof a);
+    CHECK(n > 0 && rec);
+    CHECK_EQ_STR(a, "car,run,seconds,extra,date\nGeo/Tracker/1996,0-60,14.62,,2026-11-18\n");
+
+    track_bests_offer(a, "Geo/Tracker/1996", "0-60", 15.1f, 0.0f, "2026-11-19", &rec, b, sizeof b);
+    CHECK(!rec);                                          /* slower: unchanged */
+    CHECK_EQ_STR(b, a);
+
+    track_bests_offer(a, "Geo/Tracker/1996", "quarter", 19.81f, 112.43f, "2026-11-19", &rec, b,
+                      sizeof b);
+    CHECK(rec);
+    strcpy(a, b);
+    track_bests_offer(a, "Geo/Tracker/1996", "0-60", 13.9f, 0.0f, "2026-11-20", &rec, b, sizeof b);
+    CHECK(rec);
+    CHECK_EQ_STR(b, "car,run,seconds,extra,date\n"
+                    "Geo/Tracker/1996,quarter,19.81,112.4,2026-11-19\n"
+                    "Geo/Tracker/1996,0-60,13.90,,2026-11-20\n");
+
+    track_best_t best;
+    CHECK(track_bests_get(b, "Geo/Tracker/1996", "quarter", &best));
+    CHECK(fabsf(best.seconds - 19.81f) < 0.001f && fabsf(best.extra - 112.4f) < 0.01f);
+    CHECK_EQ_STR(best.date, "2026-11-19");
+    CHECK(!track_bests_get(b, "Geo/Tracker/1996", "60-0", &best));
+    CHECK(!track_bests_get(b, "", "0-60", &best));
+    CHECK(!track_bests_get("junk\n,,,,\ncar,run,seconds,extra,date\n", "car", "run", &best));
+
+    /* No car: never saved. Too small: 0. */
+    CHECK(track_bests_offer(b, "", "0-60", 1.0f, 0.0f, "x", &rec, a, sizeof a) > 0 && !rec);
+    CHECK_EQ_INT(track_bests_offer("", "car", "0-60", 1.0f, 0.0f, "x", &rec, a, 10), 0);
+}
+
+void suite_track(void)
+{
+    RUN_TEST(test_ta_launch);
+    RUN_TEST(test_ta_false_start_and_give_up);
+    RUN_TEST(test_ta_quarter);
+    RUN_TEST(test_ta_brake);
+    RUN_TEST(test_ta_names);
+    RUN_TEST(test_track_bests);
+}

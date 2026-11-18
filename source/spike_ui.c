@@ -32,6 +32,8 @@
 #include "data/trim_view.h"
 #include "data/wifi_guide.h"
 #include "data/textlog.h"
+#include "fun/time_attack.h"
+#include "fun/track_bests.h"
 #include "spike_actions.h"
 #include "transport/conntest_server.h"
 #include "transport/net.h"
@@ -122,6 +124,10 @@
 #define BTN_UNITS         (-117) /* UI: Other: US / metric */
 #define BTN_ABOUT         (-118) /* UI: Other -> About */
 #define BTN_NONE          (-119) /* a bar that only shows a value */
+#define BTN_TRACK_TA      (-126) /* UI: TRACK -> TIME ATTACK */
+#define BTN_TA_WARN_OK    (-127) /* UI: TIME ATTACK closed-course notice: OK */
+#define BTN_TA_WARN_NO    (-128) /*     ... BACK */
+#define BTN_TA_RUN        (-130) /* UI: TIME ATTACK run (-130 - ta_run_t) */
 
 /* Bottom-screen buttons in 8x8 console cells: 12-13x6 cells = 96-104x48 px.
  * The third row has the Wi-Fi slot buttons, the last one the log ones. */
@@ -258,8 +264,33 @@ typedef enum {
     SCREEN_SETUP_OTHER,        /* SETUP > OTHER */
     SCREEN_ABOUT,              /* SETUP > OTHER > About */
     SCREEN_LOG,                /* LOG: recorded drives */
-    SCREEN_GRAPH               /* LOG > GRAPH: one value of a drive against time */
+    SCREEN_GRAPH,              /* LOG > GRAPH: one value of a drive against time */
+    SCREEN_TRACK,              /* TRACK: the track modes */
+    SCREEN_TIME_ATTACK         /* TRACK > TIME ATTACK: speed alone, timed runs */
 } screen_t;
+
+/* TRACK: one button per mode built so far, then BACK. */
+static const button_t track_buttons[] = {
+    { "TIME ATTACK", BTN_TRACK_TA, 0, 4, 19, 5 },
+    { "BACK",        BTN_BACK,     0, 25, 8, 5 },
+};
+#define TRACK_BUTTON_COUNT ((int)(sizeof track_buttons / sizeof track_buttons[0]))
+
+/* TIME ATTACK: the three runs (labels follow the units), then BACK. */
+static const button_t ta_buttons[] = {
+    { NULL,   BTN_TA_RUN - TA_RUN_LAUNCH,  0,  19, 12, 5 },
+    { NULL,   BTN_TA_RUN - TA_RUN_BRAKE,   13, 19, 13, 5 },
+    { NULL,   BTN_TA_RUN - TA_RUN_QUARTER, 27, 19, 12, 5 },
+    { "BACK", BTN_BACK,                    0,  25, 8, 5 },
+};
+#define TA_BUTTON_COUNT ((int)(sizeof ta_buttons / sizeof ta_buttons[0]))
+
+/* The closed-course notice, once a session. */
+static const button_t ta_warn_buttons[] = {
+    { "BACK",         BTN_TA_WARN_NO, 0,  23, 14, 6 },
+    { "I UNDERSTAND", BTN_TA_WARN_OK, 17, 23, 22, 6 },
+};
+#define TA_WARN_BUTTON_COUNT ((int)(sizeof ta_warn_buttons / sizeof ta_warn_buttons[0]))
 
 /* TRIM: BACK and START / STOP (the bars and hints are on the top screen). */
 static const button_t trim_buttons[] = {
@@ -489,6 +520,18 @@ static struct {
     bool rec_active;           /* worker: a drive log is open */
     uint64_t rec_started_ms;   /* when it was opened */
     char rec_file[40];         /* "drive-20261116-171230.csv" */
+    /* TIME ATTACK. The UI sets ta_on, ta_gen and the run; the worker times. */
+    bool ta_on;                /* speed alone, no ATRV */
+    unsigned ta_gen;           /* bumped to arm ta_want_run */
+    int ta_want_run;           /* ta_run_t */
+    bool ta_want_metric;
+    ta_t ta;                   /* the worker's timer (copy) */
+    bool ta_car_known;         /* bests can be saved */
+    bool ta_have_best;         /* this car's best for the run */
+    track_best_t ta_best;
+    bool ta_record;            /* the latest result is a new best */
+    bool ta_saved;             /* ... and it was written to bests.csv */
+    unsigned ta_version;
 
     volatile bool quit;
 } shared;
@@ -1402,6 +1445,109 @@ static void rec_step(spike_t *s, const obd_live_t *lv, const obd_link_t *link)
     LightLock_Unlock(&shared.lock);
 }
 
+/* ---------- TIME ATTACK (worker) ---------- */
+
+#define BESTS_PATH CONFIG_DIR "/" TRACK_BESTS_FILE
+
+static ta_t ta_w;
+
+/* This car's best for the armed run (baro_key is set when polling starts). */
+static void ta_load_best(void)
+{
+    static char text[4096];
+    read_small_file(BESTS_PATH, text, sizeof text);
+    track_best_t best;
+    bool have = baro_key[0] != '\0' &&
+                track_bests_get(text, baro_key, ta_run_key(ta_w.run, ta_w.metric), &best);
+    LightLock_Lock(&shared.lock);
+    shared.ta_car_known = baro_key[0] != '\0';
+    shared.ta_have_best = have;
+    if (have) {
+        shared.ta_best = best;
+    }
+    shared.ta_record = false;
+    shared.ta_saved = false;
+    LightLock_Unlock(&shared.lock);
+}
+
+/* A finished run: log it and keep it if it beats the best. */
+static void ta_finished(spike_t *s)
+{
+    static char text[4096], out[4096];
+    const ta_result_t *r = &ta_w.result;
+    char date[24];
+    now_text(date, sizeof date);
+    date[10] = '\0';
+    bool record = false, saved = false;
+    if (baro_key[0] != '\0') {
+        read_small_file(BESTS_PATH, text, sizeof text);
+        float extra = r->run == TA_RUN_QUARTER ? r->trap_kmh
+                    : r->run == TA_RUN_BRAKE ? r->distance_m : 0.0f;
+        size_t n = track_bests_offer(text, baro_key, ta_run_key(r->run, r->metric), r->seconds,
+                                     extra, date, &record, out, sizeof out);
+        if (record && n > 0) {
+            FILE *f = fopen(BESTS_PATH, "wb");
+            saved = f != NULL && fwrite(out, 1, n, f) == n;
+            if (f != NULL && fclose(f) != 0) {
+                saved = false;
+            }
+        }
+    }
+    spike_logf(s, "TRACK: %s %.2f s (estimate, speed read %.1f times a second)%s",
+               ta_run_name(r->run, r->metric), (double)r->seconds, (double)r->hz,
+               record ? (saved ? ", new best" : ", new best (! not saved)") : "");
+    LightLock_Lock(&shared.lock);
+    shared.ta_record = record;
+    shared.ta_saved = saved;
+    if (record) {
+        shared.ta_have_best = true;
+        shared.ta_best.seconds = r->seconds;
+        shared.ta_best.extra = 0.0f;
+        snprintf(shared.ta_best.date, sizeof shared.ta_best.date, "%.10s", date);
+    }
+    LightLock_Unlock(&shared.lock);
+}
+
+/* After each step while TIME ATTACK polls: feed the timer the new speed. */
+static void ta_feed(spike_t *s, const obd_live_t *lv)
+{
+    static unsigned gen_seen = ~0u;
+    static uint32_t reads_seen;
+    LightLock_Lock(&shared.lock);
+    bool on = shared.ta_on;
+    unsigned gen = shared.ta_gen;
+    ta_run_t run = (ta_run_t)shared.ta_want_run;
+    bool metric = shared.ta_want_metric;
+    LightLock_Unlock(&shared.lock);
+    if (!on) {
+        ta_off(&ta_w);
+        gen_seen = ~0u;
+        return;
+    }
+    uint64_t now = tp_now_ms();
+    if (gen != gen_seen) {
+        gen_seen = gen;
+        ta_arm(&ta_w, run, metric, now);
+        reads_seen = 0;
+        ta_load_best();
+        spike_logf(s, "TRACK: Time Attack %s armed", ta_run_name(run, metric));
+    }
+    bool finished = false;
+    const obd_live_pid_t *p = lv != NULL ? obd_live_get(lv, 0x0D) : NULL;
+    if (p != NULL && p->have && p->reads != reads_seen) {
+        reads_seen = p->reads;
+        finished = ta_speed(&ta_w, p->at_ms, p->value);
+    }
+    ta_tick(&ta_w, now);
+    if (finished) {
+        ta_finished(s);
+    }
+    LightLock_Lock(&shared.lock);
+    shared.ta = ta_w;
+    shared.ta_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
 static bool lost_status(elm_status_t st)
 {
     return st == ELM_ERR_IO || st == ELM_ERR_TIMEOUT;
@@ -1421,6 +1567,7 @@ static void live_poll(spike_t *s)
     uint8_t pids[OBD_LIVE_MAX];
     uint32_t periods[OBD_LIVE_MAX];
     int n = shared.live_want_count;
+    bool speed_only = shared.ta_on;
     memcpy(pids, shared.live_want, sizeof pids);
     memcpy(periods, shared.live_want_period, sizeof periods);
     LightLock_Unlock(&shared.lock);
@@ -1475,6 +1622,7 @@ static void live_poll(spike_t *s)
         lv.use_count = true;
         lv.use_multi = true;   /* CAN cars: several PIDs a request */
         lv.use_engine_header = true;   /* CAN cars: the engine ECU only */
+        lv.no_volts = speed_only;      /* TIME ATTACK: every request reads speed */
         uint8_t polled[OBD_LIVE_MAX];
         for (int i = 0; i < lv.count; i++) {
             polled[i] = lv.pid[i].pid;
@@ -1517,6 +1665,9 @@ static void live_poll(spike_t *s)
         return;
     }
     live_publish(&lv, true, link.protocol, tp_now_ms(), "", false);
+    if (speed_only) {
+        ta_feed(s, &lv);
+    }
     history_from_live(&live_history, &lv);
     baro_save(s, &lv);
     rec_step(s, &lv, &link);
@@ -1823,6 +1974,9 @@ typedef struct {
     int graph_col;             /* GRAPH: the value shown */
     double graph_t0, graph_t1; /* GRAPH: the time window, seconds */
     double graph_len;          /* GRAPH: the drive's length */
+    bool ta_dialog;            /* TIME ATTACK: closed-course notice showing */
+    bool ta_warned;            /* ... accepted this session */
+    int ta_run;                /* TIME ATTACK: the run picked (ta_run_t) */
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
@@ -1984,6 +2138,278 @@ static void live_select_view(ui_state_t *ui, int v)
     LightLock_Unlock(&shared.lock);
     LightEvent_Signal(&shared.wake);
     ui->live_view = v;
+}
+
+/* TIME ATTACK: poll speed alone and arm the run. restart: (re)start
+ * polling too (entering the screen); otherwise only the run changes. */
+static void ta_start(int run, bool metric, bool restart)
+{
+    static const uint8_t pids[] = { 0x0D };
+    static const uint32_t periods[] = { 0 };
+    LightLock_Lock(&shared.lock);
+    if (restart || !shared.live_on) {
+        shared.ta_on = true;
+        live_start_locked(pids, periods, 1);
+    }
+    shared.ta_want_run = run;
+    shared.ta_want_metric = metric;
+    shared.ta_gen++;
+    LightLock_Unlock(&shared.lock);
+    LightEvent_Signal(&shared.wake);
+}
+
+static void ta_stop(void)
+{
+    LightLock_Lock(&shared.lock);
+    shared.ta_on = false;
+    shared.live_on = false;
+    shared.live_ui_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
+/* Big 3x5 block digits for the countdown and the times. */
+static const char *big_glyph(char c)
+{
+    switch (c) {
+    case '0': case 'O': return "#### ## ## ####";
+    case '1': return " # ##  #  # ###";
+    case '2': return "###  #####  ###";
+    case '3': return "###  ####  ####";
+    case '4': return "# ## ####  #  #";
+    case '5': return "####  ###  ####";
+    case '6': return "####  #### ####";
+    case '7': return "###  #  #  #  #";
+    case '8': return "#### ##### ####";
+    case '9': return "#### ####  ####";
+    case 'G': return "####  # ## ####";
+    case '.': return "             # ";
+    case '!': return " #  #  #     # ";
+    case '-': return "      ###      ";
+    default:  return "               ";
+    }
+}
+
+/* text in big digits on rows row..row+4 from col (0-based), in color. */
+static void big_print(int row, int col, const char *text, const char *color)
+{
+    for (int r = 0; r < 5; r++) {
+        printf("\x1b[%d;%dH", row + r + 1, col + 1);
+        for (const char *c = text; *c != '\0'; c++) {
+            const char *g = big_glyph(*c);
+            for (int x = 0; x < 3; x++) {
+                printf("%s ", g[r * 3 + x] == '#' ? color : "\x1b[0m");
+            }
+            printf("\x1b[0m ");
+        }
+    }
+    printf("\x1b[0m");
+}
+
+/* TRACK top screen: what the modes are and the rules. */
+static void draw_track_top(int busy, bool connected)
+{
+    static const char *const text[] = {
+        "TRACK  Track modes",
+        "",
+        "TIME ATTACK  0-60, 60-0 braking, 1/4 mile",
+        "",
+        "Coming in version 0.4: shift light, G-meter,",
+        "Rev Sync, Eco Challenge, garage card,",
+        "achievements and attract mode.",
+        "",
+        "For closed courses, track days and passengers",
+        "only. Nothing here needs a touch while moving:",
+        "pick a run parked, then just drive.",
+        "No online leaderboards.",
+    };
+    char header[TOP_COLS + 1];
+    spike_format_header(header, sizeof header, connected, busy);
+    consoleSelect(&top_console);
+    printf("\x1b[0m");
+    print_row(0, TOP_COLS, header);
+    print_row(1, TOP_COLS, "-------------------------------------------------");
+    int row = 2;
+    for (size_t i = 0; i < sizeof text / sizeof text[0]; i++) {
+        print_row(row++, TOP_COLS, text[i]);
+    }
+    while (row < TOP_ROWS) {
+        print_row(row++, TOP_COLS, "");
+    }
+}
+
+/* TIME ATTACK top screen: the run's state in big text, speed, best. */
+static void draw_ta_top(int busy, bool connected, bool metric, uint64_t now)
+{
+    static ta_t ta;
+    static obd_live_t lv;
+    char msg[sizeof shared.live_msg];
+    LightLock_Lock(&shared.lock);
+    ta = shared.ta;
+    lv = shared.live;
+    bool have_live = shared.live_have;
+    bool on = shared.live_on;
+    bool car_known = shared.ta_car_known;
+    bool have_best = shared.ta_have_best;
+    track_best_t best = shared.ta_best;
+    bool record = shared.ta_record, saved = shared.ta_saved;
+    memcpy(msg, shared.live_msg, sizeof msg);
+    LightLock_Unlock(&shared.lock);
+
+    char header[TOP_COLS + 1], line[TOP_COLS + 32];
+    spike_format_header(header, sizeof header, connected, busy);
+    consoleSelect(&top_console);
+    printf("\x1b[0m");
+    print_row(0, TOP_COLS, header);
+    print_row(1, TOP_COLS, "-------------------------------------------------");
+    const obd_live_pid_t *sp = have_live ? obd_live_get(&lv, 0x0D) : NULL;
+    if (sp != NULL && sp->hz > 0.0f) {
+        snprintf(line, sizeof line, "TIME ATTACK  %s   speed %.1f/s",
+                 ta_run_name((ta_run_t)ta.run, metric), (double)sp->hz);
+    } else {
+        snprintf(line, sizeof line, "TIME ATTACK  %s", ta_run_name((ta_run_t)ta.run, metric));
+    }
+    print_row(2, TOP_COLS, line);
+    for (int r = 3; r < 15; r++) {
+        print_row(r, TOP_COLS, "");
+    }
+
+    const char *unit = metric ? "km/h" : "mph";
+    float to_unit = metric ? 1.0f : 1.0f / TA_MPH_KMH;
+    char big[16] = "";
+    const char *color = "\x1b[42m";   /* lime-ish: green blocks */
+    const char *say = NULL, *say2 = NULL;
+    switch (ta.state) {
+    case TA_STOP_FIRST:
+        say = "Stop the car: the timer arms when it";
+        say2 = "stands still for a moment.";
+        break;
+    case TA_COUNTDOWN:
+        snprintf(big, sizeof big, "%d", ta_countdown(&ta, now));
+        color = "\x1b[43m";
+        say = "Stay still...";
+        break;
+    case TA_GO:
+        if (now - ta.state_ms < TA_GO_SHOW_MS) {
+            snprintf(big, sizeof big, "GO!");
+        }
+        say = "Ready. Timing starts by itself when";
+        say2 = "the car moves.";
+        break;
+    case TA_BUILD_UP:
+        if (now - ta.state_ms < TA_GO_SHOW_MS) {
+            snprintf(big, sizeof big, "GO!");
+        }
+        say = metric ? "Drive above 100 km/h, then brake" : "Drive above 60 mph, then brake";
+        say2 = "to a stop. Timing starts by itself.";
+        break;
+    case TA_BRAKE_READY:
+        say = "Ready. Timing starts when you slow";
+        say2 = metric ? "under 100 km/h." : "under 60 mph.";
+        break;
+    case TA_RUNNING: {
+        double t = ((double)now - ta.start_ms) / 1000.0;
+        snprintf(big, sizeof big, "%.1f", t < 0.0 ? 0.0 : t);
+        color = "\x1b[46m";
+        say = "Timing...";
+        break;
+    }
+    case TA_DONE:
+        break;
+    default:
+        say = "Starting...";
+        break;
+    }
+    if (ta.state == TA_DONE || (ta.result.have && ta.state != TA_RUNNING &&
+                                ta.state != TA_COUNTDOWN && big[0] == '\0')) {
+        const ta_result_t *r = &ta.result;
+        snprintf(big, sizeof big, "%.2f", (double)r->seconds);
+        color = ta.state == TA_DONE && record ? "\x1b[45m" : "\x1b[42m";
+        if (ta.state == TA_DONE) {
+            say = record ? "NEW RECORD!" : "Result (an estimate)";
+        } else if (say2 == NULL) {
+            say2 = "Last result above.";
+        }
+        if (r->run == TA_RUN_QUARTER) {
+            snprintf(line, sizeof line, "Trap %.0f %s, %s %.2f s", (double)(r->trap_kmh * to_unit),
+                     unit, metric ? "0-100" : "0-60", (double)r->split_s);
+            print_row(12, TOP_COLS, line);
+        } else if (r->run == TA_RUN_BRAKE) {
+            snprintf(line, sizeof line, "Stopping distance %.0f %s",
+                     (double)(metric ? r->distance_m : r->distance_m * 3.28084f),
+                     metric ? "m" : "ft");
+            print_row(12, TOP_COLS, line);
+        }
+        snprintf(line, sizeof line, "Estimate: speed read %.1f times a second.",
+                 (double)r->hz);
+        print_row(13, TOP_COLS, line);
+    }
+    if (big[0] != '\0') {
+        int width = (int)strlen(big) * 4;
+        big_print(4, (TOP_COLS - width) / 2, big, color);
+        if (ta.state == TA_DONE || ta.state == TA_RUNNING) {
+            printf("\x1b[%d;%dHs", 8 + 1, (TOP_COLS - width) / 2 + width + 1);
+        }
+    }
+    print_row(10, TOP_COLS, say != NULL ? say : "");
+    print_row(11, TOP_COLS, say2 != NULL ? say2 : "");
+    if (ta.note != NULL && ta.state != TA_DONE) {
+        snprintf(line, sizeof line, "\x1b[33m%s\x1b[0m", ta.note);
+        printf("\x1b[%d;1H%s", 3 + 1, line);
+    }
+
+    if (!on && msg[0] != '\0') {
+        print_row(15, TOP_COLS, msg);
+    } else if (have_live && lv.count == 0) {
+        print_row(15, TOP_COLS, "This car doesn't report speed (PID 0D).");
+    } else if (msg[0] != '\0') {
+        print_row(15, TOP_COLS, msg);
+    } else if (sp != NULL && sp->have) {
+        snprintf(line, sizeof line, "Speed  %.0f %s", (double)(sp->value * to_unit), unit);
+        print_row(15, TOP_COLS, line);
+    } else {
+        print_row(15, TOP_COLS, "Speed  -");
+    }
+    if (!car_known) {
+        print_row(17, TOP_COLS, "Best: not saved (car unknown: SETUP > VEHICLE)");
+    } else if (have_best) {
+        snprintf(line, sizeof line, "Best  %.2f s  (%s)%s", (double)best.seconds, best.date,
+                 record && !saved ? "  ! not saved" : "");
+        print_row(17, TOP_COLS, line);
+    } else {
+        print_row(17, TOP_COLS, "Best  none yet");
+    }
+    for (int r = 18; r < TOP_ROWS - 2; r++) {
+        print_row(r, TOP_COLS, "");
+    }
+    print_row(TOP_ROWS - 2, TOP_COLS, "Closed course only. Results are estimates.");
+    print_row(TOP_ROWS - 1, TOP_COLS, "No touch needed while moving.");
+}
+
+static void draw_ta_dialog(void)
+{
+    static const char *const text[] = {
+        "TIME ATTACK",
+        "",
+        "For closed courses, track days and",
+        "passengers only. Never race on public",
+        "roads.",
+        "",
+        "Pick a run while parked. The timer then",
+        "starts and stops by itself: don't touch",
+        "or watch the 3DS while driving.",
+        "",
+        "Times come from the car's speed, read a",
+        "few times a second: they're estimates.",
+    };
+    consoleSelect(&bottom_console);
+    printf("\x1b[0m");
+    clear_rows(0, 29);
+    for (size_t i = 0; i < sizeof text / sizeof text[0]; i++) {
+        print_row(2 + (int)i, BOTTOM_COLS, text[i]);
+    }
+    for (int i = 0; i < TA_WARN_BUTTON_COUNT; i++) {
+        draw_button_ex(&ta_warn_buttons[i], false, false, false);
+    }
 }
 
 /* One trim row: label, value, and the bar in its zone's color. */
@@ -2439,6 +2865,11 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         cleared_after_confirm = false;
         return;
     }
+    if (ui->ta_dialog) {
+        draw_ta_dialog();
+        cleared_after_confirm = false;
+        return;
+    }
     if (ui->delete_dialog) {
         char name[32] = "";
         LightLock_Lock(&shared.lock);
@@ -2494,6 +2925,44 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
     snprintf(line, sizeof line, " %s:%u", cfg->adapter_host, (unsigned)cfg->adapter_port);
     printf("%-30.30s", line);
 
+    if (ui->screen == SCREEN_TRACK) {
+        print_row(2, BOTTOM_COLS, "TRACK  Track modes");
+        draw_list(track_buttons, TRACK_BUTTON_COUNT, now, busy, 0, false);
+        print_row(11, BOTTOM_COLS, "0-60, 60-0 braking and the 1/4 mile.");
+        print_row(13, BOTTOM_COLS, "More modes come in version 0.4.");
+        print_row(22, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        return;
+    }
+    if (ui->screen == SCREEN_TIME_ATTACK) {
+        static const char *const help[TA_RUN_COUNT][2][2] = {
+            { { "0-60: from a standstill. Stop, wait", "for 3, 2, 1, GO, then accelerate." },
+              { "0-100: from a standstill. Stop, wait", "for 3, 2, 1, GO, then accelerate." } },
+            { { "60-0: drive above 60 mph, then brake", "to a stop. Timing starts under 60." },
+              { "100-0: drive above 100 km/h, then", "brake to a stop. Starts under 100." } },
+            { { "1/4 mile from a standstill, with the", "trap speed and the 0-60 time." },
+              { "1/4 mile from a standstill, with the", "trap speed and the 0-100 time." } },
+        };
+        int run = ui->ta_run >= 0 && ui->ta_run < TA_RUN_COUNT ? ui->ta_run : 0;
+        int m = cfg->metric ? 1 : 0;
+        print_row(2, BOTTOM_COLS, "TIME ATTACK: pick a run while parked.");
+        print_row(4, BOTTOM_COLS, help[run][m][0]);
+        print_row(5, BOTTOM_COLS, help[run][m][1]);
+        print_row(7, BOTTOM_COLS, "The timer starts and stops by itself,");
+        print_row(8, BOTTOM_COLS, "and arms again once you stop: no touch");
+        print_row(9, BOTTOM_COLS, "needed while moving.");
+        print_row(11, BOTTOM_COLS, "Best times are kept for each car.");
+        print_row(16, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        for (int i = 0; i < TA_BUTTON_COUNT; i++) {
+            button_t b = ta_buttons[i];
+            int k = BTN_TA_RUN - b.action;
+            if (b.label == NULL) {
+                b.label = k == TA_RUN_QUARTER ? "1/4 MILE" : ta_run_key((ta_run_t)k, cfg->metric);
+            }
+            draw_button_ex(&b, flashing(b.action, now), false, b.label != NULL && b.action != BTN_BACK &&
+                           k == run);
+        }
+        return;
+    }
     if (ui->screen == SCREEN_HOME) {
         draw_list(home_buttons, HOME_BUTTON_COUNT, now, busy, 0, false);
         print_row(25, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
@@ -3049,7 +3518,8 @@ void spike_ui_run(void)
     }
 
     ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false, -1, SCREEN_SETUP,
-                      false, LIVE_VIEW_ENGINE, SCREEN_HOME, false, 0, 0.0, 0.0, 0.0 };
+                      false, LIVE_VIEW_ENGINE, SCREEN_HOME, false, 0, 0.0, 0.0, 0.0,
+                      false, false, TA_RUN_LAUNCH };
     live_menu_count();
     uint64_t notice_until = 0;
     int scroll = 0;                /* log (SETUP, TEST) */
@@ -3110,6 +3580,20 @@ void spike_ui_run(void)
                 ui.delete_dialog = false;
                 bottom_full = true;
             }
+        } else if ((down & KEY_TOUCH) && ui.ta_dialog) {
+            touchPosition tp;
+            hidTouchRead(&tp);
+            int i = button_at(ta_warn_buttons, TA_WARN_BUTTON_COUNT, tp.px, tp.py);
+            if (i >= 0) {
+                ui.ta_dialog = false;
+                if (ta_warn_buttons[i].action == BTN_TA_WARN_OK) {
+                    ui.ta_warned = true;
+                    ui.screen = SCREEN_TIME_ATTACK;
+                    ta_start(ui.ta_run, cfg.metric, true);
+                    top_dirty = true;
+                }
+                bottom_full = true;
+            }
         } else if ((down & KEY_TOUCH) && ui.clear_dialog) {
             touchPosition tp;
             hidTouchRead(&tp);
@@ -3167,6 +3651,8 @@ void spike_ui_run(void)
             case SCREEN_LIVE_EDIT: list = live_edit_buttons; count = LIVE_EDIT_BUTTON_COUNT; break;
             case SCREEN_TRIM:      list = trim_buttons;      count = TRIM_BUTTON_COUNT;      break;
             case SCREEN_LIVE_MENU: list = live_menu_buttons; count = LIVE_VIEW_COUNT + 1;  break;
+            case SCREEN_TRACK:     list = track_buttons;     count = TRACK_BUTTON_COUNT;     break;
+            case SCREEN_TIME_ATTACK: list = ta_buttons;      count = TA_BUTTON_COUNT;        break;
             case SCREEN_TEST:  break;
             }
             int i = ui.screen == SCREEN_HOME && home_gfx ? -1 : button_at(list, count, tp.px, tp.py);
@@ -3202,13 +3688,17 @@ void spike_ui_run(void)
         }
 
         /* Optional physical shortcuts: B back, X scan, D-pad / L R. */
-        if (ui.clear_dialog && (down & KEY_B)) {
+        if (ui.ta_dialog && (down & KEY_B)) {
+            ui.ta_dialog = false;
+            bottom_full = true;
+        } else if (ui.clear_dialog && (down & KEY_B)) {
             ui.clear_dialog = false;   /* B cancels; there is no button shortcut to clear */
             bottom_full = true;
         } else if (ui.delete_dialog && (down & KEY_B)) {
             ui.delete_dialog = false;
             bottom_full = true;
-        } else if (!confirming && !tapped && !ui.clear_dialog && !ui.delete_dialog) {
+        } else if (!confirming && !tapped && !ui.clear_dialog && !ui.delete_dialog &&
+                   !ui.ta_dialog) {
             if ((down & KEY_B) && ui.screen != SCREEN_HOME) { action = BTN_BACK; tapped = true; }
             else if ((down & KEY_X) && ui.screen == SCREEN_DIAG) { action = BTN_DIAG_SCAN; tapped = true; }
             else if ((down & KEY_L) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE || ui.screen == SCREEN_LIVE || ui.screen == SCREEN_LIVE_EDIT || ui.screen == SCREEN_LOG || ui.screen == SCREEN_GRAPH)) { action = BTN_PAGE_PREV; tapped = true; }
@@ -3371,9 +3861,36 @@ void spike_ui_run(void)
                 }
                 break;
             case BTN_MENU_TRACK:
-                ui.notice = "TRACK: track modes come in version 0.4";
-                notice_until = now + 3000;
+                ui.screen = SCREEN_TRACK;
+                bottom_full = top_dirty = true;
                 break;
+            case BTN_TRACK_TA:
+                if (!ui.ta_warned) {
+                    ui.ta_dialog = true;   /* the closed-course notice first */
+                } else {
+                    ui.screen = SCREEN_TIME_ATTACK;
+                    ta_start(ui.ta_run, cfg.metric, true);
+                    top_dirty = true;
+                }
+                bottom_full = true;
+                break;
+            case BTN_TA_RUN - TA_RUN_LAUNCH:
+            case BTN_TA_RUN - TA_RUN_BRAKE:
+            case BTN_TA_RUN - TA_RUN_QUARTER: {
+                LightLock_Lock(&shared.lock);
+                bool moving = shared.ta.have_last && shared.ta.last_kmh >= 1.0f &&
+                              now - shared.ta.last_ms < TA_GAP_MS;
+                LightLock_Unlock(&shared.lock);
+                if (moving) {
+                    ui.notice = "Pick a run while parked.";
+                    notice_until = now + 3000;
+                    break;
+                }
+                ui.ta_run = BTN_TA_RUN - action;
+                ta_start(ui.ta_run, cfg.metric, false);
+                top_dirty = true;
+                break;
+            }
             case BTN_TAB_STORED:
             case BTN_TAB_PENDING:
             case BTN_TAB_PERM:
@@ -3487,6 +4004,12 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
+                if (ui.screen == SCREEN_TIME_ATTACK) {
+                    ta_stop();
+                    ui.screen = SCREEN_TRACK;
+                    bottom_full = top_dirty = true;
+                    break;
+                }
                 if (ui.screen == SCREEN_TRIM) {
                     LightLock_Lock(&shared.lock);
                     shared.live_on = false;
@@ -3643,6 +4166,8 @@ void spike_ui_run(void)
                            ui.screen == SCREEN_LIVE_MENU || ui.screen == SCREEN_TRIM;
         bool live_due = live_screen && live_version != drawn_live_version &&
                         now - live_drawn_at >= 100;
+        /* TIME ATTACK: the countdown and the running time move on their own. */
+        bool ta_due = ui.screen == SCREEN_TIME_ATTACK && now - live_drawn_at >= 100;
 
         LightLock_Lock(&shared.lock);
         unsigned drive_version = shared.drive_version;
@@ -3672,10 +4197,15 @@ void spike_ui_run(void)
         bool shows_log = ui.screen == SCREEN_SETUP || ui.screen == SCREEN_TEST ||
                          ui.screen == SCREEN_MAKE || ui.screen == SCREEN_SETUP_WIFI ||
                          ui.screen == SCREEN_SETUP_VEHICLE || ui.screen == SCREEN_SETUP_OTHER;
-        if (top_dirty || busy != drawn_busy || connected != drawn_connected || live_due ||
+        if (top_dirty || busy != drawn_busy || connected != drawn_connected || live_due || ta_due ||
             (shows_log ? (version != drawn_version || scroll != drawn_scroll)
                        : !live_screen && diag_version != drawn_diag_version)) {
-            if (ui.screen == SCREEN_TRIM) {
+            if (ui.screen == SCREEN_TIME_ATTACK) {
+                draw_ta_top(busy, connected, cfg.metric, now);
+                live_drawn_at = now;
+            } else if (ui.screen == SCREEN_TRACK) {
+                draw_track_top(busy, connected);
+            } else if (ui.screen == SCREEN_TRIM) {
                 draw_trim_top(busy, connected);
                 drawn_live_version = live_version;
                 live_drawn_at = now;

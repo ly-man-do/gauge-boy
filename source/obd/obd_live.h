@@ -67,6 +67,7 @@ typedef struct {
     float volts;             /* adapter (battery) voltage, from ATRV */
     uint64_t volts_at_ms;
     bool volts_failed;       /* ATRV refused: stop asking */
+    bool no_volts;           /* don't ask (Time Attack: nothing but speed) */
 
     bool have_engine_off_map;
     float engine_off_map_kpa;   /* MAP with RPM 0: baro when PID 33 is missing */
