@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-16, LOG > GRAPH replays a recorded drive (gauge-boy-43v.5; M3 in progress)
+**As of:** 2026-11-17, GRAPH draws smooth curves (gauge-boy-43v.7; M3 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -65,7 +65,8 @@ Gauge Boy
         │   ├── [<] page n/m [>]                                                  [L/R]
         │   ├── [GRAPH]              (a drive selected) → GRAPH
         │   │   ├── (top: one value against time, drawn with graphics: axes, times,
-        │   │   │    min / max per pixel column, the window's min / max / average)
+        │   │   │    a smooth line through the readings over a faint min / max band,
+        │   │   │    the window's min / max / average)
         │   │   ├── [<<] [>>]        earlier / later (half a window)
         │   │   ├── [ZOOM -] [ZOOM +] more / less of the drive (5 s at the least)
         │   │   ├── [<] value n/m [>] the drive's other values                    [L/R]

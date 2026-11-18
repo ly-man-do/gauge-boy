@@ -2529,8 +2529,8 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         print_row(13, BOTTOM_COLS, "<< >>: earlier / later");
         print_row(14, BOTTOM_COLS, "ZOOM - / +: more / less of the drive");
         print_row(15, BOTTOM_COLS, "< >: other values; ALL: whole drive");
-        print_row(17, BOTTOM_COLS, "Each column shows the lowest and");
-        print_row(18, BOTTOM_COLS, "highest value in it, so spikes show.");
+        print_row(17, BOTTOM_COLS, "The line is smoothed between readings;");
+        print_row(18, BOTTOM_COLS, "the faint band shows short spikes.");
         draw_list(graph_buttons, GRAPH_BUTTON_COUNT, now, busy, 0, false);
         snprintf(line, sizeof line, "%d/%d", ui->graph_col + 1, ncols);
         printf("\x1b[%d;15H%-3.3s", 27 + 1, line);

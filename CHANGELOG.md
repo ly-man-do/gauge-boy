@@ -6,6 +6,7 @@ All notable changes to Gauge Boy are recorded here. The format follows [Keep a C
 
 ### Changed
 
+- **GRAPH draws smooth curves**: the line passes smoothly through each reading (a monotone cubic, so it never overshoots and invents no peaks) instead of stepping from one held value to the next, and a faint band behind it shows each moment's lowest and highest value, so short spikes stay visible.
 - **The name is now "Gauge Boy"** (two words), full name "Gauge Boy: OBD-II Deluxe", on the HOME menu, the banner, every screen, the logs and the docs. Files and folders follow: the release files are `gauge-boy.cia` and `gauge-boy.3dsx`, and the SD card folder is `sdmc:/3ds/gauge-boy/`. On its first start, Gauge Boy moves the settings, logs, drives and code history from the old `sdmc:/3ds/gaugeboy/` folder (an old `.3dsx` stays there; delete it once the new one runs). The `.cia` keeps its title ID, so it installs over the old one. Drive logs recorded before the change still open in LOG.
 
 ### Added

@@ -15,6 +15,7 @@
 #define COL_GRID  RGB(64, 64, 72)
 #define COL_AXIS  RGB(120, 120, 128)
 #define COL_LINE  RGB(143, 212, 42)   /* brief 5b lime accent */
+#define COL_BAND  ((u32)143 | ((u32)212 << 8) | ((u32)42 << 16) | 0x50000000u)   /* lime, faint */
 
 #define PLOT_X 44
 #define PLOT_Y 44
@@ -81,6 +82,14 @@ static void rect(float x, float y, float w, float h, u32 c)
     C2D_DrawRectSolid(x, y, next_z(), w, h, c);
 }
 
+/* v's y on the plot, unrounded (smooth), clamped to the plot. */
+static float plot_y(float v, float lo, float hi)
+{
+    float f = hi > lo ? (v - lo) / (hi - lo) : 0.0f;
+    f = f < 0.0f ? 0.0f : f > 1.0f ? 1.0f : f;
+    return PLOT_Y + (1.0f - f) * (float)(PLOT_H - 1);
+}
+
 static void time_text(double s, char *out, size_t len)
 {
     unsigned t = s > 0 ? (unsigned)(s + 0.5) : 0u;
@@ -128,24 +137,38 @@ void graph_draw(const graph_view_t *v)
     rect(PLOT_X, PLOT_Y, 1, PLOT_H, COL_AXIS);
     rect(PLOT_X, PLOT_Y + PLOT_H - 1, GRAPH_PLOT_W, 1, COL_AXIS);
 
-    /* The values: min..max per column, joined between columns. */
-    int prev_x = -1;
-    float prev_y = 0;
+    /* A faint band: each column's lowest to highest value, so short spikes
+     * stay visible under the smoothed curve. */
     for (int c = 0; c < g->ncols; c++) {
-        if (!g->have[c]) {
-            continue;
+        if (g->have[c] && g->max[c] > g->min[c]) {
+            float y0 = plot_y(g->max[c], lo, hi);
+            float y1 = plot_y(g->min[c], lo, hi);
+            rect((float)(PLOT_X + c), y0, 1, y1 - y0 + 1, COL_BAND);
         }
-        float x = (float)(PLOT_X + c);
-        float y0 = (float)(PLOT_Y + graph_y(g->max[c], lo, hi, PLOT_H));
-        float y1 = (float)(PLOT_Y + graph_y(g->min[c], lo, hi, PLOT_H));
-        rect(x, y0, 1, y1 - y0 + 1, COL_LINE);
-        float mid = (y0 + y1) / 2;
-        if (prev_x >= 0) {   /* join every step, next door or across a gap */
-            C2D_DrawLine((float)(PLOT_X + prev_x), prev_y, COL_LINE, x, mid, COL_LINE, 1.5f,
-                         next_z());
+    }
+
+    /* The curve: a monotone cubic through the column averages (flat where
+     * a value held, no overshoot), drawn a pixel at a time. */
+    static float xs[GRAPH_MAX_COLS], ys[GRAPH_MAX_COLS], ms[GRAPH_MAX_COLS];
+    int np = graph_curve_points(g, xs, ys, GRAPH_MAX_COLS);
+    graph_monotone_slopes(xs, ys, np, ms);
+    if (np == 1) {
+        C2D_DrawCircleSolid(PLOT_X + xs[0], plot_y(ys[0], lo, hi), next_z(), 1.5f, COL_LINE);
+    }
+    for (int i = 0; i + 1 < np; i++) {
+        int steps = (int)(xs[i + 1] - xs[i]);
+        if (steps < 1) {
+            steps = 1;
         }
-        prev_x = c;
-        prev_y = mid;
+        float px = PLOT_X + xs[i], py = plot_y(ys[i], lo, hi);
+        for (int k = 1; k <= steps; k++) {
+            float x = xs[i] + (xs[i + 1] - xs[i]) * (float)k / (float)steps;
+            float v = graph_hermite(xs[i], ys[i], xs[i + 1], ys[i + 1], ms[i], ms[i + 1], x);
+            float nx = PLOT_X + x, ny = plot_y(v, lo, hi);
+            C2D_DrawLine(px, py, COL_LINE, nx, ny, COL_LINE, 2.0f, next_z());
+            px = nx;
+            py = ny;
+        }
     }
 
     /* Time axis: start, middle, end of the window. */

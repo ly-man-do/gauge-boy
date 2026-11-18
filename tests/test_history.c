@@ -83,9 +83,59 @@ static void test_graph_columns(void)
     CHECK(lo <= 14.1f && hi >= 14.1f && hi > lo);
 }
 
+static void test_graph_smooth(void)
+{
+    /* A held value (repeats), a step, held again: flat runs, curved step. */
+    graph_cols_t g;
+    graph_cols_init(&g, 0.0, 10.0, 10);
+    for (int i = 0; i < 10; i++) {
+        graph_cols_add(&g, i + 0.5, i < 5 ? 10.0f : 20.0f);
+    }
+    graph_cols_add(&g, 7.5, 22.0f);                       /* column 7 averages 21 */
+    CHECK(graph_cols_mean(&g, 7) == 21.0f);
+    float xs[16], ys[16];
+    int n = graph_curve_points(&g, xs, ys, 16);
+    /* One point per reading (0, 5, 7, 8) and the window's end (9). */
+    CHECK_EQ_INT(n, 5);
+    CHECK(xs[0] == 0.0f && ys[0] == 10.0f && xs[1] == 5.0f && ys[1] == 20.0f);
+    CHECK(xs[2] == 7.0f && ys[2] == 21.0f && xs[3] == 8.0f && ys[3] == 20.0f);
+    CHECK(xs[4] == 9.0f && ys[4] == 20.0f);
+
+    float m[16];
+    graph_monotone_slopes(xs, ys, n, m);
+    /* From one reading to the next the curve rises without going past. */
+    float prev = 0.0f;
+    for (int k = 0; k <= 50; k++) {
+        float x = k * 0.1f;
+        float y = graph_hermite(xs[0], ys[0], xs[1], ys[1], m[0], m[1], x);
+        CHECK(y >= 10.0f - 1e-4f && y <= 20.0f + 1e-4f && y >= prev - 1e-4f);
+        prev = y;
+    }
+    CHECK(m[2] == 0.0f);                                  /* the peak at 7: flat top */
+    for (int k = 0; k <= 10; k++) {
+        float y = graph_hermite(xs[2], ys[2], xs[3], ys[3], m[2], m[3], 7.0f + k * 0.1f);
+        CHECK(y <= 21.0f + 1e-4f && y >= 20.0f - 1e-4f);
+    }
+    CHECK(graph_hermite(0, 3, 2, 7, 1, 1, 0) == 3.0f);   /* ends exact */
+    CHECK(graph_hermite(0, 3, 2, 7, 1, 1, 2) == 7.0f);
+
+    /* Strictly rising data stays monotone. */
+    float x2[] = { 0, 1, 2, 3, 4 }, y2[] = { 0, 1, 1.5f, 9, 10 }, m2[5];
+    graph_monotone_slopes(x2, y2, 5, m2);
+    prev = -1.0f;
+    for (int k = 0; k <= 40; k++) {
+        float x = k * 0.1f;
+        int i = (int)x < 4 ? (int)x : 3;
+        float y = graph_hermite(x2[i], y2[i], x2[i + 1], y2[i + 1], m2[i], m2[i + 1], x);
+        CHECK(y >= prev - 1e-4f);
+        prev = y;
+    }
+}
+
 void suite_history(void)
 {
     RUN_TEST(test_history_ring);
     RUN_TEST(test_history_from_live);
     RUN_TEST(test_graph_columns);
+    RUN_TEST(test_graph_smooth);
 }
