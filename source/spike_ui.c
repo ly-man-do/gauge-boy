@@ -33,6 +33,7 @@
 #include "data/wifi_guide.h"
 #include "data/textlog.h"
 #include "fun/gmeter.h"
+#include "fun/rev_sync.h"
 #include "fun/shift_light.h"
 #include "fun/time_attack.h"
 #include "fun/track_bests.h"
@@ -137,6 +138,9 @@
 #define BTN_TRACK_GMETER  (-136) /* UI: TRACK -> G-METER */
 #define BTN_GM_CAL        (-137) /* UI: G-METER: calibrate (parked) */
 #define BTN_GM_RESET      (-138) /* UI: G-METER: reset the peaks (parked) */
+#define BTN_TRACK_REVSYNC (-139) /* UI: TRACK -> REV SYNC */
+#define BTN_RS_START      (-140) /* UI: REV SYNC: START / AGAIN */
+#define BTN_RS_BEST       116    /* worker: Rev Sync high score: save the new one, read it */
 
 /* Bottom-screen buttons in 8x8 console cells: 12-13x6 cells = 96-104x48 px.
  * The third row has the Wi-Fi slot buttons, the last one the log ones. */
@@ -277,14 +281,16 @@ typedef enum {
     SCREEN_TRACK,              /* TRACK: the track modes */
     SCREEN_TIME_ATTACK,        /* TRACK > TIME ATTACK: speed alone, timed runs */
     SCREEN_SHIFT,              /* TRACK > SHIFT LIGHT: RPM, LEDs on the top screen */
-    SCREEN_GMETER              /* TRACK > G-METER: the 3DS accelerometer */
+    SCREEN_GMETER,             /* TRACK > G-METER: the 3DS accelerometer */
+    SCREEN_REVSYNC             /* TRACK > REV SYNC: parked-only throttle blip game */
 } screen_t;
 
 /* TRACK: one button per mode built so far, then BACK. */
 static const button_t track_buttons[] = {
     { "TIME ATTACK", BTN_TRACK_TA,    0,  4, 19, 5 },
     { "SHIFT LIGHT", BTN_TRACK_SHIFT, 20, 4, 19, 5 },
-    { "G-METER",     BTN_TRACK_GMETER, 0, 10, 19, 5 },
+    { "G-METER",     BTN_TRACK_GMETER,  0,  10, 19, 5 },
+    { "REV SYNC",    BTN_TRACK_REVSYNC, 20, 10, 19, 5 },
     { "BACK",        BTN_BACK,     0, 25, 8, 5 },
 };
 #define TRACK_BUTTON_COUNT ((int)(sizeof track_buttons / sizeof track_buttons[0]))
@@ -313,6 +319,13 @@ static const button_t gm_buttons[] = {
     { "BACK",        BTN_BACK,     0,  25, 8, 5 },
 };
 #define GM_BUTTON_COUNT ((int)(sizeof gm_buttons / sizeof gm_buttons[0]))
+
+/* REV SYNC: START, then BACK. */
+static const button_t rs_buttons[] = {
+    { "START", BTN_RS_START, 0,  19, 19, 5 },
+    { "BACK",  BTN_BACK,     0,  25, 8, 5 },
+};
+#define RS_BUTTON_COUNT ((int)(sizeof rs_buttons / sizeof rs_buttons[0]))
 
 /* The closed-course notice, once a session. */
 static const button_t ta_warn_buttons[] = {
@@ -553,6 +566,12 @@ static struct {
     bool ta_on;                /* speed alone, no ATRV */
     bool shift_on;             /* SHIFT LIGHT: RPM (and speed slowly), no ATRV */
     bool gmeter_on;            /* G-METER: speed, no ATRV */
+    bool revsync_on;           /* REV SYNC: RPM and speed, no ATRV */
+    int rs_save_score;         /* UI: a finished game's score for the worker, 0 = none */
+    bool rs_car_known;         /* worker: the high score can be saved */
+    bool rs_have_best;
+    track_best_t rs_best;
+    bool rs_record;            /* the last game beat it */
     unsigned ta_gen;           /* bumped to arm ta_want_run */
     int ta_want_run;           /* ta_run_t */
     bool ta_want_metric;
@@ -1599,7 +1618,7 @@ static void live_poll(spike_t *s)
     uint32_t periods[OBD_LIVE_MAX];
     int n = shared.live_want_count;
     bool speed_only = shared.ta_on;
-    bool no_volts = shared.ta_on || shared.shift_on || shared.gmeter_on;
+    bool no_volts = shared.ta_on || shared.shift_on || shared.gmeter_on || shared.revsync_on;
     memcpy(pids, shared.live_want, sizeof pids);
     memcpy(periods, shared.live_want_period, sizeof periods);
     LightLock_Unlock(&shared.lock);
@@ -1705,6 +1724,53 @@ static void live_poll(spike_t *s)
     rec_step(s, &lv, &link);
 }
 
+/* REV SYNC (worker): save a finished game's score if it's this car's
+ * best, then read the best. */
+static void rs_best_io(spike_t *s)
+{
+    static char text[4096], out[4096];
+    char key[32];
+    LightLock_Lock(&shared.lock);
+    baro_store_key(&shared.diag, app_cfg->car_make, app_cfg->car_model, app_cfg->car_year, key,
+                   sizeof key);
+    int score = shared.rs_save_score;
+    shared.rs_save_score = 0;
+    LightLock_Unlock(&shared.lock);
+    read_small_file(BESTS_PATH, text, sizeof text);
+    bool record = false, saved = false;
+    if (score > 0 && key[0] != '\0') {
+        char date[24];
+        now_text(date, sizeof date);
+        date[10] = '\0';
+        size_t n = track_bests_offer_high(text, key, "revsync", (float)score, date, &record, out,
+                                          sizeof out);
+        if (record && n > 0) {
+            FILE *f = fopen(BESTS_PATH, "wb");
+            saved = f != NULL && fwrite(out, 1, n, f) == n;
+            if (f != NULL && fclose(f) != 0) {
+                saved = false;
+            }
+            memcpy(text, out, n + 1);
+        }
+    }
+    if (score > 0) {
+        spike_logf(s, "TRACK: Rev Sync %d points, rank %s%s", score, rs_rank(score),
+                   record ? (saved ? ", new high score" : ", new high score (! not saved)") : "");
+    }
+    track_best_t best;
+    bool have = key[0] != '\0' && track_bests_get(text, key, "revsync", &best);
+    LightLock_Lock(&shared.lock);
+    shared.rs_car_known = key[0] != '\0';
+    shared.rs_have_best = have;
+    if (have) {
+        shared.rs_best = best;
+    }
+    if (score > 0) {
+        shared.rs_record = record;
+    }
+    LightLock_Unlock(&shared.lock);
+}
+
 /* SHIFT LIGHT: the shift point to config.ini (worker). */
 static void shift_save(spike_t *s)
 {
@@ -1783,6 +1849,8 @@ static void worker_main(void *arg)
                 live_save(spike);
             } else if (action == BTN_SHIFT_SAVE) {
                 shift_save(spike);
+            } else if (action == BTN_RS_BEST) {
+                rs_best_io(spike);
             } else {
                 spike_run(spike, (spike_action_t)action);
             }
@@ -2301,6 +2369,62 @@ static void gmeter_frame(uint64_t now, gm_vec_t *raw_out)
     }
 }
 
+/* REV SYNC: RPM as fast as it comes, speed twice a second (the lock). */
+static rev_sync_t revsync;
+
+static void revsync_start(int shift_rpm, uint64_t now)
+{
+    static const uint8_t pids[] = { 0x0C, 0x0D };
+    static const uint32_t periods[] = { 0, 500 };
+    rs_init(&revsync, shift_rpm, (uint32_t)now);
+    LightLock_Lock(&shared.lock);
+    shared.ta_on = shared.shift_on = shared.gmeter_on = false;
+    shared.revsync_on = true;
+    shared.rs_record = false;
+    live_start_locked(pids, periods, 2);
+    LightLock_Unlock(&shared.lock);
+    LightEvent_Signal(&shared.wake);
+}
+
+static void revsync_stop(void)
+{
+    LightLock_Lock(&shared.lock);
+    shared.revsync_on = false;
+    shared.live_on = false;
+    shared.live_ui_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
+/* REV SYNC, every frame: new RPM and speed readings, the clock. Returns
+ * true when a game has just finished. */
+static bool revsync_frame(uint64_t now)
+{
+    static uint32_t rpm_seen, speed_seen;
+    LightLock_Lock(&shared.lock);
+    const obd_live_pid_t *r = shared.live_have ? obd_live_get(&shared.live, 0x0C) : NULL;
+    const obd_live_pid_t *v = shared.live_have ? obd_live_get(&shared.live, 0x0D) : NULL;
+    bool new_rpm = r != NULL && r->have && r->reads != rpm_seen;
+    bool new_speed = v != NULL && v->have && v->reads != speed_seen;
+    uint64_t rt = new_rpm ? r->at_ms : 0, vt = new_speed ? v->at_ms : 0;
+    float rpm = new_rpm ? r->value : 0.0f, kmh = new_speed ? v->value : 0.0f;
+    if (new_rpm) {
+        rpm_seen = r->reads;
+    }
+    if (new_speed) {
+        speed_seen = v->reads;
+    }
+    LightLock_Unlock(&shared.lock);
+    rs_state_t before = revsync.state;
+    if (new_speed) {
+        rs_speed(&revsync, vt, kmh);
+    }
+    if (new_rpm) {
+        rs_rpm(&revsync, rt, rpm);
+    }
+    rs_tick(&revsync, now);
+    return before != RS_DONE && revsync.state == RS_DONE;
+}
+
 /* The car is moving (speed read in the last few seconds above 0). */
 static bool car_moving(uint64_t now)
 {
@@ -2363,8 +2487,11 @@ static void draw_track_top(int busy, bool connected)
         "G-METER      the car's G-forces from the 3DS's",
         "             own motion sensor, with peaks",
         "",
-        "Coming in version 0.4: Rev Sync, Eco Challenge,",
-        "garage card, achievements and attract mode.",
+        "REV SYNC     blip the throttle to a target RPM",
+        "             (parked only)",
+        "",
+        "Coming in version 0.4: Eco Challenge, garage",
+        "card, achievements and attract mode.",
         "",
         "For closed courses, track days and passengers",
         "only. Nothing here needs a touch while moving:",
@@ -2719,6 +2846,154 @@ static void draw_gmeter_top(int busy, bool connected, gm_vec_t raw, bool full)
     snprintf(line, sizeof line, "raw %d %d %d", (int)raw.x, (int)raw.y, (int)raw.z);
     printf("\x1b[%d;%dH%s", TOP_ROWS - 3, col, line);
     print_row(TOP_ROWS - 1, TOP_COLS, "Display only: no touch needed while moving.");
+}
+
+/* REV SYNC top screen: the tach bar with the target, big text for the
+ * round, the rounds so far. */
+static void draw_revsync_top(int busy, bool connected, bool full)
+{
+    const rev_sync_t *rs = &revsync;
+    LightLock_Lock(&shared.lock);
+    bool car_known = shared.rs_car_known, have_best = shared.rs_have_best;
+    track_best_t best = shared.rs_best;
+    bool record = shared.rs_record;
+    char msg[sizeof shared.live_msg];
+    memcpy(msg, shared.live_msg, sizeof msg);
+    LightLock_Unlock(&shared.lock);
+
+    char header[TOP_COLS + 1], line[TOP_COLS + 32];
+    spike_format_header(header, sizeof header, connected, busy);
+    consoleSelect(&top_console);
+    printf(full ? "\x1b[0m\x1b[2J" : "\x1b[0m");
+    print_row(0, TOP_COLS, header);
+    print_row(1, TOP_COLS, "-------------------------------------------------");
+    bool playing = rs->state >= RS_READY && rs->state <= RS_DONE;
+    if (playing) {
+        snprintf(line, sizeof line, "REV SYNC   round %d/%d   score %d%s", rs->round + 1, RS_ROUNDS,
+                 rs->score, rs->combo > 1 ? "   COMBO!" : "");
+    } else {
+        snprintf(line, sizeof line, "REV SYNC   parked only");
+    }
+    print_row(2, TOP_COLS, line);
+
+    /* The tach: 0 to 7000 rpm over 48 columns. */
+    enum { W = 48, MAXR = 7000 };
+    int target = playing ? rs->target[rs->round] : 0;
+    int tc = target * W / MAXR;
+    int rc = rs->have_rpm ? (int)(rs->rpm * W / MAXR) : 0;
+    int pc = rs->state >= RS_GO && rs->state <= RS_JUDGE && rs->peak > 0.0f
+           ? (int)(rs->peak * W / MAXR) : -1;
+    rc = rc > W ? W : rc;
+    pc = pc > W - 1 ? W - 1 : pc;
+    print_row(3, TOP_COLS, "");
+    if (target > 0) {
+        snprintf(line, sizeof line, "TARGET %d", target);
+        int lc = tc - (int)strlen(line) / 2;
+        lc = lc < 0 ? 0 : lc > TOP_COLS - (int)strlen(line) ? TOP_COLS - (int)strlen(line) : lc;
+        print_row(4, TOP_COLS, "");
+        printf("\x1b[%d;%dH\x1b[33m%s\x1b[0m", 4 + 1, lc + 1, line);
+        print_row(5, TOP_COLS, "");
+        printf("\x1b[%d;%dH\x1b[33mv\x1b[0m", 5 + 1, tc + 1);
+    } else {
+        print_row(4, TOP_COLS, "");
+        print_row(5, TOP_COLS, "");
+    }
+    for (int r = 0; r < 2; r++) {
+        printf("\x1b[%d;1H", 6 + r + 1);
+        for (int c = 0; c < W; c++) {
+            bool lit = c < rc;
+            if (c == tc && target > 0) {
+                printf("\x1b[43m \x1b[0m");   /* the target */
+            } else if (lit) {
+                printf("%s \x1b[0m", c < tc || target == 0 ? "\x1b[42m" : "\x1b[41m");
+            } else {
+                printf("\x1b[0m%c", r == 1 ? '_' : ' ');
+            }
+        }
+    }
+    print_row(8, TOP_COLS, "");
+    if (pc >= 0) {
+        printf("\x1b[%d;%dH\x1b[36m^ %d\x1b[0m", 8 + 1, pc + 1, (int)lroundf(rs->peak));
+    }
+    print_row(9, TOP_COLS, "0      1      2      3      4      5      6     7");
+    for (int r = 10; r < 24; r++) {
+        print_row(r, TOP_COLS, "");
+    }
+
+    char big[16] = "";
+    const char *color = "\x1b[43m";
+    const char *say = "", *say2 = "";
+    switch (rs->state) {
+    case RS_LOCKED:
+        say = rs->note != NULL ? rs->note : "Waiting for the car's speed...";
+        say2 = "Rev Sync runs only while the speed reads 0.";
+        break;
+    case RS_IDLE:
+        say = "Parked. Tap START to play 5 rounds.";
+        say2 = "Engine warm, in neutral or park.";
+        break;
+    case RS_READY:
+        snprintf(big, sizeof big, "%d", target);
+        say = "Get ready: blip to this RPM at GO.";
+        break;
+    case RS_GO:
+        snprintf(big, sizeof big, "GO!");
+        color = "\x1b[42m";
+        say = "Blip the throttle to the target!";
+        break;
+    case RS_JUDGE: {
+        int r = rs->round;
+        snprintf(big, sizeof big, "%d", rs->peak_of[r]);
+        color = rs->grade[r] >= RS_GRADE_GREAT ? "\x1b[42m" : rs->grade[r] == RS_GRADE_MISS
+              ? "\x1b[41m" : "\x1b[43m";
+        snprintf(line, sizeof line, "%s!  +%d%s", rs_grade_name(rs->grade[r]), rs->points,
+                 rs->combo > 1 && rs->grade[r] >= RS_GRADE_GREAT ? "  combo" : "");
+        say = line;
+        if (rs->peak_of[r] == 0) {
+            big[0] = '\0';
+            say2 = "No blip in time.";
+        }
+        break;
+    }
+    case RS_DONE:
+        snprintf(big, sizeof big, "%d", rs->score);
+        color = record ? "\x1b[45m" : "\x1b[42m";
+        snprintf(line, sizeof line, "RANK %s%s", rs_rank(rs->score), record ? "   NEW HIGH SCORE!" : "");
+        say = line;
+        say2 = "Tap AGAIN to play again.";
+        break;
+    }
+    if (big[0] != '\0') {
+        int width = (int)strlen(big) * 4;
+        big_print(11, (TOP_COLS - width) / 2, big, color);
+    }
+    print_row(17, TOP_COLS, say);
+    print_row(18, TOP_COLS, say2);
+    if (!rs->have_rpm && msg[0] != '\0') {
+        print_row(18, TOP_COLS, msg);
+    }
+    if (playing) {
+        for (int i = 0; i < RS_ROUNDS && i <= rs->round; i++) {
+            if (i == rs->round && rs->state != RS_JUDGE && rs->state != RS_DONE) {
+                break;
+            }
+            snprintf(line, sizeof line, "%d. target %4d  blip %4d  %s", i + 1, rs->target[i],
+                     rs->peak_of[i], rs_grade_name(rs->grade[i]));
+            print_row(19 + i, TOP_COLS, line);
+        }
+    }
+    if (!car_known) {
+        print_row(25, TOP_COLS, "High score: not saved (car unknown)");
+    } else if (have_best) {
+        snprintf(line, sizeof line, "High score %d  (%s)", (int)best.seconds, best.date);
+        print_row(25, TOP_COLS, line);
+    } else {
+        print_row(25, TOP_COLS, "High score: none yet");
+    }
+    for (int r = 26; r < TOP_ROWS - 1; r++) {
+        print_row(r, TOP_COLS, "");
+    }
+    print_row(TOP_ROWS - 1, TOP_COLS, "Parked only: it stops if the car moves.");
 }
 
 static void draw_ta_dialog(void)
@@ -3267,8 +3542,29 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         print_row(16, BOTTOM_COLS, "TIME ATTACK: 0-60, 60-0, 1/4 mile.");
         print_row(17, BOTTOM_COLS, "SHIFT LIGHT: LEDs that flash at your");
         print_row(18, BOTTOM_COLS, "shift point. G-METER: G-forces.");
-        print_row(20, BOTTOM_COLS, "More modes come in version 0.4.");
+        print_row(19, BOTTOM_COLS, "REV SYNC: blip to a target RPM.");
+        print_row(21, BOTTOM_COLS, "More modes come in version 0.4.");
         print_row(23, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        return;
+    }
+    if (ui->screen == SCREEN_REVSYNC) {
+        print_row(2, BOTTOM_COLS, "REV SYNC");
+        print_row(4, BOTTOM_COLS, "Parked, engine warm, in neutral or");
+        print_row(5, BOTTOM_COLS, "park. Each round shows a target RPM;");
+        print_row(6, BOTTOM_COLS, "at GO, blip the throttle so the peak");
+        print_row(7, BOTTOM_COLS, "lands on it.");
+        print_row(9, BOTTOM_COLS, "PERFECT within 75 rpm, GREAT 200,");
+        print_row(10, BOTTOM_COLS, "GOOD 400, OK 700. GREAT or better in");
+        print_row(11, BOTTOM_COLS, "a row builds a combo.");
+        print_row(13, BOTTOM_COLS, "Locked unless the speed reads 0.");
+        print_row(16, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        for (int i = 0; i < RS_BUTTON_COUNT; i++) {
+            button_t b = rs_buttons[i];
+            if (b.action == BTN_RS_START && revsync.state == RS_DONE) {
+                b.label = "AGAIN";
+            }
+            draw_button_ex(&b, flashing(b.action, now), false, false);
+        }
         return;
     }
     if (ui->screen == SCREEN_GMETER) {
@@ -3913,6 +4209,20 @@ void spike_ui_run(void)
         if (ui.screen == SCREEN_GMETER) {
             gmeter_frame(now, &gm_raw);
         }
+        if (ui.screen == SCREEN_REVSYNC) {
+            static rs_state_t rs_drawn = RS_LOCKED;
+            if (revsync_frame(now) && worker != NULL) {
+                LightLock_Lock(&shared.lock);
+                shared.rs_save_score = revsync.score;
+                LightLock_Unlock(&shared.lock);
+                enqueue(BTN_RS_BEST);
+            }
+            if ((revsync.state == RS_DONE || revsync.state == RS_IDLE) !=
+                (rs_drawn == RS_DONE || rs_drawn == RS_IDLE)) {
+                bottom_dirty = true;   /* START / AGAIN */
+            }
+            rs_drawn = revsync.state;
+        }
 
         if (down & KEY_START) {
             break;
@@ -4025,6 +4335,7 @@ void spike_ui_run(void)
             case SCREEN_TIME_ATTACK: list = ta_buttons;      count = TA_BUTTON_COUNT;        break;
             case SCREEN_SHIFT:     list = shift_buttons;     count = SHIFT_BUTTON_COUNT;     break;
             case SCREEN_GMETER:    list = gm_buttons;        count = GM_BUTTON_COUNT;        break;
+            case SCREEN_REVSYNC:   list = rs_buttons;        count = RS_BUTTON_COUNT;        break;
             case SCREEN_TEST:  break;
             }
             int i = ui.screen == SCREEN_HOME && home_gfx ? -1 : button_at(list, count, tp.px, tp.py);
@@ -4251,6 +4562,29 @@ void spike_ui_run(void)
                 shift_start();
                 bottom_full = top_dirty = true;
                 break;
+            case BTN_TRACK_REVSYNC:
+                ui.screen = SCREEN_REVSYNC;
+                revsync_start(cfg.shift_rpm, now);
+                if (worker != NULL) {
+                    enqueue(BTN_RS_BEST);   /* this car's high score */
+                }
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_RS_START:
+                if (worker != NULL) {
+                    enqueue(BTN_RS_BEST);   /* the car may be known by now */
+                }
+                if (!rs_start(&revsync, now)) {
+                    ui.notice = revsync.state == RS_LOCKED ? "Locked: the speed must read 0."
+                                                           : "A game is running.";
+                    notice_until = now + 3000;
+                    break;
+                }
+                LightLock_Lock(&shared.lock);
+                shared.rs_record = false;
+                LightLock_Unlock(&shared.lock);
+                bottom_full = top_dirty = true;
+                break;
             case BTN_TRACK_GMETER:
                 ui.screen = SCREEN_GMETER;
                 gmeter_start();
@@ -4417,6 +4751,12 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
+                if (ui.screen == SCREEN_REVSYNC) {
+                    revsync_stop();
+                    ui.screen = SCREEN_TRACK;
+                    bottom_full = top_dirty = true;
+                    break;
+                }
                 if (ui.screen == SCREEN_GMETER) {
                     gmeter_stop();
                     ui.screen = SCREEN_TRACK;
@@ -4593,7 +4933,8 @@ void spike_ui_run(void)
                         now - live_drawn_at >= 100;
         /* TIME ATTACK: the countdown and the running time move on their own. */
         bool ta_due = (ui.screen == SCREEN_TIME_ATTACK && now - live_drawn_at >= 100) ||
-                      ((ui.screen == SCREEN_SHIFT || ui.screen == SCREEN_GMETER) &&
+                      ((ui.screen == SCREEN_SHIFT || ui.screen == SCREEN_GMETER ||
+                        ui.screen == SCREEN_REVSYNC) &&
                        now - live_drawn_at >= 30);
 
         LightLock_Lock(&shared.lock);
@@ -4629,6 +4970,9 @@ void spike_ui_run(void)
                        : !live_screen && diag_version != drawn_diag_version)) {
             if (ui.screen == SCREEN_TIME_ATTACK) {
                 draw_ta_top(busy, connected, cfg.metric, now);
+                live_drawn_at = now;
+            } else if (ui.screen == SCREEN_REVSYNC) {
+                draw_revsync_top(busy, connected, top_dirty);
                 live_drawn_at = now;
             } else if (ui.screen == SCREEN_GMETER) {
                 draw_gmeter_top(busy, connected, gm_raw, top_dirty);

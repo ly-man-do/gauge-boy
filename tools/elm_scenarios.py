@@ -19,6 +19,7 @@ motorbike. Gauge Boy's test cars are not CAN, so this adds:
   track      the ridgeline with its speed and RPM going round a 50 s loop
              (stop, 0-130 km/h through the gears, cruise, hard stop) for
              testing Time Attack and the shift light.
+  blips      the ridgeline parked, blipping the throttle every 3 s (Rev Sync).
 
 Replies are what an ELM327 prints with headers off (ATH0), which is how
 Gauge Boy runs the adapter: data bytes only, one line per frame, no CAN
@@ -30,6 +31,7 @@ Run through tools/run-emulator.sh (ELM_SCENARIO=ridgeline ...), or directly:
 """
 
 import copy
+import math
 import re
 import sys
 import time
@@ -245,7 +247,7 @@ def track_speed(self, cmd, pid, uc_val):
     return ST("41 0D %02X" % min(kmh, 255))
 
 
-# RPM on the loop: 750 stopped, through five gears (rpm per km/h), shifting
+# RPM on the loop: 750 stopped (with a blip every 3 s), through five gears (rpm per km/h), shifting
 # up at 6300 rpm, so the shift light (default 6000) flashes before each shift.
 TRACK_GEARS = (110.0, 64.0, 44.0, 33.0, 27.0)
 
@@ -253,6 +255,12 @@ TRACK_GEARS = (110.0, 64.0, 44.0, 33.0, 27.0)
 def track_rpm_at(t):
     kmh = track_kmh(t)
     if kmh < 1.0:
+        # Parked: a throttle blip every 3 s (for Rev Sync), peaking at
+        # 2600, 3300 or 4000 rpm in turn.
+        phase = t % 3.0
+        if phase < 0.8:
+            peak = (2600.0, 3300.0, 4000.0)[int(t // 3.0) % 3]
+            return 750.0 + (peak - 750.0) * math.sin(math.pi * phase / 0.8)
         return 750.0
     for ratio in TRACK_GEARS:
         if kmh * ratio <= 6300.0:
@@ -276,6 +284,20 @@ def track():
 
 
 SCENARIOS["track"] = track()
+
+
+def blips():
+    """The ridgeline parked, the throttle blipped every 3 s (for Rev Sync)."""
+    s = copy.deepcopy(SCENARIOS["ridgeline"])
+    s[default_key("010C")] = {
+        "Request": "^010C[0-9]?$", "Descr": "RPM (parked, blips)", "Response": "",
+        "ResponseHeader": lambda self, cmd, pid, uc_val: ST(
+            "41 0C %02X %02X" % divmod(int(track_rpm_at((time.monotonic() - _track_t0) % 12.0)
+                                           * 4), 256))}
+    return s
+
+
+SCENARIOS["blips"] = blips()
 
 # A freeze frame for the j1850 truck's stored P0171 (Mode 02, frame 0):
 # running lean, warm, at idle.

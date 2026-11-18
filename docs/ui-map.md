@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, TRACK > G-METER (gauge-boy-356.6; M4 in progress)
+**As of:** 2026-11-18, TRACK > REV SYNC (gauge-boy-356.7; M4 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -23,7 +23,14 @@ Gauge Boy
         │   │   │                      notice: [BACK] → TRACK [B]   [I UNDERSTAND] → TIME ATTACK
         │   │   ├── [SHIFT LIGHT]    → SHIFT LIGHT
         │   │   ├── [G-METER]        → G-METER
+        │   │   ├── [REV SYNC]       → REV SYNC
         │   │   └── [BACK]           → HOME                                       [B]
+        │   ├── REV SYNC             (polls RPM, speed twice a second; top: tach bar 0-7000
+        │   │   │                     with the target marked and the blip's peak, big target /
+        │   │   │                     GO! / blip / score, the grade, the rounds so far, this
+        │   │   │                     car's high score; locked unless speed reads 0)
+        │   │   ├── [START] / [AGAIN] a 5-round game; refused while locked
+        │   │   └── [BACK]           → TRACK (stops polling)                      [B]
         │   ├── G-METER              (3DS accelerometer on; polls speed; top: a friction
         │   │   │                     circle, 1 g at the edge, ring at 0.5 g, ACCEL up,
         │   │   │                     BRAKE down, the ball; side / long / total g, peaks,

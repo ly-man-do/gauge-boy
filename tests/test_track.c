@@ -4,6 +4,7 @@
 
 #include "harness.h"
 #include "fun/gmeter.h"
+#include "fun/rev_sync.h"
 #include "fun/shift_light.h"
 #include "fun/time_attack.h"
 #include "fun/track_bests.h"
@@ -175,6 +176,18 @@ static void test_track_bests(void)
     CHECK(!track_bests_get(b, "", "0-60", &best));
     CHECK(!track_bests_get("junk\n,,,,\ncar,run,seconds,extra,date\n", "car", "run", &best));
 
+    /* Scores: higher wins. */
+    track_bests_offer_high(b, "Geo/Tracker/1996", "revsync", 3300.0f, "2026-11-20", &rec, a,
+                           sizeof a);
+    CHECK(rec);
+    track_bests_offer_high(a, "Geo/Tracker/1996", "revsync", 2900.0f, "2026-11-21", &rec, b,
+                           sizeof b);
+    CHECK(!rec);
+    track_bests_offer_high(a, "Geo/Tracker/1996", "revsync", 4100.0f, "2026-11-21", &rec, b,
+                           sizeof b);
+    CHECK(rec);
+    CHECK(track_bests_get(b, "Geo/Tracker/1996", "revsync", &best) && best.seconds == 4100.0f);
+
     /* No car: never saved. Too small: 0. */
     CHECK(track_bests_offer(b, "", "0-60", 1.0f, 0.0f, "x", &rec, a, sizeof a) > 0 && !rec);
     CHECK_EQ_INT(track_bests_offer("", "car", "0-60", 1.0f, 0.0f, "x", &rec, a, 10), 0);
@@ -341,8 +354,106 @@ static void test_gmeter_learns_forward(void)
     CHECK(!gm.forward_learned && !gm.learning);
 }
 
+static rev_sync_t rs;
+
+/* One round: idle readings while READY, then a blip peaking at peak (0 =
+ * no blip), every 100 ms with speed 0; returns the time after it. */
+static uint64_t rs_round(uint64_t t, float peak)
+{
+    for (; rs.state == RS_READY; t += 100) {
+        rs_speed(&rs, t, 0.0f);
+        rs_rpm(&rs, t, 750.0f);
+        rs_tick(&rs, t);
+    }
+    CHECK_EQ_INT(rs.state, RS_GO);
+    float shape[] = { 900, 1600, 2400, 0, 0, 1800, 1100, 800 };   /* 0: the peak */
+    for (int i = 0; i < 8 && rs.state == RS_GO && peak > 0.0f; i++, t += 100) {
+        rs_speed(&rs, t, 0.0f);
+        rs_rpm(&rs, t, shape[i] == 0 ? (i == 3 ? peak - 30.0f : peak) : fminf(shape[i], peak));
+        rs_tick(&rs, t);
+    }
+    for (; rs.state == RS_GO; t += 100) {                 /* no blip: time runs out */
+        rs_speed(&rs, t, 0.0f);
+        rs_rpm(&rs, t, 760.0f);
+        rs_tick(&rs, t);
+    }
+    CHECK_EQ_INT(rs.state, RS_JUDGE);
+    for (; rs.state == RS_JUDGE; t += 100) {
+        rs_speed(&rs, t, 0.0f);
+        rs_tick(&rs, t);
+    }
+    return t;
+}
+
+static void test_rev_sync_game(void)
+{
+    rs_init(&rs, 6000, 42);
+    CHECK_EQ_INT(rs.state, RS_LOCKED);                    /* no speed read yet */
+    CHECK(rs.note == NULL);
+    rs_speed(&rs, 50, 40.0f);                             /* already moving: says so */
+    CHECK(rs.state == RS_LOCKED && rs.note != NULL);
+    CHECK(!rs_start(&rs, 0));
+    rs_speed(&rs, 100, 0.0f);
+    CHECK_EQ_INT(rs.state, RS_IDLE);
+    CHECK(rs_start(&rs, 100));
+    for (int i = 0; i < RS_ROUNDS; i++) {
+        CHECK(rs.target[i] >= RS_TARGET_MIN && rs.target[i] <= RS_TARGET_MAX &&
+              rs.target[i] % 100 == 0);
+    }
+    uint64_t t = 100;
+    float off[RS_ROUNDS] = { 20, 30, -150, 0, 500 };      /* perfect, perfect, great, miss, ok */
+    for (int r = 0; r < RS_ROUNDS; r++) {
+        CHECK_EQ_INT(rs.round, r);
+        t = rs_round(t, r == 3 ? 0.0f : (float)rs.target[r] + off[r]);
+    }
+    CHECK_EQ_INT(rs.state, RS_DONE);
+    CHECK_EQ_INT(rs.grade[0], RS_GRADE_PERFECT);
+    CHECK_EQ_INT(rs.grade[1], RS_GRADE_PERFECT);
+    CHECK_EQ_INT(rs.grade[2], RS_GRADE_GREAT);
+    CHECK_EQ_INT(rs.grade[3], RS_GRADE_MISS);
+    CHECK_EQ_INT(rs.grade[4], RS_GRADE_OK);
+    CHECK_EQ_INT(rs.peak_of[0], rs.target[0] + 20);
+    CHECK_EQ_INT(rs.peak_of[3], 0);
+    /* 1000 + (1000 + 200) + (600 + 400) + 0 + 100 */
+    CHECK_EQ_INT(rs.score, 3300);
+    CHECK_EQ_STR(rs_rank(rs.score), "B");
+    CHECK(rs_start(&rs, t));                              /* again */
+    CHECK_EQ_INT(rs.score, 0);
+}
+
+static void test_rev_sync_locks(void)
+{
+    rs_init(&rs, 6000, 7);
+    rs_speed(&rs, 0, 0.0f);
+    CHECK(rs_start(&rs, 0));
+    rs_speed(&rs, 500, 3.0f);                             /* rolled */
+    CHECK_EQ_INT(rs.state, RS_LOCKED);
+    CHECK(rs.note != NULL);
+    CHECK(!rs_start(&rs, 600));
+    rs_speed(&rs, 1000, 0.0f);
+    CHECK_EQ_INT(rs.state, RS_IDLE);                      /* parked again: START anew */
+    CHECK(rs_start(&rs, 1000));
+    CHECK(rs_tick(&rs, 1000 + RS_SPEED_STALE_MS + 1));    /* speed readings stopped */
+    CHECK_EQ_INT(rs.state, RS_LOCKED);
+
+    /* Targets stay 1000 under a low shift point, and never under the minimum span. */
+    rs_init(&rs, 4000, 3);
+    CHECK_EQ_INT(rs.max_target, 3000);
+    rs_init(&rs, 2000, 3);
+    CHECK_EQ_INT(rs.max_target, RS_TARGET_MIN + 500);
+
+    CHECK_EQ_INT(rs_grade_for(3000, 3075.0f), RS_GRADE_PERFECT);
+    CHECK_EQ_INT(rs_grade_for(3000, 2799.0f), RS_GRADE_GOOD);
+    CHECK_EQ_INT(rs_grade_for(3000, 3701.0f), RS_GRADE_MISS);
+    CHECK_EQ_STR(rs_grade_name(RS_GRADE_GREAT), "GREAT");
+    CHECK_EQ_STR(rs_rank(6000), "S");
+    CHECK_EQ_STR(rs_rank(999), "D");
+}
+
 void suite_track(void)
 {
+    RUN_TEST(test_rev_sync_game);
+    RUN_TEST(test_rev_sync_locks);
     RUN_TEST(test_gmeter_flat);
     RUN_TEST(test_gmeter_calibration_fails);
     RUN_TEST(test_gmeter_learns_forward);

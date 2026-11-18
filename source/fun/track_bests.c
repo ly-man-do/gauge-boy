@@ -121,8 +121,9 @@ static bool add(char *out, size_t len, size_t *used, const char *text)
     return true;
 }
 
-size_t track_bests_offer(const char *text, const char *car, const char *run, float seconds,
-                         float extra, const char *date, bool *record, char *out, size_t len)
+static size_t offer(const char *text, const char *car, const char *run, float seconds,
+                    float extra, const char *date, bool higher, bool *record, char *out,
+                    size_t len)
 {
     *record = false;
     if (len == 0) {
@@ -131,7 +132,8 @@ size_t track_bests_offer(const char *text, const char *car, const char *run, flo
     out[0] = '\0';
     track_best_t old;
     bool beat = car != NULL && car[0] != '\0' && seconds > 0.0f &&
-                (!track_bests_get(text, car, run, &old) || seconds < old.seconds);
+                (!track_bests_get(text, car, run, &old) ||
+                 (higher ? seconds > old.seconds : seconds < old.seconds));
     if (!beat) {
         size_t n = text != NULL ? strlen(text) : 0;
         if (n >= len) {
@@ -166,4 +168,16 @@ size_t track_bests_offer(const char *text, const char *car, const char *run, flo
     }
     *record = true;
     return used;
+}
+
+size_t track_bests_offer(const char *text, const char *car, const char *run, float seconds,
+                         float extra, const char *date, bool *record, char *out, size_t len)
+{
+    return offer(text, car, run, seconds, extra, date, false, record, out, len);
+}
+
+size_t track_bests_offer_high(const char *text, const char *car, const char *run, float score,
+                              const char *date, bool *record, char *out, size_t len)
+{
+    return offer(text, car, run, score, 0.0f, date, true, record, out, len);
 }
