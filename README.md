@@ -102,4 +102,4 @@ Development uses [Beads](https://github.com/gastownhall/beads) for issue trackin
 
 ## License
 
-[MIT](LICENSE). All artwork, music and sounds are original or openly licensed; sources are listed in [CREDITS.md](CREDITS.md).
+No license for now: the owner removed it on 2026-11-18 and may choose one later, so all rights are reserved. Copies published before then (up to version 0.2.0) were released under the MIT license and stay under it. Third-party parts keep their own licenses; all artwork, music and sounds are original or openly licensed, and every source is listed in [CREDITS.md](CREDITS.md).

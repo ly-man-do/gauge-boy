@@ -1,16 +1,16 @@
 # Credits
 
-Every asset and borrowed file in Gauge Boy, with its source and license. Gauge Boy itself is [MIT](LICENSE).
+Every asset and borrowed file in Gauge Boy, with its source and license. Gauge Boy itself has no license for now (see the README).
 
 ## Art and sound
 
 | File | What | Source | License |
 |---|---|---|---|
-| `meta/icon.png` | HOME menu icon (tachometer) | Original, drawn by `tools/make_meta_assets.py` | MIT (this project) |
-| `meta/banner.png` | HOME menu banner | Original, drawn by `tools/make_meta_assets.py`; lettering is an original block font defined in that script | MIT (this project) |
-| `meta/banner.wav` | Banner chime | Original, synthesized by `tools/make_meta_assets.py` | MIT (this project) |
+| `meta/icon.png` | HOME menu icon (tachometer) | Original, drawn by `tools/make_meta_assets.py` | Gauge Boy (this project) |
+| `meta/banner.png` | HOME menu banner | Original, drawn by `tools/make_meta_assets.py`; lettering is an original block font defined in that script | Gauge Boy (this project) |
+| `meta/banner.wav` | Banner chime | Original, synthesized by `tools/make_meta_assets.py` | Gauge Boy (this project) |
 | `assets/fonts/Nunito-Bold.ttf` | HOME screen font (Nunito, Bold weight cut from the variable font with fonttools); converted at build time to `romfs/fonts/nunito-13.bcfnt` and `nunito-8.bcfnt` (ASCII only) | [google/fonts](https://github.com/google/fonts/tree/main/ofl/nunito) `ofl/nunito/Nunito[wght].ttf` (upstream [googlefonts/nunito](https://github.com/googlefonts/nunito)). Copyright 2014 The Nunito Project Authors. | SIL OFL 1.1 ([license text](assets/fonts/OFL.txt)) |
-| HOME screen icons | Gauge, magnifier, sliders, flag, document, gear, lamp and Wi-Fi icons | Original, drawn in code in `source/ui/home_draw.c` | MIT (this project) |
+| HOME screen icons | Gauge, magnifier, sliders, flag, document, gear, lamp and Wi-Fi icons | Original, drawn in code in `source/ui/home_draw.c` | Gauge Boy (this project) |
 
 ## Data
 

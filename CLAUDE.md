@@ -1,7 +1,7 @@
 # CLAUDE.md: Gauge Boy: OBD-II Deluxe
 
-**Version:** 1.24.0
-**Matches project brief:** 1.19.0 (`docs/gaugeboy-brief.md`)
+**Version:** 1.25.0
+**Matches project brief:** 1.20.0 (`docs/gaugeboy-brief.md`)
 
 You are the developer on Gauge Boy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
 
@@ -52,7 +52,7 @@ Use Beads (`bd`) for all task tracking. Do not create markdown TODO lists, plan 
 - Host unit tests: a minimal hand-rolled assert harness in `tests/` (no third-party test framework).
 - ELM327 emulator: the Python `ELM327-emulator` package, dev-only (never shipped); its config lives in `tools/`.
 - `.cia` packaging: `makerom` and `bannertool`. The `.cia` title ID is chosen once (an M0 `needs-owner` issue) and never changed.
-- 3D modeling: Blender, dev-only (never shipped). Models are built by Blender Python scripts in `tools/` so they can be regenerated, and a `tools/` converter turns the export into C data for citro3d. Scripts are MIT (GPL-compatible, as Blender's API needs); Blender's license does not cover the models it makes.
+- 3D modeling: Blender, dev-only (never shipped). Models are built by Blender Python scripts in `tools/` so they can be regenerated, and a `tools/` converter turns the export into C data for citro3d. Scripts follow the project's license (none for now) and must stay GPL-compatible, as Blender's API needs; Blender's license does not cover the models it makes.
 - QR codes: the Python `segno` package (BSD), dev and CI only (never shipped), pinned with a hash in `tools/requirements-release.txt`. `tools/make_qr.py` makes the README's stable install QR and each release's QR.
 - Anything else still needs owner approval (section 9).
 
@@ -113,7 +113,7 @@ docs/          Project brief, compatibility list
 
 ## 7. Legal and asset rules
 
-- License: MIT. Every dependency and asset must be compatible.
+- License: none for now (owner decision 2026-11-18; may be reviewed later). Don't add a LICENSE file or license headers. Every dependency and asset must still allow redistribution in a public repo, and its license and notices are kept (`CREDITS.md`, `docs/licenses/`). GPL code still can't be copied in.
 - "Gauge Boy" lettering and logo must be original and must not imitate the Game Boy logo, fonts or colors.
 - The 3DS-game look is built from original art only.
 - Fonts: open-licensed (e.g. SIL OFL) only.
@@ -143,6 +143,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.25.0 | 2026-11-18 | Matches brief 1.20.0: the MIT license is removed for now (sections 2, 7) |
 | 1.24.0 | 2026-11-18 | Matches brief 1.19.0: the FUN menu is TRACK (sections 5, 6); safety rules unchanged |
 | 1.23.0 | 2026-11-17 | Matches brief 1.18.0: M4 is Track modes (were fun modes), M5 UI polish, M6 Audio (section 1) |
 | 1.22.0 | 2026-11-17 | Matches brief 1.17.0: the name is "Gauge Boy"; files and folders `gauge-boy` (sections 2, 7) |

@@ -1,6 +1,6 @@
 # Project Brief: Gauge Boy: OBD-II Deluxe
 
-**Version:** 1.19.0
+**Version:** 1.20.0
 **Product name:** Gauge Boy: OBD-II Deluxe (short name: Gauge Boy)
 **Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -28,7 +28,7 @@ Build Gauge Boy: OBD-II Deluxe, a homebrew Nintendo 3DS application that connect
 - Let users install the app by scanning a QR code on the 3DS (see section 5c).
 - Log sessions to the SD card as CSV for later review.
 - Distribute as a `.3dsx` (Homebrew Launcher) and an installable `.cia`.
-- Release as open source on a public Git repository (MIT license, provisional).
+- Publish the source on a public Git repository (no license for now; owner decision 2026-11-18, may be reviewed later).
 
 ## 3. Non-Goals (v1)
 
@@ -79,8 +79,8 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 ## 5a. Open Source Setup
 
-- **License:** MIT (provisional; easy to change before the first public release). It is compatible with libctru (zlib) and citro2d/citro3d (zlib).
-- **Repository:** Public GitHub repo with `README.md`, `LICENSE`, `CHANGELOG.md`, and `CONTRIBUTING.md`.
+- **License:** none for now (owner decision 2026-11-18; may be reviewed later), so all rights are reserved. Copies published before then (up to 0.2.0) stay MIT. Dependencies and assets must still allow redistribution in a public repository, and their licenses and notices are kept (`CREDITS.md`, `docs/licenses/`).
+- **Repository:** Public GitHub repo with `README.md`, `CHANGELOG.md`, and `CONTRIBUTING.md`.
 - **Versioning:** Semantic versioning (`MAJOR.MINOR.PATCH`), with tagged releases matching the milestones in section 6.
 - **Builds:** GitHub Actions using the official devkitPro Docker image to build `.3dsx` and `.cia` on every tag.
 - **Community input:** An issue template for adapter and vehicle compatibility reports, feeding the compatibility list.
@@ -349,7 +349,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 1. ~~Target hardware~~ Resolved in 0.2.0: New 3DS family only.
 2. ~~ESP32 bridge scope~~ Resolved in 0.3.0: backup only, triggered by the M0 go / no-go rule.
-3. ~~Open source or private~~ Resolved in 0.4.0: open source, MIT license (provisional).
+3. Licensing: the source is public; the MIT license was removed in 1.20.0 (owner decision), and a license may be chosen later.
 4. ~~Solo or team / timeline~~ Resolved in 0.5.0 and 0.7.0: solo, no fixed timeline.
 5. ~~Test vehicle~~ Resolved in 0.8.0: 2008 Honda Ridgeline as primary. Second vehicle still to be chosen.
 6. Music track list: sources agreed in 0.11.0 (mix of free licensed, original and commissioned); specific tracks still to be decided.
@@ -361,6 +361,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.20.0 | 2026-11-18 | Owner decision: the MIT license is removed for now (may be reviewed later); copies published before stay MIT; third-party licenses and notices are kept (sections 2, 5a, 10); `CLAUDE.md` updated to 1.25.0 |
 | 1.19.0 | 2026-11-18 | Owner request: the FUN menu is renamed TRACK, subtitle "Track modes" (sections 2, 5b, 5e, 5f, 8); the safety rules are unchanged; `CLAUDE.md` updated to 1.24.0 |
 | 1.18.0 | 2026-11-17 | Owner decision: the track modes (were fun modes) are built before the UI polish: M4 is Track modes (0.4.x), M5 UI polish (0.5.x), M6 Audio (0.6.x) (section 8); freeze-frame data and recording from TRIM join M3 (sections 5d, 8); `CLAUDE.md` updated to 1.23.0 |
 | 1.17.0 | 2026-11-17 | Owner decision: the name is written "Gauge Boy" (two words), full name "Gauge Boy: OBD-II Deluxe"; files and folders use `gauge-boy` (`gauge-boy.cia`, `gauge-boy.3dsx`, `sdmc:/3ds/gauge-boy/`), and the app moves an old `sdmc:/3ds/gaugeboy/` folder's files once; `CLAUDE.md` updated to 1.22.0 |

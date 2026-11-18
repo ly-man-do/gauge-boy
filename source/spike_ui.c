@@ -4161,7 +4161,7 @@ static void draw_about_top(int busy, bool connected)
         "Unofficial homebrew. Not made, endorsed or",
         "supported by Nintendo.",
         "",
-        "MIT license. github.com/ly-man-do/gauge-boy",
+        "github.com/ly-man-do/gauge-boy",
         "",
         "Trouble code text: Wal33D/dtc-database (MIT).",
         "VIN models: NHTSA vPIC (US government, public",

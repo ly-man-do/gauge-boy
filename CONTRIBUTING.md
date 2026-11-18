@@ -43,4 +43,4 @@ Development work is tracked with [Beads](https://github.com/gastownhall/beads) i
 
 ## License
 
-By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE).
+Gauge Boy has no license for now (see the README); the owner may choose one later. Please open an issue to talk about a change before sending code.
