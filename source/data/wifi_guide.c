@@ -1,5 +1,6 @@
 #include "wifi_guide.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -112,4 +113,81 @@ int wifi_guide_lines(int step, const char *adapter_host, int cols,
         p = nl != NULL ? nl + 1 : NULL;
     }
     return n;
+}
+
+/* ---------- CHECK & CONNECT ---------- */
+
+typedef struct {
+    char (*lines)[WIFI_CHECK_COLS + 1];
+    int max, n;
+} out_t;
+
+static void say(out_t *o, const char *fmt, ...)
+{
+    if (o->n >= o->max) {
+        return;
+    }
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(o->lines[o->n++], WIFI_CHECK_COLS + 1, fmt, ap);
+    va_end(ap);
+}
+
+int wifi_check_lines(const wifi_check_t *c, char lines[][WIFI_CHECK_COLS + 1], int max)
+{
+    out_t o = { lines, max, 0 };
+    switch (c->failed) {
+    case WIFI_STEP_DONE:
+        if (c->car_ok) {
+            say(&o, "Connected.");
+            say(&o, "Adapter: %.30s", c->adapter[0] ? c->adapter : "answering");
+            say(&o, "Car: %.34s", c->car[0] ? c->car : "answering");
+        } else {
+            say(&o, "Connected to the adapter.");
+            say(&o, "The car didn't answer: turn the key");
+            say(&o, "on, or start the engine, and CHECK.");
+        }
+        return o.n;
+    case WIFI_STEP_WIFI:
+        say(&o, "Failed at: Wi-Fi");
+        say(&o, "The 3DS isn't on the adapter's Wi-Fi.");
+        say(&o, "Is the adapter on (key on)? Is its");
+        say(&o, "network saved in a slot? (Guide 1-2)");
+        break;
+    case WIFI_STEP_ADAPTER:
+        say(&o, "Failed at: reaching the adapter");
+        say(&o, "No answer at %.15s:%u.", c->host, c->port);
+        if (c->tcp == WIFI_TCP_REFUSED) {
+            say(&o, "It refused: is the port right?");
+        } else {
+            say(&o, "Is the address right, and the");
+            say(&o, "adapter plugged in with the key on?");
+        }
+        break;
+    case WIFI_STEP_ANSWER:
+        say(&o, "Failed at: the adapter answering");
+        say(&o, "It took the connection but didn't");
+        say(&o, "reply. Unplug it, wait 10 s, plug");
+        say(&o, "it back in, then CHECK again.");
+        break;
+    default:
+        break;
+    }
+    /* The likely cause: the slot isn't set up as the guide says. */
+    if (c->slot > 0 && c->slot_read && !c->slot_matches) {
+        say(&o, "Slot %d's IP / DNS differ from the", c->slot);
+        say(&o, "guide: manual, IP and DNS %.15s.", c->plan_ip);
+    }
+    return o.n;
+}
+
+const char *wifi_step_progress(wifi_step_t step)
+{
+    switch (step) {
+    case WIFI_STEP_WIFI:    return "Checking Wi-Fi...";
+    case WIFI_STEP_ADAPTER: return "Reaching the adapter...";
+    case WIFI_STEP_ANSWER:  return "Asking the adapter...";
+    case WIFI_STEP_CAR:     return "Asking the car...";
+    default:                return "";
+    }
 }

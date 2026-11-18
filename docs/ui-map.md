@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, HOME's Garage card (was My Garage); MILEAGE LOG select / EDIT / DELETE
+**As of:** 2026-11-18, SETUP > WI-FI: CHECK & CONNECT and CONNECTION GUIDE (gauge-boy-a1z)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -160,11 +160,13 @@ Gauge Boy
         │   │   ├── [SAVE LOG]       → logs/gauge-boy-log-<date>.txt
         │   │   └── [BACK → SETUP] [OLDER ^] [NEWER v]   (scroll the log)  [B, Up/Down, L/R]
         │   ├── [WI-FI]              → SETUP > WI-FI
-        │   │   ├── [Connect to the adapter      Connected/Not connected]
+        │   │   ├── [CHECK & CONNECT  Connected/Not connected/checking...]  Wi-Fi (joins the
+        │   │   │                    slot if needed), reaching the adapter, the adapter
+        │   │   │                    answering, the car; below: "Connected." with the adapter
+        │   │   │                    and car, or "Failed at: <step>" and what to fix (and the
+        │   │   │                    slot's IP / DNS when they differ from the guide)
         │   │   ├── [Wi-Fi slot                  Any/1/2/3]   cycles the slot, saved
-        │   │   ├── [Check the slot's IP and DNS >]  → Slot check screen
-        │   │   │   └── [OK]         → SETUP > WI-FI
-        │   │   ├── [Wi-Fi setup guide >]        → Wi-Fi guide
+        │   │   ├── [CONNECTION GUIDE >]          → Wi-Fi guide (the setup steps)
         │   │   └── [BACK]           → SETUP                                      [B]
         │   ├── [VEHICLE]            → SETUP > VEHICLE  (VIN values win, marked "(VIN)")
         │   │   ├── [Make         Auto/<make>]   → Car make picker
@@ -187,7 +189,7 @@ Gauge Boy
         └── Wi-Fi guide              (top: step text; 5 steps)
             ├── [BACK]               → SETUP > WI-FI, or HOME if opened from the Adapter card  [B]
             ├── [<] step n/5 [>]                                                  [L/R]
-            └── [CHECK]              slot, IP/DNS, Wi-Fi, adapter → results on bottom
+            └── [CHECK]              the same CHECK & CONNECT → results on bottom
 ```
 
 Any screen: a new achievement shows "Unlocked: <name>!" (or "Unlocked n achievements!") in the bottom screen's notice line for 5 s.

@@ -13,6 +13,7 @@
 
 #include <3ds.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
 #include <math.h>
@@ -265,11 +266,10 @@ static const button_t setup_buttons[] = {
  * BACK bottom-left (-> the SETUP menu). */
 #define BAR_ROWS_LAST 24
 static const button_t wifi_buttons[] = {
-    { "Connect to the adapter",      SPIKE_CONNECT,  0,  2, 39, 5 },
-    { "Wi-Fi slot",                  BTN_WIFI_SLOT,  0,  8, 39, 5 },
-    { "Check the slot's IP and DNS", BTN_SETUP_SLOT, 0, 14, 39, 5 },
-    { "Wi-Fi setup guide",           BTN_GUIDE,      0, 20, 39, 5 },
-    { "BACK",                        BTN_BACK,       0, 25, 8, 5 },
+    { "CHECK & CONNECT",  BTN_GUIDE_CHECK, 0, 2,  39, 5 },
+    { "Wi-Fi slot",       BTN_WIFI_SLOT,   0, 8,  39, 5 },
+    { "CONNECTION GUIDE", BTN_GUIDE,       0, 14, 39, 5 },
+    { "BACK",             BTN_BACK,        0, 25, 8, 5 },
 };
 #define WIFI_BUTTON_COUNT ((int)(sizeof wifi_buttons / sizeof wifi_buttons[0]))
 
@@ -604,6 +604,8 @@ static struct {
     char diag_msg[40];         /* last DIAG result line (clear codes), or "" */
     char guide_check[GUIDE_CHECK_LINES][40]; /* last Wi-Fi guide CHECK result */
     bool guide_checking;
+    int guide_step;            /* wifi_step_t in progress */
+    bool guide_ok;             /* the last CHECK connected */
 
     /* LIVE screen. The UI sets live_on and live_gen (PIDs changed); the
      * worker polls and publishes. */
@@ -1130,65 +1132,111 @@ static void clear_codes(spike_t *s)
 
 /* Wi-Fi guide CHECK (worker): slot chosen and named, its IP / DNS as the
  * guide says, on Wi-Fi, adapter answering. */
-static void guide_check(spike_t *s)
+static void wifi_progress(wifi_step_t step)
 {
-    char out[GUIDE_CHECK_LINES][40];
-    memset(out, 0, sizeof out);
-    int n = 0;
     LightLock_Lock(&shared.lock);
-    int slot = shared.wifi_slot;
-    char host[sizeof app_cfg->adapter_host];
-    strcpy(host, app_cfg->adapter_host);
-    shared.guide_checking = true;
+    shared.guide_step = (int)step;
     shared.diag_version++;
     LightLock_Unlock(&shared.lock);
+}
 
-    if (slot == 0) {
-        snprintf(out[n++], 40, "! Slot: Any (pick it in SETUP)");
-    } else {
-        char name[40];
-        if (!net_slot_name(slot, name, sizeof name)) {
-            snprintf(out[n++], 40, "! Slot %d is empty (step 2)", slot);
-        } else {
-            snprintf(out[n++], 40, "OK Slot %d: %.28s", slot, name);
-            net_ip_settings_t now, plan;
-            char err[80];
-            if (!net_slot_read(slot, &now, err, sizeof err) || !spike_plan_slot(host, &plan)) {
-                snprintf(out[n++], 40, "! Can't read the slot's settings");
-            } else if (spike_slot_matches(&now, &plan)) {
-                snprintf(out[n++], 40, "OK IP and DNS as in steps 3-4");
-            } else {
-                snprintf(out[n++], 40, "! IP / DNS differ from steps 3-4");
-                snprintf(out[n++], 40, "  (SETUP > WI-FI > Check the slot)");
+/* CHECK & CONNECT (worker, SETUP > WI-FI and the guide): Wi-Fi (joining
+ * the chosen slot if needed), the adapter (a fresh connection), the
+ * adapter answering, then the car. Stops at the first step that fails and
+ * says why; the slot's saved IP and DNS are read (never written) so a
+ * failure can name them as the likely cause. */
+static void guide_check(spike_t *s)
+{
+    static wifi_check_t c;
+    memset(&c, 0, sizeof c);
+    LightLock_Lock(&shared.lock);
+    int slot = shared.wifi_slot;
+    snprintf(c.host, sizeof c.host, "%s", app_cfg->adapter_host);
+    c.port = app_cfg->adapter_port;
+    shared.guide_checking = true;
+    shared.guide_step = WIFI_STEP_WIFI;
+    shared.diag_version++;
+    LightLock_Unlock(&shared.lock);
+    spike_logf(s, "CHECK & CONNECT");
+
+    /* Wi-Fi: on it, or join the saved slot now. */
+    char info[160], msg[160];
+    net_describe(info, sizeof info);
+    if (strstr(info, "Wi-Fi on") == NULL) {
+        msg[0] = '\0';
+        net_bring_up(msg, sizeof msg);
+        if (msg[0] != '\0') {
+            spike_logf(s, "%s", msg);
+        }
+        net_describe(info, sizeof info);
+    }
+    spike_logf(s, "Wi-Fi: %s", info);
+    bool on = strstr(info, "Wi-Fi on") != NULL;
+    /* The slot to look at: the one chosen, else the one the 3DS is on. */
+    const char *sp = strstr(info, "(slot ");
+    c.slot = slot != 0 ? slot : sp != NULL ? atoi(sp + 6) : 0;
+    net_ip_settings_t now, plan;
+    char err[80];
+    if (c.slot >= 1 && c.slot <= 3 && net_slot_read(c.slot, &now, err, sizeof err) &&
+        spike_plan_slot(c.host, &plan)) {
+        c.slot_read = true;
+        c.slot_matches = spike_slot_matches(&now, &plan);
+        snprintf(c.plan_ip, sizeof c.plan_ip, "%u.%u.%u.%u", plan.ip[0], plan.ip[1], plan.ip[2],
+                 plan.ip[3]);
+    }
+    c.failed = WIFI_STEP_DONE;
+    if (!on) {
+        c.failed = WIFI_STEP_WIFI;
+    }
+
+    /* The adapter: a fresh attempt now, not after the reconnect wait. */
+    if (c.failed == WIFI_STEP_DONE) {
+        wifi_progress(WIFI_STEP_ADAPTER);
+        tcp_transport_t *t = s->transport;
+        if (!tcp_transport_connected(t)) {
+            t->next_attempt_ms = 0;
+            tp_status_t st = tcp_transport_ensure_connected(t, TP_CONNECT_TIMEOUT_MS);
+            if (st != TP_OK) {
+                c.failed = WIFI_STEP_ADAPTER;
+                c.tcp = st == TP_ERR_CONNECT ? WIFI_TCP_REFUSED
+                      : st == TP_ERR_TIMEOUT ? WIFI_TCP_TIMEOUT : WIFI_TCP_OTHER;
+                spike_logf(s, "! Can't reach %s:%u (%s)", c.host, c.port, tp_status_str(st));
             }
         }
     }
-    char info[160];
-    net_describe(info, sizeof info);
-    bool on = strstr(info, "Wi-Fi on") != NULL;
-    snprintf(out[n++], 40, "%s %s", on ? "OK" : "!", on ? "On Wi-Fi" : "Not on Wi-Fi yet");
-
-    bool answered = false;
-    char id[ELM_LINE_MAX] = "";
-    if (spike_connect_if_needed(s)) {
+    if (c.failed == WIFI_STEP_DONE) {
+        wifi_progress(WIFI_STEP_ANSWER);
         static elm_response_t r;
         if (elm_command(s->elm, "ATI", ELM_TIMEOUT_DEFAULT_MS, &r) == ELM_OK && r.line_count > 0) {
-            answered = true;
-            snprintf(id, sizeof id, "%s", r.lines[r.line_count - 1]);
+            snprintf(c.adapter, sizeof c.adapter, "%.23s", r.lines[r.line_count - 1]);
+        } else {
+            c.failed = WIFI_STEP_ANSWER;
+            tcp_transport_close(s->transport);
         }
     }
-    if (answered) {
-        snprintf(out[n++], 40, "OK Adapter: %.27s", id);
-    } else {
-        snprintf(out[n++], 40, "! Adapter not answering");
-    }
-    for (int i = 0; i < n; i++) {
-        spike_logf(s, "Guide check: %s", out[i]);
+    if (c.failed == WIFI_STEP_DONE) {
+        wifi_progress(WIFI_STEP_CAR);
+        identify_car(s);   /* protocol and VIN, as after any connect */
+        LightLock_Lock(&shared.lock);
+        c.car_ok = shared.diag.link.protocol != 0;
+        diag_car_text(&shared.diag, c.car, sizeof c.car);
+        if (c.car_ok && c.car[0] == '\0') {
+            snprintf(c.car, sizeof c.car, "%.39s", elm_protocol_name(shared.diag.link.protocol));
+        }
+        LightLock_Unlock(&shared.lock);
     }
 
+    static char lines[GUIDE_CHECK_LINES][WIFI_CHECK_COLS + 1];
+    memset(lines, 0, sizeof lines);
+    int n = wifi_check_lines(&c, lines, GUIDE_CHECK_LINES);
+    for (int i = 0; i < n; i++) {
+        spike_logf(s, "%s %s", c.failed == WIFI_STEP_DONE ? "=" : "!", lines[i]);
+    }
     LightLock_Lock(&shared.lock);
-    memcpy(shared.guide_check, out, sizeof out);
+    memcpy(shared.guide_check, lines, sizeof shared.guide_check);
+    shared.guide_ok = c.failed == WIFI_STEP_DONE;
     shared.guide_checking = false;
+    shared.connected = tcp_transport_connected(s->transport);
     shared.diag_version++;
     LightLock_Unlock(&shared.lock);
 }
@@ -4573,7 +4621,9 @@ static void bar_value(int action, const gb_config_t *cfg, char *out, size_t len)
     out[0] = '\0';
     switch (action) {
     case SPIKE_CONNECT:
-        snprintf(out, len, "%s", shared.connected ? "Connected" : "Not connected");
+    case BTN_GUIDE_CHECK:
+        snprintf(out, len, "%s", shared.guide_checking ? "checking..."
+                                 : shared.connected ? "Connected" : "Not connected");
         break;
     case BTN_WIFI_SLOT:
         if (shared.wifi_slot == 0) {
@@ -4940,7 +4990,10 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         memcpy(check, shared.guide_check, sizeof check);
         bool checking = shared.guide_checking;
         LightLock_Unlock(&shared.lock);
-        print_row(10, BOTTOM_COLS, checking ? "Checking..." : check[0][0] ? "Last CHECK:"
+        LightLock_Lock(&shared.lock);
+        wifi_step_t step = (wifi_step_t)shared.guide_step;
+        LightLock_Unlock(&shared.lock);
+        print_row(10, BOTTOM_COLS, checking ? wifi_step_progress(step) : check[0][0] ? "Last CHECK:"
                                                         : "Tap CHECK after step 5.");
         for (int i = 0; i < GUIDE_CHECK_LINES; i++) {
             print_row(12 + i, BOTTOM_COLS, checking ? "" : check[i]);
@@ -5029,7 +5082,36 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
             bar_value(b->action, cfg, value, sizeof value);
             draw_bar(b, value, active);
         }
-        if (ui->screen == SCREEN_SETUP_VEHICLE) {
+        if (ui->screen == SCREEN_SETUP_WIFI) {
+            /* CHECK & CONNECT: the step in progress, or what it found. */
+            char check[GUIDE_CHECK_LINES][40];
+            LightLock_Lock(&shared.lock);
+            memcpy(check, shared.guide_check, sizeof check);
+            bool checking = shared.guide_checking, ok = shared.guide_ok;
+            wifi_step_t step = (wifi_step_t)shared.guide_step;
+            LightLock_Unlock(&shared.lock);
+            if (checking) {
+                print_row(19, BOTTOM_COLS, wifi_step_progress(step));
+                for (int i = 1; i < GUIDE_CHECK_LINES; i++) {
+                    print_row(19 + i, BOTTOM_COLS, "");
+                }
+            } else if (check[0][0] == '\0') {
+                print_row(19, BOTTOM_COLS, "CHECK & CONNECT tries each step and");
+                print_row(20, BOTTOM_COLS, "says where it stops. New to this?");
+                print_row(21, BOTTOM_COLS, "Start with the CONNECTION GUIDE.");
+            } else {
+                for (int i = 0; i < GUIDE_CHECK_LINES; i++) {
+                    print_row(19 + i, BOTTOM_COLS, "");
+                    if (i == 0) {
+                        printf("\x1b[%d;1H%s%-39.39s\x1b[0m", 19 + 1, ok ? "\x1b[32m" : "\x1b[31m",
+                               check[0]);
+                    } else {
+                        print_row(19 + i, BOTTOM_COLS, check[i]);
+                    }
+                }
+            }
+            printf("\x1b[28;11H%-28.28s", "L/R: scroll the log above");
+        } else if (ui->screen == SCREEN_SETUP_VEHICLE) {
             print_row(22, BOTTOM_COLS, "Values from the VIN win; yours are for");
             print_row(23, BOTTOM_COLS, "cars with no VIN. Engine: for TRACK's");
             print_row(24, BOTTOM_COLS, "fuel estimate on cars without a MAF.");

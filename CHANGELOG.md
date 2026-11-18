@@ -6,6 +6,7 @@ All notable changes to Gauge Boy are recorded here. The format follows [Keep a C
 
 ### Changed
 
+- **SETUP > WI-FI is simpler**: CHECK & CONNECT goes through every step (Wi-Fi, joining the chosen slot if needed; reaching the adapter; the adapter answering; the car) and connects. When it works it just says "Connected." with the adapter and the car; when it doesn't it says "Failed at:" the step and what to fix, and names the slot's IP and DNS when they differ from the guide. CONNECTION GUIDE opens the setup steps (its CHECK is the same one). The separate Connect and slot-check buttons are gone.
 - **GARAGE is reached from HOME's Garage card only** (the GARAGE button left TRACK).
 - **No license for now**: the MIT license is removed (owner decision); all rights are reserved until the owner chooses one. Copies published before (up to 0.2.0) stay MIT. About no longer says MIT. Third-party parts keep their own licenses (CREDITS.md).
 - **FUN is now TRACK**: the HOME card reads TRACK, "Track modes", for the timers, shift light, G-meter and the other modes coming in version 0.4.

@@ -459,6 +459,50 @@ static void test_wifi_guide(void)
     CHECK_EQ_STR(wifi_guide_title(9), "");
 }
 
+static void test_wifi_check_text(void)
+{
+    static char l[8][WIFI_CHECK_COLS + 1];
+    wifi_check_t c;
+    memset(&c, 0, sizeof c);
+    snprintf(c.host, sizeof c.host, "192.168.0.10");
+    c.port = 35000;
+    snprintf(c.plan_ip, sizeof c.plan_ip, "192.168.0.11");
+    c.failed = WIFI_STEP_DONE;
+    c.car_ok = true;
+    snprintf(c.adapter, sizeof c.adapter, "ELM327 v2.3");
+    snprintf(c.car, sizeof c.car, "2023 Subaru Ascent");
+    int n = wifi_check_lines(&c, l, 8);
+    CHECK_EQ_INT(n, 3);
+    CHECK_EQ_STR(l[0], "Connected.");
+    CHECK_EQ_STR(l[2], "Car: 2023 Subaru Ascent");
+    c.slot = 1;                                     /* success: nothing about the slot */
+    c.slot_read = true;
+    CHECK_EQ_INT(wifi_check_lines(&c, l, 8), 3);
+    c.car_ok = false;
+    n = wifi_check_lines(&c, l, 8);
+    CHECK_EQ_STR(l[0], "Connected to the adapter.");
+
+    c.failed = WIFI_STEP_ADAPTER;
+    c.tcp = WIFI_TCP_TIMEOUT;
+    n = wifi_check_lines(&c, l, 8);
+    CHECK_EQ_STR(l[0], "Failed at: reaching the adapter");
+    CHECK_EQ_STR(l[1], "No answer at 192.168.0.10:35000.");
+    CHECK_EQ_STR(l[n - 2], "Slot 1's IP / DNS differ from the");   /* the likely cause */
+    CHECK_EQ_STR(l[n - 1], "guide: manual, IP and DNS 192.168.0.11.");
+    c.slot_matches = true;
+    CHECK_EQ_INT(wifi_check_lines(&c, l, 8), n - 2);
+    c.failed = WIFI_STEP_WIFI;
+    wifi_check_lines(&c, l, 8);
+    CHECK_EQ_STR(l[0], "Failed at: Wi-Fi");
+    c.failed = WIFI_STEP_ANSWER;
+    wifi_check_lines(&c, l, 8);
+    CHECK_EQ_STR(l[0], "Failed at: the adapter answering");
+    for (int i = 0; i < 8; i++) {
+        CHECK(strlen(l[i]) <= WIFI_CHECK_COLS);
+    }
+    CHECK_EQ_STR(wifi_step_progress(WIFI_STEP_CAR), "Asking the car...");
+}
+
 /* The car found after a connect: just the VIN on a known link. */
 static void test_read_vin_only(void)
 {
@@ -570,6 +614,7 @@ static void test_freeze_frame(void)
 
 void suite_diag(void)
 {
+    RUN_TEST(test_wifi_check_text);
     gb_suite("diag");
     RUN_TEST(test_scan_ridgeline);
     RUN_TEST(test_panel);
