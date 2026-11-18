@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, MILEAGE LOG select / EDIT / DELETE; GARAGE only from HOME (gauge-boy-u8b, b0z)
+**As of:** 2026-11-18, HOME's Garage card (was My Garage); MILEAGE LOG select / EDIT / DELETE
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -12,7 +12,7 @@ Gauge Boy
 └── Safety notice                    (tap the touch screen to continue)
     └── HOME                         (graphics; top screen: car facts, found by itself
                                      after connecting: car, VIN, protocol)
-        ├── [My Garage card]         → GARAGE (BACK returns to HOME)
+        ├── [Garage card]            → GARAGE (BACK returns to HOME)
         │   └── GARAGE               (no polling; top: one car's card: a picture frame (photo
         │       │                     in M5), nickname, year make model, VIN or "(set in
         │       │                     SETUP)", logged distance and drives, odometer, bests;

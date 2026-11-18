@@ -6,7 +6,7 @@
  * Platform-free so the layout and touch zones are unit-tested; drawing is
  * in home_draw.c (citro2d).
  *
- *   [ My Garage ] [ Not connected ]    status cards (tap: GARAGE / Wi-Fi guide)
+ *   [ Garage ] [ Not connected ]    status cards (tap: GARAGE / Wi-Fi guide)
  *   [ LIVE ] [ DIAG ] [ TRIM ]         menu cards: icon, label, second line
  *   [ TRACK ] [ LOG ] [ SETUP ]
  *   ======= START Close =======        bar: tap to close, like START
@@ -66,7 +66,7 @@ const char *home_cel_text(const home_view_t *v);
  * CEL lamp) when the light is on, else "Codes & CEL". */
 const char *home_diag_sub(const home_view_t *v);
 
-#define HOME_GARAGE_TEXT "My Garage"
+#define HOME_GARAGE_TEXT "Garage"
 const char *home_adapter_text(const home_view_t *v);
 
 #endif
