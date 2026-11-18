@@ -9,7 +9,8 @@ motorbike. Gauge Boy's test cars are not CAN, so this adds:
   tracker    ISO 9141-2, like the owner's 1996 Geo Tracker: PIDs 01-1F only,
              CEL off, no codes and no VIN over OBD (choose the make in SETUP).
   j1850      SAE J1850 VPW (protocol 2, ATDPN A2), a made-up 2002 Chevrolet
-             truck with the CEL on, two stored codes and one pending code.
+             truck with the CEL on, two stored codes and one pending code,
+             and a freeze frame (Mode 02) for P0171.
   ascent     CAN 11-bit 500k (protocol 6), like the owner's 2023 Subaru
              Ascent (turbo): its supported-PID lists, no PID 0B, manifold
              pressure in PID 87 (idle vacuum and boost), baro in PID 33.
@@ -211,6 +212,18 @@ def ascent():
 
 
 SCENARIOS["ascent"] = ascent()
+
+# A freeze frame for the j1850 truck's stored P0171 (Mode 02, frame 0):
+# running lean, warm, at idle.
+for req, reply in {
+        "020200": "42 02 00 01 71",               # P0171 set it
+        "020000": "42 00 00 5E 3E 80 00",         # 02, 04-07, 0B-0F, 11
+        "020400": "42 04 00 40", "020500": "42 05 00 7B", "020600": "42 06 00 98",
+        "020700": "42 07 00 9A", "020B00": "42 0B 00 22", "020C00": "42 0C 00 0C 80",
+        "020D00": "42 0D 00 00", "020E00": "42 0E 00 8C", "020F00": "42 0F 00 3C",
+        "021100": "42 11 00 22"}.items():
+    SCENARIOS["j1850"]["FREEZE_" + req] = {"Request": "^" + req + "$", "Descr": "Freeze frame",
+                                           "Response": ST(reply)}
 
 ObdMessage.update(SCENARIOS)
 

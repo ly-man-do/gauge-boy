@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-17, REC on the TRIM screen (gauge-boy-43v.8; M3 in progress)
+**As of:** 2026-11-17, freeze frames on DIAG (gauge-boy-43v.9; M3 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -47,7 +47,8 @@ Gauge Boy
         │   │                        to drives/; red while recording; tap again to stop
         │   └── [START / STOP]       pauses or resumes polling (STOP also ends a recording)
         │
-        ├── DIAG                     (top: car facts or the selected code's text)
+        ├── DIAG                     (top: car facts or the selected code's text; a stored
+        │                            code with a freeze frame adds its values)
         │   ├── [STORED] [PENDING] [PERM] [READY]   tabs (PERM hidden if unsupported)
         │   ├── [list rows]          3 per page, tap → full description on top
         │   ├── [BACK]               → HOME                                       [B]
@@ -57,7 +58,8 @@ Gauge Boy
         │   ├── [CLEAR]              → Clear codes dialog (needs a scan first)
         │   │   ├── [CANCEL]         → DIAG                                       [B]
         │   │   └── [CLEAR CODES]    clears (refused if moving), then rescans
-        │   └── [SCAN]               reads CEL, readiness, codes, VIN (and model)  [X]
+        │   └── [SCAN]               reads CEL, readiness, codes, the freeze frame (with stored
+        │                            codes), VIN (and model)                        [X]
         │
         ├── LOG                      (top: the selected drive's details: date, car, VIN,
         │   │                        protocol, length, size, values; else what LOG is)

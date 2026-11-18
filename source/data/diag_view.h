@@ -35,12 +35,16 @@ const char *diag_tab_name(diag_tab_t tab);
 
 typedef struct {
     char row[DIAG_ROW_COLS + 1];  /* "P0171 System Too Lean Bank 1" (cut to fit) */
-    char detail[200];             /* full text for the top screen */
+    char detail[480];             /* full text for the top screen (with a freeze frame) */
 } diag_item_t;
 
 /* Rows for a tab: codes with their descriptions, or the supported
  * readiness monitors. Returns the count (0 = empty tab). */
 int diag_items(const obd_diag_t *d, diag_tab_t tab, diag_item_t *items, int max);
+
+/* Units for the freeze frame values in DIAG's text (OBD_UNITS_US unless
+ * set; the app passes SETUP's units). */
+void diag_view_set_units(int units);
 
 /* One line telling why a tab is empty ("No stored codes.", "Not read",
  * "Not supported by this car (normal before 2010)."). */

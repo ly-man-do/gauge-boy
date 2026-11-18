@@ -17,6 +17,7 @@
 #include <stdbool.h>
 
 #include "obd_codes.h"
+#include "obd_freeze.h"
 #include "obd_link.h"
 #include "obd_readiness.h"
 #include "obd_vin.h"
@@ -44,6 +45,7 @@ typedef struct {
     bool have_stored, have_pending, have_permanent;
     bool permanent_unsupported;     /* refused or NO DATA: hide the tab */
     obd_code_list_t stored, pending, permanent;
+    obd_freeze_t freeze;            /* frame 0, read when codes are stored */
 
     bool have_vin;
     char vin[OBD_VIN_LEN + 1];

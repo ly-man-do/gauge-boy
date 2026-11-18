@@ -132,6 +132,11 @@ int main(int argc, char **argv)
         printf("    pending %s  %s\n", d.pending.code[i].code,
                obd_dtc_text_for(d.pending.code[i].code, d.make));
     }
+    if (d.freeze.have) {
+        char ff[400];
+        obd_freeze_text(&d.freeze, OBD_UNITS_US, ff, sizeof ff);
+        printf("    freeze frame %s: %s\n", d.freeze.code, ff[0] ? ff : "(no values)");
+    }
     if (d.have_vin) {
         /* Check digits are a North American rule: report, don't require. */
         snprintf(detail, sizeof detail, "%s, %d %s%s%s, check digit %s", d.vin, d.model_year,

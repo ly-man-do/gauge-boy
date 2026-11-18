@@ -1,5 +1,7 @@
 #include "code_history.h"
 
+#include "obd/obd_pid.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -45,7 +47,7 @@ static void car_text(const obd_diag_t *d, char *out, size_t len)
 static bool add_row(char *out, size_t len, size_t *used, const char *when, const obd_diag_t *d,
                     const char *cel, const char *type, const char *code, const char *desc)
 {
-    char row[400] = "";
+    char row[640] = "";
     char car[48];
     car_text(d, car, sizeof car);
     field(row, sizeof row, when, false);
@@ -81,6 +83,20 @@ static bool add_codes(char *out, size_t len, size_t *used, const char *when, con
     return true;
 }
 
+/* The freeze frame (in US units, like the rest of the file's text). */
+static bool add_freeze(char *out, size_t len, size_t *used, const char *when,
+                       const obd_diag_t *d, const char *cel, int *rows)
+{
+    if (!d->freeze.have) {
+        return true;
+    }
+    char text[400];
+    obd_freeze_text(&d->freeze, OBD_UNITS_US, text, sizeof text);
+    (*rows)++;
+    return add_row(out, len, used, when, d, cel, "freeze", d->freeze.code,
+                   text[0] ? text : "freeze frame with no values read");
+}
+
 size_t code_history_scan_rows(const obd_diag_t *d, const char *when, char *out, size_t len)
 {
     if (len == 0) {
@@ -94,6 +110,7 @@ size_t code_history_scan_rows(const obd_diag_t *d, const char *when, char *out, 
     size_t used = 0;
     int rows = 0;
     if (!add_codes(out, len, &used, when, d, cel, "stored", &d->stored, d->have_stored, &rows) ||
+        !add_freeze(out, len, &used, when, d, cel, &rows) ||
         !add_codes(out, len, &used, when, d, cel, "pending", &d->pending, d->have_pending, &rows) ||
         !add_codes(out, len, &used, when, d, cel, "permanent", &d->permanent, d->have_permanent,
                    &rows)) {

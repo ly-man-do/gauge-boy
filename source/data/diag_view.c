@@ -5,6 +5,9 @@
 #include <string.h>
 
 #include "obd/dtc.h"
+#include "obd/obd_pid.h"
+
+static int view_units = OBD_UNITS_US;   /* freeze frame values */
 
 typedef struct {
     char (*lines)[DIAG_VIEW_COLS + 1];
@@ -287,9 +290,21 @@ int diag_items(const obd_diag_t *d, diag_tab_t tab, diag_item_t *items, int max)
         } else {
             snprintf(items[n].detail, sizeof items[n].detail, "%s (%s): %s", c->code, kind, text);
         }
+        if (tab == DIAG_TAB_STORED && d->freeze.have && strcmp(c->code, d->freeze.code) == 0) {
+            char ff[320];
+            obd_freeze_text(&d->freeze, view_units, ff, sizeof ff);
+            size_t used = strlen(items[n].detail);
+            snprintf(items[n].detail + used, sizeof items[n].detail - used,
+                     " Freeze frame when it set: %s.", ff[0] ? ff : "no values read");
+        }
         n++;
     }
     return n;
+}
+
+void diag_view_set_units(int units)
+{
+    view_units = units;
 }
 
 bool diag_has_trim_codes(const obd_diag_t *d)
@@ -380,6 +395,10 @@ int diag_facts(const obd_diag_t *d, int cols, char lines[][DIAG_VIEW_COLS + 1], 
         snprintf(buf + n, sizeof buf - n, ", %d permanent", d->permanent.count);
     }
     fact(&v, "Codes", buf);
+    if (d->freeze.have) {
+        snprintf(buf, sizeof buf, "%s (tap it on STORED)", d->freeze.code);
+        fact(&v, "Freeze", buf);
+    }
     if (d->result != OBD_LINK_OK || d->stopped_at != OBD_DIAG_STEP_DONE) {
         snprintf(buf, sizeof buf, "stopped: %s", obd_diag_step_str(d->stopped_at));
         fact(&v, "Scan", buf);

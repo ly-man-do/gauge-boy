@@ -9,6 +9,7 @@
 #include "data/wifi_guide.h"
 #include "obd/dtc.h"
 #include "obd/obd_diag.h"
+#include "obd/obd_pid.h"
 
 static fake_io_t f;
 static elm_t elm;
@@ -34,6 +35,7 @@ static void script_ridgeline(void)
     fake_io_reply(&f, "0120", "41 20 80 00 00 00\r\r>", 60, 0);
     fake_io_reply(&f, "0101", "41 01 82 07 65 04\r\r>", 60, 0);
     fake_io_reply(&f, "03", "43 01 71 14 56 00 00\r\r>", 80, 0);
+    fake_io_reply(&f, "020200", "NO DATA\r\r>", 80, 0);
     fake_io_reply(&f, "07", "NO DATA\r\r>", 80, 0);
     fake_io_reply(&f, "0A", "NO DATA\r\r>", 80, 0);
     fake_io_reply(&f, "0902",
@@ -52,6 +54,7 @@ static void script_tracker(void)
     fake_io_reply(&f, "ATDPN", "A3\r\r>", 40, 0);
     fake_io_reply(&f, "0101", "41 01 81 07 E1 00\r\r>", 60, 0);
     fake_io_reply(&f, "03", "43 12 50 00 00 00 00\r\r>", 80, 0);
+    fake_io_reply(&f, "020200", "NO DATA\r\r>", 80, 0);
     fake_io_reply(&f, "07", "NO DATA\r\r>", 80, 0);
     fake_io_reply(&f, "0A", "NO DATA\r\r>", 80, 0);
     fake_io_reply(&f, "0902", "NO DATA\r\r>", 80, 0);
@@ -469,6 +472,76 @@ static void test_read_vin_only(void)
     CHECK_EQ_INT(f.unexpected_writes, 0);
 }
 
+/* Freeze frame (Mode 02), ISO 9141-2 layout with headers off. */
+static void test_freeze_frame(void)
+{
+    setup();
+    fake_io_reply(&f, "020200", "42 02 00 01 71\r\r>", 80, 0);          /* P0171 set it */
+    fake_io_reply(&f, "020000", "42 00 00 5E 3E 80 00\r\r>", 80, 0);    /* 02, 04-07, 0B-0F, 11 */
+    fake_io_reply(&f, "020400", "42 04 00 40\r\r>", 80, 0);
+    fake_io_reply(&f, "020500", "42 05 00 7B\r\r>", 80, 0);
+    fake_io_reply(&f, "020600", "42 06 00 98\r\r>", 80, 0);
+    fake_io_reply(&f, "020700", "42 07 00 9A\r\r>", 80, 0);
+    fake_io_reply(&f, "020B00", "42 0B 00 22\r\r>", 80, 0);
+    fake_io_reply(&f, "020C00", "42 0C 00 0C 80\r\r>", 80, 0);
+    fake_io_reply(&f, "020D00", "42 0D 00 00\r\r>", 80, 0);
+    fake_io_reply(&f, "020E00", "NO DATA\r\r>", 80, 0);                  /* skipped */
+    fake_io_reply(&f, "020F00", "42 0F 01 3C\r\r>", 80, 0);              /* frame 1: not ours */
+    fake_io_reply(&f, "021100", "42 11 00 22\r\r>", 80, 0);
+    static obd_freeze_t fz;
+    CHECK_EQ_INT(obd_freeze_read(&elm, 3, &fz, NULL, NULL), ELM_OK);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+    CHECK(fz.have);
+    CHECK_EQ_STR(fz.code, "P0171");
+    CHECK_EQ_INT(fz.count, 8);
+    CHECK_EQ_INT(fz.pid[5], 0x0C);
+    CHECK(fz.value[5] == 800.0f);
+    char text[256];
+    obd_freeze_text(&fz, OBD_UNITS_US, text, sizeof text);
+    CHECK(strstr(text, "RPM 800 rpm") != NULL && strstr(text, "Coolant 181 F") != NULL);
+
+    /* Saved with the scan in the code history. */
+    static obd_diag_t dd;
+    memset(&dd, 0, sizeof dd);
+    dd.make = -1;
+    dd.link.protocol = 3;
+    dd.have_stored = true;
+    dd.stored.count = 1;
+    strcpy(dd.stored.code[0].code, "P0171");
+    dd.freeze = fz;
+    static char rows[2048];
+    CHECK(code_history_scan_rows(&dd, "2026-11-17 18:00:00", rows, sizeof rows) > 0);
+    CHECK(strstr(rows, ",freeze,P0171,\"Load 25 %, Coolant 181 F,") != NULL);
+    static diag_item_t its[4];
+    CHECK_EQ_INT(diag_items(&dd, DIAG_TAB_STORED, its, 4), 1);
+    CHECK(strstr(its[0].detail, "Freeze frame when it set: Load 25 %") != NULL);
+    int nf = diag_facts(&dd, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(nf, "Freeze    P0171 (tap it on STORED)");
+
+    /* No freeze frame: NO DATA, or code 0000. */
+    setup();
+    fake_io_reply(&f, "020200", "NO DATA\r\r>", 80, 0);
+    CHECK_EQ_INT(obd_freeze_read(&elm, 3, &fz, NULL, NULL), ELM_OK);
+    CHECK(!fz.have);
+    setup();
+    fake_io_reply(&f, "020200", "42 02 00 00 00\r\r>", 80, 0);
+    CHECK_EQ_INT(obd_freeze_read(&elm, 3, &fz, NULL, NULL), ELM_OK);
+    CHECK(!fz.have);
+
+    /* CAN, headers off, and a car that lists PIDs but answers none. */
+    setup();
+    fake_io_reply(&f, "020200", "42 02 00 03 00\r\r>", 40, 0);          /* P0300 */
+    fake_io_reply(&f, "020000", "42 00 00 00 10 00 00\r\r>", 40, 0);    /* 0C only */
+    fake_io_reply(&f, "020C00", "NO DATA\r\r>", 40, 0);
+    CHECK_EQ_INT(obd_freeze_read(&elm, 6, &fz, NULL, NULL), ELM_OK);
+    CHECK(fz.have && fz.count == 0);
+    CHECK_EQ_STR(fz.code, "P0300");
+
+    /* The adapter stops answering: the link is lost. */
+    setup();
+    CHECK_EQ_INT(obd_freeze_read(&elm, 3, &fz, NULL, NULL), ELM_ERR_TIMEOUT);
+}
+
 void suite_diag(void)
 {
     gb_suite("diag");
@@ -476,6 +549,7 @@ void suite_diag(void)
     RUN_TEST(test_panel);
     RUN_TEST(test_chosen_make);
     RUN_TEST(test_read_vin_only);
+    RUN_TEST(test_freeze_frame);
     RUN_TEST(test_scan_engine_off);
     RUN_TEST(test_scan_lost_midway);
     RUN_TEST(test_paged_pieces);

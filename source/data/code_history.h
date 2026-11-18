@@ -11,6 +11,7 @@
  *   date,vin,car,cel,type,code,description
  *   2026-11-15 15:56:02,2HJ...,2008 Honda,off,none,,
  *   2026-11-15 16:10:40,2HJ...,2008 Honda,ON,stored,P0171,System Too Lean Bank 1
+ *   2026-11-15 16:10:40,2HJ...,2008 Honda,ON,freeze,P0171,"Load 25 %, RPM 800 rpm, ..."
  *   2026-11-15 16:12:05,2HJ...,2008 Honda,,cleared,,Codes cleared
  */
 

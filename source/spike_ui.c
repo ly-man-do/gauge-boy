@@ -635,6 +635,7 @@ static void set_units(spike_t *s)
     gb_config_t copy = *app_cfg;
     LightLock_Unlock(&shared.lock);
     s->units = copy.metric ? OBD_UNITS_METRIC : OBD_UNITS_US;
+    diag_view_set_units(s->units);
     bool saved = config_save(&copy, CONFIG_PATH);
     spike_logf(s, "Units: %s%s", copy.metric ? "metric (km/h, C, kPa)" : "US (mph, F, psi, inHg)",
                saved ? "" : " (! not saved to config.ini)");
@@ -1758,8 +1759,8 @@ static void draw_diag_top(bool home, diag_tab_t tab, int selected, int busy, boo
     } else if (n == 0) {
         print_row(row++, TOP_COLS, empty);
     } else if (selected >= 0 && selected < n) {
-        static char wrapped[8][DIAG_VIEW_COLS + 1];
-        int w = diag_wrap(items[selected].detail, TOP_COLS, 2, wrapped, 8);
+        static char wrapped[14][DIAG_VIEW_COLS + 1];
+        int w = diag_wrap(items[selected].detail, TOP_COLS, 2, wrapped, 14);
         for (int i = 0; i < w && row < TOP_ROWS; i++) {
             print_row(row++, TOP_COLS, wrapped[i]);
         }
@@ -2993,6 +2994,7 @@ void spike_ui_run(void)
 
     load_config(&spike, &cfg);
     spike.units = cfg.metric ? OBD_UNITS_METRIC : OBD_UNITS_US;
+    diag_view_set_units(spike.units);
     app_cfg = &cfg;
     shared.wifi_slot = cfg.wifi_slot;
     net_set_wifi_slot(cfg.wifi_slot);

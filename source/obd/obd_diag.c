@@ -171,6 +171,13 @@ obd_link_result_t obd_diag_scan(elm_t *elm, bool reset, int current_year, obd_di
         out->stopped_at = OBD_DIAG_STEP_STORED;
         goto lost_link;
     }
+    if (out->have_stored && out->stored.count > 0) {
+        st = obd_freeze_read(elm, protocol, &out->freeze, trace, ctx);   /* Mode 02 */
+        if (lost(st)) {
+            out->stopped_at = OBD_DIAG_STEP_STORED;
+            goto lost_link;
+        }
+    }
 
     progress_to(progress, ctx, OBD_DIAG_STEP_PENDING);
     st = read_codes(&sc, "07", OBD_SERVICE_PENDING, protocol, &out->pending, &out->have_pending);
