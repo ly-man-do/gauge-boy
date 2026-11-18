@@ -63,6 +63,26 @@ static void test_config_car_make(void)
     remove(path);
 }
 
+static void test_config_shift_rpm(void)
+{
+    gb_config_t c;
+    config_defaults(&c);
+    CHECK_EQ_INT(c.shift_rpm, CONFIG_SHIFT_DEFAULT);
+    CHECK_EQ_INT(config_parse(&c, "[track]\nshift_rpm = 5500\n"), 0);
+    CHECK_EQ_INT(c.shift_rpm, 5500);
+    CHECK_EQ_INT(config_parse(&c, "[track]\nshift_rpm = 900\n[track]\nshift_rpm = fast\n"), 2);
+    CHECK_EQ_INT(c.shift_rpm, 5500);                       /* bad values keep it */
+    char path[] = "gaugeboy_test_shift.tmp.ini";
+    c.shift_rpm = 6300;
+    CHECK(config_save(&c, path));
+    gb_config_t back;
+    int w = -1;
+    CHECK(config_load(&back, path, &w));
+    CHECK_EQ_INT(w, 0);
+    CHECK_EQ_INT(back.shift_rpm, 6300);
+    remove(path);
+}
+
 static void test_config_vehicle_and_units(void)
 {
     gb_config_t c;
@@ -419,6 +439,7 @@ void suite_data(void)
     RUN_TEST(test_config_defaults);
     RUN_TEST(test_config_wifi_slot);
     RUN_TEST(test_config_car_make);
+    RUN_TEST(test_config_shift_rpm);
     RUN_TEST(test_config_vehicle_and_units);
     RUN_TEST(test_config_live_pids);
     RUN_TEST(test_config_unknown_key_ignored);

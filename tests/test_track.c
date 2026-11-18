@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "fun/shift_light.h"
 #include "fun/time_attack.h"
 #include "fun/track_bests.h"
 
@@ -178,8 +179,58 @@ static void test_track_bests(void)
     CHECK_EQ_INT(track_bests_offer("", "car", "0-60", 1.0f, 0.0f, "x", &rec, a, 10), 0);
 }
 
+static void test_shift_light(void)
+{
+    shift_light_t sl;
+    shift_init(&sl, 6000);
+    CHECK_EQ_INT(sl.shift_rpm, 6000);
+    CHECK_EQ_INT(shift_update(&sl, 800.0f), 0);           /* idle: dark */
+    CHECK_EQ_INT(shift_update(&sl, 3599.0f), 0);          /* under 60 % */
+    CHECK_EQ_INT(shift_update(&sl, 3600.0f), 1);          /* the first LED */
+    CHECK_EQ_INT(shift_update(&sl, 4800.0f), 5);          /* half way */
+    CHECK_EQ_INT(shift_update(&sl, 5999.0f), 9);          /* all but the last */
+    CHECK(!sl.flashing);
+    CHECK_EQ_INT(shift_update(&sl, 6000.0f), SHIFT_LEDS);  /* shift! */
+    CHECK(sl.flashing);
+    CHECK_EQ_INT(shift_update(&sl, 5850.0f), SHIFT_LEDS);  /* within the hysteresis */
+    CHECK(sl.flashing);
+    CHECK_EQ_INT(shift_update(&sl, 5700.0f), 8);          /* shifted: back to the bar */
+    CHECK(!sl.flashing);
+
+    CHECK(shift_flash_on(0) && !shift_flash_on(SHIFT_FLASH_MS) && shift_flash_on(2 * SHIFT_FLASH_MS));
+    CHECK_EQ_INT(shift_led_color(0), SHIFT_GREEN);
+    CHECK_EQ_INT(shift_led_color(5), SHIFT_AMBER);
+    CHECK_EQ_INT(shift_led_color(SHIFT_LEDS - 1), SHIFT_RED);
+
+    CHECK_EQ_INT(shift_step(6000, 100), 6100);
+    CHECK_EQ_INT(shift_step(6000, -10000), SHIFT_RPM_MIN);
+    CHECK_EQ_INT(shift_step(9900, 100), SHIFT_RPM_MAX);
+    CHECK_EQ_INT(shift_step(6049, 0), 6000);
+    shift_init(&sl, 50);
+    CHECK_EQ_INT(sl.shift_rpm, SHIFT_RPM_MIN);
+}
+
+static void test_shift_predict(void)
+{
+    shift_light_t sl;
+    shift_init(&sl, 6000);
+    CHECK(shift_rpm_now(&sl, 100) == 0.0f);
+    shift_reading(&sl, 1000, 3000.0f);
+    CHECK(shift_rpm_now(&sl, 1100) == 3000.0f);           /* one reading: no trend */
+    shift_reading(&sl, 1200, 4000.0f);                    /* +5 rpm a ms */
+    CHECK(fabsf(shift_rpm_now(&sl, 1300) - 4500.0f) < 1.0f);
+    CHECK(fabsf(shift_rpm_now(&sl, 5000) - 5500.0f) < 1.0f);   /* capped at 300 ms */
+    CHECK(shift_rpm_now(&sl, 1200) == 4000.0f);
+    shift_reading(&sl, 1100, 9000.0f);                    /* out of order: ignored */
+    CHECK(sl.rpm1 == 4000.0f);
+    shift_reading(&sl, 1400, 1000.0f);                    /* a fast drop (shifted) */
+    CHECK(shift_rpm_now(&sl, 1700) == 0.0f);              /* never negative */
+}
+
 void suite_track(void)
 {
+    RUN_TEST(test_shift_light);
+    RUN_TEST(test_shift_predict);
     RUN_TEST(test_ta_launch);
     RUN_TEST(test_ta_false_start_and_give_up);
     RUN_TEST(test_ta_quarter);

@@ -21,6 +21,7 @@ void config_defaults(gb_config_t *cfg)
     memcpy(cfg->live_pids, live, sizeof live);
     cfg->live_pid_count = (uint8_t)sizeof live;
     strcpy(cfg->live_view, "engine");
+    cfg->shift_rpm = CONFIG_SHIFT_DEFAULT;
 }
 
 /* "0C 0D 05" or "0c,0d,5": hex PIDs 01-FF, repeats dropped. False (and
@@ -195,6 +196,19 @@ int config_parse(gb_config_t *cfg, const char *text)
             }
             continue;
         }
+        if (strcmp(section, "track") == 0) {
+            if (strcmp(key, "shift_rpm") == 0) {
+                char *end = NULL;
+                long r = strtol(value, &end, 10);
+                if (value[0] != '\0' && end != NULL && *end == '\0' && r >= CONFIG_SHIFT_MIN &&
+                    r <= CONFIG_SHIFT_MAX) {
+                    cfg->shift_rpm = (uint16_t)r;
+                } else {
+                    warnings++;
+                }
+            }
+            continue;
+        }
         if (strcmp(section, "display") == 0) {
             if (strcmp(key, "units") == 0) {
                 if (strcmp(value, "us") == 0 || strcmp(value, "US") == 0) {
@@ -365,6 +379,12 @@ bool config_save(const gb_config_t *cfg, const char *path)
         "[display]\n"
         "units = %s\n"
         "\n"
+        "; shift_rpm: the shift light's shift point (TRACK > SHIFT LIGHT),\n"
+        "; 2000 to 9900 rpm.\n"
+        "\n"
+        "[track]\n"
+        "shift_rpm = %u\n"
+        "\n"
         "; pids: the LIVE Custom view's Mode 01 PIDs, in hex (chosen with EDIT).\n"
         "; Fewer PIDs refresh faster. view: the LIVE view opened last.\n"
         "\n"
@@ -374,7 +394,7 @@ bool config_save(const gb_config_t *cfg, const char *path)
         cfg->adapter_host, (unsigned)cfg->adapter_port, slot,
         cfg->car_make[0] != '\0' ? cfg->car_make : "auto",
         cfg->car_model[0] != '\0' ? cfg->car_model : "auto", year,
-        cfg->metric ? "metric" : "us", pids, cfg->live_view);
+        cfg->metric ? "metric" : "us", (unsigned)cfg->shift_rpm, pids, cfg->live_view);
     bool ok = rc > 0;
     if (fclose(f) != 0) {
         ok = false;

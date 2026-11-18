@@ -32,6 +32,7 @@
 #include "data/trim_view.h"
 #include "data/wifi_guide.h"
 #include "data/textlog.h"
+#include "fun/shift_light.h"
 #include "fun/time_attack.h"
 #include "fun/track_bests.h"
 #include "spike_actions.h"
@@ -128,6 +129,10 @@
 #define BTN_TA_WARN_OK    (-127) /* UI: TIME ATTACK closed-course notice: OK */
 #define BTN_TA_WARN_NO    (-128) /*     ... BACK */
 #define BTN_TA_RUN        (-130) /* UI: TIME ATTACK run (-130 - ta_run_t) */
+#define BTN_TRACK_SHIFT   (-129) /* UI: TRACK -> SHIFT LIGHT */
+#define BTN_SHIFT_DOWN    (-134) /* UI: SHIFT LIGHT: shift point -100 / +100 rpm */
+#define BTN_SHIFT_UP      (-135)
+#define BTN_SHIFT_SAVE    115    /* worker: save the shift point to config.ini */
 
 /* Bottom-screen buttons in 8x8 console cells: 12-13x6 cells = 96-104x48 px.
  * The third row has the Wi-Fi slot buttons, the last one the log ones. */
@@ -266,12 +271,14 @@ typedef enum {
     SCREEN_LOG,                /* LOG: recorded drives */
     SCREEN_GRAPH,              /* LOG > GRAPH: one value of a drive against time */
     SCREEN_TRACK,              /* TRACK: the track modes */
-    SCREEN_TIME_ATTACK         /* TRACK > TIME ATTACK: speed alone, timed runs */
+    SCREEN_TIME_ATTACK,        /* TRACK > TIME ATTACK: speed alone, timed runs */
+    SCREEN_SHIFT               /* TRACK > SHIFT LIGHT: RPM, LEDs on the top screen */
 } screen_t;
 
 /* TRACK: one button per mode built so far, then BACK. */
 static const button_t track_buttons[] = {
-    { "TIME ATTACK", BTN_TRACK_TA, 0, 4, 19, 5 },
+    { "TIME ATTACK", BTN_TRACK_TA,    0,  4, 19, 5 },
+    { "SHIFT LIGHT", BTN_TRACK_SHIFT, 20, 4, 19, 5 },
     { "BACK",        BTN_BACK,     0, 25, 8, 5 },
 };
 #define TRACK_BUTTON_COUNT ((int)(sizeof track_buttons / sizeof track_buttons[0]))
@@ -284,6 +291,14 @@ static const button_t ta_buttons[] = {
     { "BACK", BTN_BACK,                    0,  25, 8, 5 },
 };
 #define TA_BUTTON_COUNT ((int)(sizeof ta_buttons / sizeof ta_buttons[0]))
+
+/* SHIFT LIGHT: the shift point down / up, then BACK. */
+static const button_t shift_buttons[] = {
+    { "-100", BTN_SHIFT_DOWN, 0,  19, 12, 5 },
+    { "+100", BTN_SHIFT_UP,   27, 19, 12, 5 },
+    { "BACK", BTN_BACK,       0,  25, 8, 5 },
+};
+#define SHIFT_BUTTON_COUNT ((int)(sizeof shift_buttons / sizeof shift_buttons[0]))
 
 /* The closed-course notice, once a session. */
 static const button_t ta_warn_buttons[] = {
@@ -522,6 +537,7 @@ static struct {
     char rec_file[40];         /* "drive-20261116-171230.csv" */
     /* TIME ATTACK. The UI sets ta_on, ta_gen and the run; the worker times. */
     bool ta_on;                /* speed alone, no ATRV */
+    bool shift_on;             /* SHIFT LIGHT: RPM (and speed slowly), no ATRV */
     unsigned ta_gen;           /* bumped to arm ta_want_run */
     int ta_want_run;           /* ta_run_t */
     bool ta_want_metric;
@@ -1568,6 +1584,7 @@ static void live_poll(spike_t *s)
     uint32_t periods[OBD_LIVE_MAX];
     int n = shared.live_want_count;
     bool speed_only = shared.ta_on;
+    bool no_volts = shared.ta_on || shared.shift_on;
     memcpy(pids, shared.live_want, sizeof pids);
     memcpy(periods, shared.live_want_period, sizeof periods);
     LightLock_Unlock(&shared.lock);
@@ -1622,7 +1639,7 @@ static void live_poll(spike_t *s)
         lv.use_count = true;
         lv.use_multi = true;   /* CAN cars: several PIDs a request */
         lv.use_engine_header = true;   /* CAN cars: the engine ECU only */
-        lv.no_volts = speed_only;      /* TIME ATTACK: every request reads speed */
+        lv.no_volts = no_volts;        /* TIME ATTACK, SHIFT LIGHT: only what they show */
         uint8_t polled[OBD_LIVE_MAX];
         for (int i = 0; i < lv.count; i++) {
             polled[i] = lv.pid[i].pid;
@@ -1671,6 +1688,17 @@ static void live_poll(spike_t *s)
     history_from_live(&live_history, &lv);
     baro_save(s, &lv);
     rec_step(s, &lv, &link);
+}
+
+/* SHIFT LIGHT: the shift point to config.ini (worker). */
+static void shift_save(spike_t *s)
+{
+    LightLock_Lock(&shared.lock);
+    gb_config_t copy = *app_cfg;
+    LightLock_Unlock(&shared.lock);
+    bool saved = config_save(&copy, CONFIG_PATH);
+    spike_logf(s, "SHIFT LIGHT: shift point %u rpm%s", (unsigned)copy.shift_rpm,
+               saved ? ", saved" : " (! not saved to config.ini)");
 }
 
 /* LIVE PIDs to config.ini (worker). */
@@ -1738,6 +1766,8 @@ static void worker_main(void *arg)
                 set_units(spike);
             } else if (action == BTN_LIVE_SAVE) {
                 live_save(spike);
+            } else if (action == BTN_SHIFT_SAVE) {
+                shift_save(spike);
             } else {
                 spike_run(spike, (spike_action_t)action);
             }
@@ -2167,6 +2197,39 @@ static void ta_stop(void)
     LightLock_Unlock(&shared.lock);
 }
 
+/* SHIFT LIGHT: RPM as fast as the car allows, speed every second (to
+ * keep the shift point setting for when parked). */
+static void shift_start(void)
+{
+    static const uint8_t pids[] = { 0x0C, 0x0D };
+    static const uint32_t periods[] = { 0, 1000 };
+    LightLock_Lock(&shared.lock);
+    shared.ta_on = false;
+    shared.shift_on = true;
+    live_start_locked(pids, periods, 2);
+    LightLock_Unlock(&shared.lock);
+    LightEvent_Signal(&shared.wake);
+}
+
+static void shift_stop(void)
+{
+    LightLock_Lock(&shared.lock);
+    shared.shift_on = false;
+    shared.live_on = false;
+    shared.live_ui_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
+/* The car is moving (speed read in the last few seconds above 0). */
+static bool car_moving(uint64_t now)
+{
+    LightLock_Lock(&shared.lock);
+    const obd_live_pid_t *p = shared.live_have ? obd_live_get(&shared.live, 0x0D) : NULL;
+    bool moving = p != NULL && p->have && p->value >= 1.0f && now - p->at_ms < 5000;
+    LightLock_Unlock(&shared.lock);
+    return moving;
+}
+
 /* Big 3x5 block digits for the countdown and the times. */
 static const char *big_glyph(char c)
 {
@@ -2213,9 +2276,12 @@ static void draw_track_top(int busy, bool connected)
         "",
         "TIME ATTACK  0-60, 60-0 braking, 1/4 mile",
         "",
-        "Coming in version 0.4: shift light, G-meter,",
-        "Rev Sync, Eco Challenge, garage card,",
-        "achievements and attract mode.",
+        "SHIFT LIGHT  LEDs that fill with RPM and flash",
+        "             at your shift point",
+        "",
+        "Coming in version 0.4: G-meter, Rev Sync, Eco",
+        "Challenge, garage card, achievements and",
+        "attract mode.",
         "",
         "For closed courses, track days and passengers",
         "only. Nothing here needs a touch while moving:",
@@ -2383,6 +2449,94 @@ static void draw_ta_top(int busy, bool connected, bool metric, uint64_t now)
     }
     print_row(TOP_ROWS - 2, TOP_COLS, "Closed course only. Results are estimates.");
     print_row(TOP_ROWS - 1, TOP_COLS, "No touch needed while moving.");
+}
+
+/* SHIFT LIGHT top screen: the LED row, RPM in big digits, the shift point. */
+static void draw_shift_top(int busy, bool connected, int shift_rpm, uint64_t now)
+{
+    static shift_light_t sl;
+    static uint32_t reads_seen;
+    static obd_live_t lv;
+    char msg[sizeof shared.live_msg];
+    LightLock_Lock(&shared.lock);
+    lv = shared.live;
+    bool have_live = shared.live_have;
+    memcpy(msg, shared.live_msg, sizeof msg);
+    LightLock_Unlock(&shared.lock);
+
+    if (sl.shift_rpm != shift_rpm) {
+        shift_init(&sl, shift_rpm);
+        reads_seen = 0;
+    }
+    const obd_live_pid_t *rp = have_live ? obd_live_get(&lv, 0x0C) : NULL;
+    if (rp != NULL && rp->have && rp->reads != reads_seen) {
+        reads_seen = rp->reads;
+        shift_reading(&sl, rp->at_ms, rp->value);
+    }
+    bool fresh = rp != NULL && rp->have && now - rp->at_ms < 2000;
+    float rpm = fresh ? shift_rpm_now(&sl, now) : 0.0f;
+    int lit = fresh ? shift_update(&sl, rpm) : 0;
+    bool on = !sl.flashing || shift_flash_on(now);
+
+    char header[TOP_COLS + 1], line[TOP_COLS + 32];
+    spike_format_header(header, sizeof header, connected, busy);
+    consoleSelect(&top_console);
+    printf("\x1b[0m");
+    print_row(0, TOP_COLS, header);
+    print_row(1, TOP_COLS, "-------------------------------------------------");
+    if (rp != NULL && rp->hz > 0.0f) {
+        snprintf(line, sizeof line, "SHIFT LIGHT  shift at %d rpm   RPM %.1f/s", shift_rpm,
+                 (double)rp->hz);
+    } else {
+        snprintf(line, sizeof line, "SHIFT LIGHT  shift at %d rpm", shift_rpm);
+    }
+    print_row(2, TOP_COLS, line);
+    print_row(3, TOP_COLS, "");
+
+    /* The LEDs: SHIFT_LEDS blocks 4 wide with a 1-column gap, 3 rows tall. */
+    static const char *const color[] = { "\x1b[42m", "\x1b[43m", "\x1b[41m" };
+    for (int r = 0; r < 3; r++) {
+        printf("\x1b[%d;1H", 4 + r + 1);
+        for (int i = 0; i < SHIFT_LEDS; i++) {
+            bool led = i < lit && on;
+            const char *c = sl.flashing ? "\x1b[41m" : color[shift_led_color(i)];
+            if (led) {
+                printf("%s    \x1b[0m", c);
+            } else {
+                printf("\x1b[0m%s", r == 1 ? " -- " : "    ");
+            }
+            if (i < SHIFT_LEDS - 1) {
+                printf(" ");
+            }
+        }
+    }
+    printf("\x1b[0m");
+    print_row(7, TOP_COLS, "");
+
+    for (int r = 8; r < 16; r++) {
+        print_row(r, TOP_COLS, "");
+    }
+    if (fresh) {
+        char big[16];
+        snprintf(big, sizeof big, "%d", (int)(rpm / 10.0f + 0.5f) * 10);
+        int width = (int)strlen(big) * 4;
+        big_print(9, (TOP_COLS - width) / 2, big, sl.flashing ? "\x1b[41m" : "\x1b[47m");
+        printf("\x1b[%d;%dHrpm", 13 + 1, (TOP_COLS - width) / 2 + width + 1);
+        print_row(15, TOP_COLS, sl.flashing ? "                    SHIFT!" : "");
+    } else if (msg[0] != '\0') {
+        print_row(11, TOP_COLS, msg);
+    } else if (have_live && lv.count == 0) {
+        print_row(11, TOP_COLS, "This car doesn't report RPM (PID 0C).");
+    } else {
+        print_row(11, TOP_COLS, "Waiting for RPM...");
+    }
+    for (int r = 16; r < TOP_ROWS - 2; r++) {
+        print_row(r, TOP_COLS, "");
+    }
+    snprintf(line, sizeof line, "The LEDs light from %d rpm and flash at %d.",
+             shift_rpm * SHIFT_START_PCT / 100, shift_rpm);
+    print_row(TOP_ROWS - 2, TOP_COLS, line);
+    print_row(TOP_ROWS - 1, TOP_COLS, "Display only: no touch needed while moving.");
 }
 
 static void draw_ta_dialog(void)
@@ -2928,9 +3082,25 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
     if (ui->screen == SCREEN_TRACK) {
         print_row(2, BOTTOM_COLS, "TRACK  Track modes");
         draw_list(track_buttons, TRACK_BUTTON_COUNT, now, busy, 0, false);
-        print_row(11, BOTTOM_COLS, "0-60, 60-0 braking and the 1/4 mile.");
-        print_row(13, BOTTOM_COLS, "More modes come in version 0.4.");
+        print_row(11, BOTTOM_COLS, "TIME ATTACK: 0-60, 60-0, 1/4 mile.");
+        print_row(12, BOTTOM_COLS, "SHIFT LIGHT: LEDs that flash at your");
+        print_row(13, BOTTOM_COLS, "shift point.");
+        print_row(15, BOTTOM_COLS, "More modes come in version 0.4.");
         print_row(22, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        return;
+    }
+    if (ui->screen == SCREEN_SHIFT) {
+        print_row(2, BOTTOM_COLS, "SHIFT LIGHT");
+        print_row(4, BOTTOM_COLS, "The LEDs on the top screen fill as the");
+        print_row(5, BOTTOM_COLS, "RPM rises and flash at the shift point.");
+        print_row(7, BOTTOM_COLS, "Set the shift point while parked, a");
+        print_row(8, BOTTOM_COLS, "little under the redline (it's saved).");
+        print_row(10, BOTTOM_COLS, "Older cars send RPM a few times a");
+        print_row(11, BOTTOM_COLS, "second; the light fills in between.");
+        print_row(16, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        draw_list(shift_buttons, SHIFT_BUTTON_COUNT, now, busy, 0, false);
+        snprintf(line, sizeof line, "%u rpm", (unsigned)cfg->shift_rpm);
+        printf("\x1b[%d;%dH%-13.13s", 21 + 1, 14 + 1, line);
         return;
     }
     if (ui->screen == SCREEN_TIME_ATTACK) {
@@ -3653,6 +3823,7 @@ void spike_ui_run(void)
             case SCREEN_LIVE_MENU: list = live_menu_buttons; count = LIVE_VIEW_COUNT + 1;  break;
             case SCREEN_TRACK:     list = track_buttons;     count = TRACK_BUTTON_COUNT;     break;
             case SCREEN_TIME_ATTACK: list = ta_buttons;      count = TA_BUTTON_COUNT;        break;
+            case SCREEN_SHIFT:     list = shift_buttons;     count = SHIFT_BUTTON_COUNT;     break;
             case SCREEN_TEST:  break;
             }
             int i = ui.screen == SCREEN_HOME && home_gfx ? -1 : button_at(list, count, tp.px, tp.py);
@@ -3874,6 +4045,27 @@ void spike_ui_run(void)
                 }
                 bottom_full = true;
                 break;
+            case BTN_TRACK_SHIFT:
+                ui.screen = SCREEN_SHIFT;
+                shift_start();
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_SHIFT_DOWN:
+            case BTN_SHIFT_UP:
+                if (car_moving(now)) {
+                    ui.notice = "Set the shift point while parked.";
+                    notice_until = now + 3000;
+                    break;
+                }
+                LightLock_Lock(&shared.lock);
+                cfg.shift_rpm = (uint16_t)shift_step(cfg.shift_rpm,
+                                                     action == BTN_SHIFT_UP ? 100 : -100);
+                LightLock_Unlock(&shared.lock);
+                if (worker != NULL) {
+                    enqueue(BTN_SHIFT_SAVE);
+                }
+                top_dirty = true;
+                break;
             case BTN_TA_RUN - TA_RUN_LAUNCH:
             case BTN_TA_RUN - TA_RUN_BRAKE:
             case BTN_TA_RUN - TA_RUN_QUARTER: {
@@ -4004,6 +4196,12 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
+                if (ui.screen == SCREEN_SHIFT) {
+                    shift_stop();
+                    ui.screen = SCREEN_TRACK;
+                    bottom_full = top_dirty = true;
+                    break;
+                }
                 if (ui.screen == SCREEN_TIME_ATTACK) {
                     ta_stop();
                     ui.screen = SCREEN_TRACK;
@@ -4167,7 +4365,8 @@ void spike_ui_run(void)
         bool live_due = live_screen && live_version != drawn_live_version &&
                         now - live_drawn_at >= 100;
         /* TIME ATTACK: the countdown and the running time move on their own. */
-        bool ta_due = ui.screen == SCREEN_TIME_ATTACK && now - live_drawn_at >= 100;
+        bool ta_due = (ui.screen == SCREEN_TIME_ATTACK && now - live_drawn_at >= 100) ||
+                      (ui.screen == SCREEN_SHIFT && now - live_drawn_at >= 30);
 
         LightLock_Lock(&shared.lock);
         unsigned drive_version = shared.drive_version;
@@ -4202,6 +4401,9 @@ void spike_ui_run(void)
                        : !live_screen && diag_version != drawn_diag_version)) {
             if (ui.screen == SCREEN_TIME_ATTACK) {
                 draw_ta_top(busy, connected, cfg.metric, now);
+                live_drawn_at = now;
+            } else if (ui.screen == SCREEN_SHIFT) {
+                draw_shift_top(busy, connected, cfg.shift_rpm, now);
                 live_drawn_at = now;
             } else if (ui.screen == SCREEN_TRACK) {
                 draw_track_top(busy, connected);

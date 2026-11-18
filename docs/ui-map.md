@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, TRACK > TIME ATTACK (gauge-boy-356.4; M4 in progress)
+**As of:** 2026-11-18, TRACK > SHIFT LIGHT (gauge-boy-356.5; M4 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -21,7 +21,14 @@ Gauge Boy
         │   ├── TRACK                (top: the modes, closed-course rules)
         │   │   ├── [TIME ATTACK]    → closed-course notice (once a session), then TIME ATTACK
         │   │   │                      notice: [BACK] → TRACK [B]   [I UNDERSTAND] → TIME ATTACK
+        │   │   ├── [SHIFT LIGHT]    → SHIFT LIGHT
         │   │   └── [BACK]           → HOME                                       [B]
+        │   ├── SHIFT LIGHT          (polls RPM, speed every second; top: a row of 10 LEDs,
+        │   │   │                     green / amber / red, filling from 60 % of the shift
+        │   │   │                     point and flashing at it with SHIFT!, RPM in big digits)
+        │   │   ├── [-100] [+100]    shift point (shown between them, saved to config.ini);
+        │   │   │                     refused while moving ("Set the shift point while parked.")
+        │   │   └── [BACK]           → TRACK (stops polling)                      [B]
         │   └── TIME ATTACK          (polls speed alone; top: run, speed readings a second,
         │       │                     state in big text: stop the car / 3 2 1 / GO! / time /
         │       │                     result with NEW RECORD!, speed, this car's best)

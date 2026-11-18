@@ -16,8 +16,9 @@ motorbike. Gauge Boy's test cars are not CAN, so this adds:
              pressure in PID 87 (idle vacuum and boost), baro in PID 33.
              Built on the emulator's own CAN 'car' scenario, so combined
              requests ("010C0D05...") are answered too.
-  track      the ridgeline with its speed going round a 50 s loop (stop,
-             0-130 km/h, cruise, hard stop) for testing Time Attack.
+  track      the ridgeline with its speed and RPM going round a 50 s loop
+             (stop, 0-130 km/h through the gears, cruise, hard stop) for
+             testing Time Attack and the shift light.
 
 Replies are what an ELM327 prints with headers off (ATH0), which is how
 Gauge Boy runs the adapter: data bytes only, one line per frame, no CAN
@@ -244,11 +245,33 @@ def track_speed(self, cmd, pid, uc_val):
     return ST("41 0D %02X" % min(kmh, 255))
 
 
+# RPM on the loop: 750 stopped, through five gears (rpm per km/h), shifting
+# up at 6300 rpm, so the shift light (default 6000) flashes before each shift.
+TRACK_GEARS = (110.0, 64.0, 44.0, 33.0, 27.0)
+
+
+def track_rpm_at(t):
+    kmh = track_kmh(t)
+    if kmh < 1.0:
+        return 750.0
+    for ratio in TRACK_GEARS:
+        if kmh * ratio <= 6300.0:
+            return max(1200.0, kmh * ratio)
+    return kmh * TRACK_GEARS[-1]
+
+
+def track_rpm(self, cmd, pid, uc_val):
+    rpm = int(track_rpm_at(time.monotonic() - _track_t0) * 4)
+    return ST("41 0C %02X %02X" % (rpm >> 8, rpm & 0xFF))
+
+
 def track():
-    """The ridgeline with its speed going round the test loop above."""
+    """The ridgeline with its speed and RPM going round the test loop above."""
     s = copy.deepcopy(SCENARIOS["ridgeline"])
     s[default_key("010D")] = {"Request": "^010D[0-9]?$", "Descr": "Vehicle speed (test loop)",
                               "ResponseHeader": track_speed, "Response": ""}
+    s[default_key("010C")] = {"Request": "^010C[0-9]?$", "Descr": "RPM (test loop)",
+                              "ResponseHeader": track_rpm, "Response": ""}
     return s
 
 

@@ -21,6 +21,9 @@
  *   [display]
  *   units = us             ; or metric
  *
+ *   [track]
+ *   shift_rpm = 6000       ; the shift light's shift point (2000-9900)
+ *
  *   [live]
  *   pids = 0C 0D 05 0F 11 04 0B 0E 10   ; the Custom view's PIDs, hex
  *   view = engine                        ; the LIVE view opened last
@@ -52,11 +55,15 @@ typedef struct {
     uint8_t live_pids[CONFIG_LIVE_PIDS_MAX];  /* LIVE screen PIDs, in order */
     uint8_t live_pid_count;
     char live_view[12];      /* LIVE view key ("engine", "custom" ...) */
+    uint16_t shift_rpm;      /* TRACK > SHIFT LIGHT: the shift point */
 } gb_config_t;
 
 #define CONFIG_WIFI_SLOTS 3
 #define CONFIG_YEAR_MIN 1980
 #define CONFIG_YEAR_MAX 2100
+#define CONFIG_SHIFT_DEFAULT 6000
+#define CONFIG_SHIFT_MIN 2000
+#define CONFIG_SHIFT_MAX 9900
 
 void config_defaults(gb_config_t *cfg);
 
