@@ -187,3 +187,74 @@ const char *obd_link_result_str(obd_link_result_t result)
     }
     return "?";
 }
+
+const char *obd_module_header(int protocol, obd_module_t module)
+{
+    static const char *const can11[OBD_MODULE_COUNT] = { "ATSH7E0", "ATSH7E1" };
+    static const char *const can29[OBD_MODULE_COUNT] = { "ATSHDA10F1", "ATSHDA18F1" };
+    if ((unsigned)module >= (unsigned)OBD_MODULE_COUNT) {
+        return NULL;
+    }
+    return protocol == 6 || protocol == 8 ? can11[module]
+         : protocol == 7 || protocol == 9 ? can29[module] : NULL;
+}
+
+const char *obd_functional_header(int protocol)
+{
+    return protocol == 6 || protocol == 8 ? "ATSH7DF"
+         : protocol == 7 || protocol == 9 ? "ATSHDB33F1" : NULL;
+}
+
+const char *obd_module_name(obd_module_t module)
+{
+    return module == OBD_MODULE_TRANSMISSION ? "Transmission" : "Engine";
+}
+
+obd_link_result_t obd_link_read_module(elm_t *elm, const obd_link_t *link, obd_module_t module,
+                                       obd_link_t *out, obd_link_trace_fn trace, void *ctx)
+{
+    static elm_response_t r;
+    memset(out, 0, sizeof *out);
+    out->protocol = link->protocol;
+    out->protocol_auto = link->protocol_auto;
+    trace_fn = trace;
+    trace_ctx = ctx;
+    const char *hdr = obd_module_header(link->protocol, module);
+    const char *all = obd_functional_header(link->protocol);
+    if (hdr == NULL || all == NULL) {
+        return fail(out, OBD_LINK_NO_VEHICLE, ELM_ERR_BAD_REPLY, "ATSH");
+    }
+    elm_status_t st = command(elm, hdr, ELM_TIMEOUT_DEFAULT_MS, &r);
+    if (st != ELM_OK) {
+        return fail(out, lost(st) ? OBD_LINK_LOST : OBD_LINK_NO_ADAPTER, st, hdr);
+    }
+    obd_link_result_t res = OBD_LINK_OK;
+    for (int i = 0; i < OBD_PID_RANGES && (i == 0 || (out->supported[i - 1][3] & 0x01)); i++) {
+        char cmd[8];
+        uint8_t range_pid = (uint8_t)(i * 0x20);
+        snprintf(cmd, sizeof cmd, "01%02X", range_pid);
+        st = command(elm, cmd, ELM_TIMEOUT_DEFAULT_MS, &r);
+        if (lost(st)) {
+            res = OBD_LINK_LOST;
+            break;
+        }
+        if (st != ELM_OK ||
+            !read_range(&r, out->protocol, range_pid, out->supported[i], i == 0 ? &out->ecus : NULL)) {
+            if (i == 0) {
+                res = OBD_LINK_NO_VEHICLE;   /* the module didn't answer */
+            }
+            break;
+        }
+        out->ranges_read = i + 1;
+    }
+    if (res != OBD_LINK_LOST) {
+        elm_status_t back = command(elm, all, ELM_TIMEOUT_DEFAULT_MS, &r);
+        if (lost(back)) {
+            res = OBD_LINK_LOST;
+        }
+    }
+    out->result = res;
+    out->elm_status = res == OBD_LINK_OK ? ELM_OK : st;
+    out->failed_command = res == OBD_LINK_OK ? NULL : "0100";
+    return res;
+}

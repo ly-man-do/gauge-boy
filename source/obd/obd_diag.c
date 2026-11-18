@@ -1,5 +1,6 @@
 #include "obd_diag.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "dtc.h"
@@ -207,6 +208,12 @@ obd_link_result_t obd_diag_scan(elm_t *elm, bool reset, int current_year, obd_di
         goto lost_link;
     }
 
+    st = obd_diag_read_modules(elm, out, trace, ctx);
+    if (lost(st)) {
+        out->stopped_at = OBD_DIAG_STEP_VIN;
+        goto lost_link;
+    }
+
     out->stopped_at = OBD_DIAG_STEP_DONE;
     progress_to(progress, ctx, OBD_DIAG_STEP_DONE);
     return out->result;
@@ -301,4 +308,80 @@ const char *obd_clear_result_str(obd_clear_result_t result)
     case OBD_CLEAR_RESULT_COUNT: break;
     }
     return "?";
+}
+
+/* ---------- modules ---------- */
+
+/* The code's module from a headers-on read of the same service. */
+static void tag_codes(obd_code_list_t *list, const obd_code_list_t *tagged)
+{
+    for (int i = 0; i < list->count; i++) {
+        for (int j = 0; j < tagged->count; j++) {
+            if (tagged->code[j].has_ecu && strcmp(list->code[i].code, tagged->code[j].code) == 0) {
+                list->code[i].has_ecu = true;
+                list->code[i].ecu = tagged->code[j].ecu;
+                break;
+            }
+        }
+    }
+}
+
+elm_status_t obd_diag_read_modules(elm_t *elm, obd_diag_t *d, obd_link_trace_fn trace, void *ctx)
+{
+    static elm_response_t r;
+    static obd_reply_t reply;
+    static obd_code_list_t tagged;
+    scan_t sc = { elm, trace, ctx };
+    int protocol = d->link.protocol;
+    d->have_modules = false;
+    d->module_count = 0;
+    elm_status_t st = command(&sc, "ATH1", &r);
+    if (st != ELM_OK) {
+        return lost(st) ? st : ELM_OK;   /* an adapter without headers: skip it */
+    }
+    st = command(&sc, "0100", &r);
+    if (st == ELM_OK && obd_assemble(&r, protocol, true, &reply) == OBD_OK) {
+        for (int e = 0; e < reply.ecu_count && d->module_count < OBD_DIAG_MODULES_MAX; e++) {
+            if (reply.ecu[e].has_id) {
+                d->module_id[d->module_count++] = reply.ecu[e].id;
+            }
+        }
+        d->have_modules = d->module_count > 0;
+    }
+    static const struct { const char *cmd; uint8_t service; } reads[] = {
+        { "03", OBD_SERVICE_STORED }, { "07", OBD_SERVICE_PENDING },
+    };
+    for (int i = 0; i < 2 && !lost(st); i++) {
+        obd_code_list_t *list = i == 0 ? &d->stored : &d->pending;
+        if (list->count == 0) {
+            continue;
+        }
+        st = command(&sc, reads[i].cmd, &r);
+        if (st == ELM_OK && obd_assemble(&r, protocol, true, &reply) == OBD_OK &&
+            obd_decode_codes(&reply, protocol, reads[i].service, &tagged)) {
+            tag_codes(list, &tagged);
+        }
+    }
+    if (lost(st)) {
+        return st;
+    }
+    elm_status_t back = command(&sc, "ATH0", &r);
+    return lost(back) ? back : ELM_OK;
+}
+
+char *obd_diag_module_name(int protocol, uint32_t id, char *out, size_t len)
+{
+    /* The standard engine and transmission addresses (ISO 15765-4 and
+     * SAE J1979: engine 7E8 / 10, transmission 7E9 / 18). */
+    uint32_t src = protocol == 6 || protocol == 8 ? id
+                 : (protocol == 7 || protocol == 9) ? (id & 0xFFu) : id;
+    bool can11 = protocol == 6 || protocol == 8;
+    if ((can11 && src == 0x7E8) || (!can11 && src == 0x10)) {
+        snprintf(out, len, "Engine");
+    } else if ((can11 && src == 0x7E9) || (!can11 && src == 0x18)) {
+        snprintf(out, len, "Transmission");
+    } else {
+        snprintf(out, len, "Module %X", (unsigned)id);
+    }
+    return out;
 }

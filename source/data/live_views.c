@@ -38,9 +38,10 @@ static const view_pid_t air_fuel[] = {
 static const view_pid_t warmup[] = {
     { 0x05, 1000 }, { 0x0F, 2000 }, { 0x5C, 2000 }, { 0x46, D }, { 0x1F, 1000 }, { 0x0C, D },
 };
-/* Drive: load under acceleration; load and timing as fast as RPM. */
+/* Drive: load under acceleration; load and timing as fast as RPM. The
+ * gear ratio and odometer where the car reports them (newer CAN cars). */
 static const view_pid_t drive[] = {
-    { 0x0C, D }, { 0x0D, D }, { 0x11, D }, { 0x04, 0 }, { 0x0E, 0 },
+    { 0x0C, D }, { 0x0D, D }, { 0x11, D }, { 0x04, 0 }, { 0x0E, 0 }, { 0xA4, D }, { 0xA6, D },
 };
 
 #define N(a) ((int)(sizeof a / sizeof a[0]))
@@ -54,6 +55,7 @@ static const view_def_t views[LIVE_VIEW_COUNT] = {
     [LIVE_VIEW_DRIVE]    = { "Drive", "drive", "Load under acceleration", drive, N(drive) },
     [LIVE_VIEW_ALL]      = { "All", "all", "Every PID the car supports", NULL, 0 },
     [LIVE_VIEW_CUSTOM]   = { "Custom", "custom", "Your own pick (EDIT)", NULL, 0 },
+    [LIVE_VIEW_TRANS]    = { "Transmission", "trans", "The transmission module (CAN cars)", NULL, 0 },
 };
 
 static bool valid(int view)
@@ -91,11 +93,16 @@ bool live_view_warns(int view)
     return view == LIVE_VIEW_ALL || view == LIVE_VIEW_CUSTOM;
 }
 
+obd_module_t live_view_module(int view)
+{
+    return view == LIVE_VIEW_TRANS ? OBD_MODULE_TRANSMISSION : OBD_MODULE_ENGINE;
+}
+
 int live_view_request(int view, const uint8_t *custom, int ncustom, uint8_t *pids,
                       uint32_t *periods, int max)
 {
     int n = 0;
-    if (view == LIVE_VIEW_ALL) {
+    if (view == LIVE_VIEW_ALL || view == LIVE_VIEW_TRANS) {   /* whatever the module supports */
         for (int i = 0; i < obd_pid_count() && n < max; i++) {
             pids[n] = obd_pid_at(i)->pid;
             periods[n++] = D;

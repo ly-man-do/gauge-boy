@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "obd/obd_live.h"
 #include "obd/obd_pid.h"
 
 static obd_reply_t reply; /* large: keep off the stack */
@@ -36,6 +37,7 @@ static obd_pid_result_t from(const char *const *lines, int protocol, bool header
 static void test_pid_table(void)
 {
     CHECK(obd_pid_count() >= 20);
+    CHECK(obd_pid_count() <= OBD_LIVE_MAX);   /* LIVE's All view polls every one */
     for (int i = 0; i < obd_pid_count(); i++) {
         const obd_pid_info_t *p = obd_pid_at(i);
         CHECK(p != NULL && p->name[0] != '\0' && p->label[0] != '\0');
@@ -210,8 +212,28 @@ static void test_pid_map_wide(void)
     CHECK_EQ_STR(obd_boost_format(50.0f, OBD_UNITS_METRIC, text, sizeof text), "50 kPa");
 }
 
+static void test_pid_odometer_gear(void)
+{
+    /* Odometer: 0x0007A120 = 500000 tenths = 50000.0 km = 31069 mi. */
+    uint8_t odo[4] = { 0x00, 0x07, 0xA1, 0x20 };
+    float v = 0.0f;
+    CHECK_EQ_INT(obd_pid_decode(0xA6, odo, 4, &v), OBD_PID_OK);
+    CHECK_NEAR(v, 50000.0f);
+    CHECK_EQ_STR(obd_pid_format(0xA6, v, OBD_UNITS_US, text, sizeof text), "31069 mi");
+    CHECK_EQ_STR(obd_pid_format(0xA6, v, OBD_UNITS_METRIC, text, sizeof text), "50000 km");
+    CHECK_EQ_INT(obd_pid_decode(0xA6, odo, 3, &v), OBD_PID_SHORT);
+    /* Gear ratio: supported bit A1, 0x0D7A = 3450 -> 3.45. */
+    uint8_t gear[4] = { 0x02, 0x00, 0x0D, 0x7A };
+    CHECK_EQ_INT(obd_pid_decode(0xA4, gear, 4, &v), OBD_PID_OK);
+    CHECK_NEAR(v, 3.45f);
+    CHECK_EQ_STR(obd_pid_format(0xA4, v, OBD_UNITS_US, text, sizeof text), "3.45 :1");
+    gear[0] = 0x00;                                       /* not reported */
+    CHECK_EQ_INT(obd_pid_decode(0xA4, gear, 4, &v), OBD_PID_NO_REPLY);
+}
+
 void suite_pid(void)
 {
+    RUN_TEST(test_pid_odometer_gear);
     RUN_TEST(test_pid_map_wide);
     RUN_TEST(test_pid_parse_multi);
     RUN_TEST(test_pid_table);

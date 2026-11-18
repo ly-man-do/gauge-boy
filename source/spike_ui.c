@@ -584,6 +584,7 @@ static struct {
     unsigned live_version;     /* bumped on every published step */
     obd_link_t live_link;      /* supported PIDs, for the toggles */
     uint8_t live_want[OBD_LIVE_MAX];       /* the view's PIDs (the UI sets them) */
+    int live_module;                       /* obd_module_t the view polls */
     uint32_t live_want_period[OBD_LIVE_MAX];
     int live_want_count;
     bool live_link_ok;
@@ -1416,6 +1417,37 @@ static void baro_save(spike_t *s, const obd_live_t *lv)
                (double)lv->engine_off_map_kpa, ok ? "saved" : "not saved");
 }
 
+/* Odometer (PID A6, newer cars): the car's last reading, for the garage
+ * card. Saved when first read in a LIVE run and again when it has gone up
+ * by a kilometre or more. */
+#define ODO_PATH CONFIG_DIR "/odometer.csv"
+static float odo_saved_km = -1.0f;   /* this run's last saved reading, -1 = none */
+
+static void odo_save(spike_t *s, const obd_live_t *lv)
+{
+    static char text[2048], out[2048];
+    float km = 0.0f;
+    if (baro_key[0] == '\0' || !obd_live_value(lv, 0xA6, &km) ||
+        (odo_saved_km >= 0.0f && km < odo_saved_km + 1.0f)) {
+        return;
+    }
+    char date[24];
+    now_text(date, sizeof date);
+    date[10] = '\0';
+    read_small_file(ODO_PATH, text, sizeof text);
+    size_t n = keyval_store_set(text, "car,km,date\n", baro_key, km, date, out, sizeof out);
+    FILE *f = n > 0 ? fopen(ODO_PATH, "wb") : NULL;
+    bool ok = f != NULL && fwrite(out, 1, n, f) == n;
+    if (f != NULL && fclose(f) != 0) {
+        ok = false;
+    }
+    if (odo_saved_km < 0.0f) {
+        spike_logf(s, "%sLIVE: odometer %.1f km %s for this car", ok ? "" : "! ", (double)km,
+                   ok ? "saved" : "not saved");
+    }
+    odo_saved_km = km;
+}
+
 /* GRAPH (worker): one value of a drive file, squeezed into the plot's
  * pixel columns for the requested window. Read in chunks, line by line. */
 static void graph_load(spike_t *s)
@@ -1735,6 +1767,7 @@ static void live_poll(spike_t *s)
     uint8_t pids[OBD_LIVE_MAX];
     uint32_t periods[OBD_LIVE_MAX];
     int n = shared.live_want_count;
+    obd_module_t module = (obd_module_t)shared.live_module;
     bool speed_only = shared.ta_on;
     bool no_volts = shared.ta_on || shared.shift_on || shared.gmeter_on || shared.revsync_on ||
                     shared.eco_on;
@@ -1783,7 +1816,36 @@ static void live_poll(spike_t *s)
             obd_live_restore_header(&lv, s->elm);
             spike_live_summary(s, &lv);   /* the old PID set's rates */
         }
-        int count = obd_live_init(&lv, &link, pids, n);
+        static obd_link_t module_link;
+        static unsigned module_connects = ~0u;
+        static obd_module_t module_read = OBD_MODULE_ENGINE;
+        const obd_link_t *use = &link;
+        if (module != OBD_MODULE_ENGINE) {
+            /* Another module: its own supported PIDs, once a connection. */
+            if (module_connects != s->transport->connects || module_read != module) {
+                obd_link_result_t mr = obd_link_read_module(s->elm, &link, module, &module_link,
+                                                            spike_trace_command, s);
+                if (mr == OBD_LINK_LOST) {
+                    tcp_transport_close(s->transport);
+                    ready = false;
+                    return;
+                }
+                module_connects = s->transport->connects;
+                module_read = module;
+                char list[3 * 0xE0 + 1];
+                spike_logf(s, "LIVE: %s module: %s", obd_module_name(module),
+                           mr == OBD_LINK_OK ? obd_link_pid_list(&module_link, list, sizeof list)
+                                             : "no answer");
+            }
+            if (module_link.result != OBD_LINK_OK) {
+                live_stop(link.protocol >= 6 && link.protocol <= 9
+                          ? "No transmission module answered"
+                          : "Transmission data needs a CAN car");
+                return;
+            }
+            use = &module_link;
+        }
+        int count = obd_live_init(&lv, use, pids, n);
         for (int i = 0; i < n; i++) {
             if (periods[i] != LIVE_PERIOD_DEFAULT) {
                 obd_live_set_period(&lv, pids[i], periods[i]);
@@ -1791,7 +1853,8 @@ static void live_poll(spike_t *s)
         }
         lv.use_count = true;
         lv.use_multi = true;   /* CAN cars: several PIDs a request */
-        lv.use_engine_header = true;   /* CAN cars: the engine ECU only */
+        lv.use_engine_header = true;   /* CAN cars: one module only (the engine, or the view's) */
+        lv.module = module;
         lv.no_volts = no_volts;        /* TIME ATTACK, SHIFT LIGHT: only what they show */
         uint8_t polled[OBD_LIVE_MAX];
         for (int i = 0; i < lv.count; i++) {
@@ -1799,6 +1862,7 @@ static void live_poll(spike_t *s)
         }
         history_reset(&live_history, polled, lv.count);
         baro_seed(s, &lv);
+        odo_saved_km = -1.0f;
         char list[3 * OBD_LIVE_MAX + 1] = "";
         for (int i = 0; i < count; i++) {
             snprintf(list + strlen(list), sizeof list - strlen(list), " %02X",
@@ -1840,6 +1904,7 @@ static void live_poll(spike_t *s)
     }
     history_from_live(&live_history, &lv);
     baro_save(s, &lv);
+    odo_save(s, &lv);
     rec_step(s, &lv, &link);
 }
 
@@ -1919,6 +1984,14 @@ static void garage_scan(spike_t *s)
     read_small_file(GARAGE_PATH, text, sizeof text);
     garage_add_from_csv(&g, text, year);
     garage_read_nicknames(&g, text);
+    read_small_file(ODO_PATH, text, sizeof text);
+    garage_add_from_csv(&g, text, year);
+    for (int i = 0; i < g.count; i++) {
+        float km;
+        g.car[i].have_odo = baro_store_get(text, g.car[i].key, &km, g.car[i].odo_date,
+                                           sizeof g.car[i].odo_date);
+        g.car[i].odo_km = g.car[i].have_odo ? km : 0.0;
+    }
 
     /* Logged distance: every drive file, from the cache when unchanged. */
     int n = 0;
@@ -2543,6 +2616,7 @@ static void live_start_locked(const uint8_t *pids, const uint32_t *periods, int 
     memcpy(shared.live_want, pids, (size_t)n);
     memcpy(shared.live_want_period, periods, (size_t)n * sizeof periods[0]);
     shared.live_want_count = n;
+    shared.live_module = OBD_MODULE_ENGINE;   /* a view sets another after this */
     shared.live_on = true;
     shared.live_gen++;
     shared.live_msg[0] = '\0';
@@ -2572,6 +2646,7 @@ static void live_select_view(ui_state_t *ui, int v)
     int n = live_view_request(v, app_cfg->live_pids, app_cfg->live_pid_count, pids, periods,
                               OBD_LIVE_MAX);
     live_start_locked(pids, periods, n);
+    shared.live_module = live_view_module(v);
     if (strcmp(app_cfg->live_view, live_view_key(v)) != 0) {
         snprintf(app_cfg->live_view, sizeof app_cfg->live_view, "%s", live_view_key(v));
         ui->live_dirty = true;
@@ -3630,6 +3705,11 @@ static void draw_garage_top(int busy, bool connected, int index, bool metric, bo
     printf("\x1b[%d;%dH%.28s", row + 2, col, line);
     snprintf(line, sizeof line, "in %d drive%s", c->drives, c->drives == 1 ? "" : "s");
     printf("\x1b[%d;%dH%.28s", row + 3, col, line);
+    if (c->have_odo) {
+        snprintf(line, sizeof line, "Odometer %.0f %s", metric ? c->odo_km : c->odo_km / 1.609344,
+                 metric ? "km" : "mi");
+        printf("\x1b[%d;%dH%.28s", row + 4, col, line);
+    }
 
     print_row(12, TOP_COLS, "Personal bests");
     static const struct { const char *run; const char *name; } runs[] = {

@@ -177,10 +177,11 @@ SCENARIOS = {
 
 
 
-def can(data):
-    """One CAN reply frame from ECU 7E8, as the emulator's 'car' scenario
-    writes them (headers are off in Gauge Boy, so only the data shows)."""
-    return "<header>7E8</header><size>%02X</size><data>%s</data>" % (len(data.split()), data)
+def can(data, ecu="7E8"):
+    """One CAN reply frame from an ECU (7E8 engine, 7E9 transmission), as
+    the emulator's 'car' scenario writes them (Gauge Boy runs with headers
+    off; with ATH1 the emulator shows the header too)."""
+    return "<header>%s</header><size>%02X</size><data>%s</data>" % (ecu, len(data.split()), data)
 
 
 def car_key(scen, request):
@@ -207,6 +208,22 @@ def ascent():
         replies = [can(r) for r in reply] if isinstance(reply, list) else can(reply)
         s[car_key(s, req)] = {"Request": "^" + req + "[0-9]?$", "Descr": "Mode 01 " + req,
                               "Header": "7E0", "Response": replies}
+    # Odometer (PID A6, listed in 01A0): 48,212.0 km.
+    s[car_key(s, "01A6")] = {"Request": "^01A6[0-9]?$", "Descr": "Odometer", "Header": "7E0",
+                             "Response": can("41 A6 00 07 5B 48")}
+    # A transmission module at 7E1 (made up: the real Ascent's PIDs aren't
+    # known yet): RPM, speed and the gear ratio (A4). Asked of every module
+    # (as the emulator does by default), 0100 gets both answers.
+    tcm = {"0100": "41 00 00 18 00 01", "0120": "41 20 00 00 00 01", "0140": "41 40 00 00 00 01",
+           "0160": "41 60 00 00 00 01", "0180": "41 80 00 00 00 01", "01A0": "41 A0 10 00 00 00",
+           "010C": "41 0C 0B B8", "010D": "41 0D 00", "01A4": "41 A4 02 00 0D 7A"}
+    for req, reply in tcm.items():
+        s["TCM_" + req] = {"Request": "^" + req + "[0-9]?$", "Descr": "Transmission " + req,
+                           "Header": "7E1", "Response": can(reply, "7E9")}
+    # The emulator's own header is 7E0, so its 0100 answer (every module in a
+    # real car) gets the transmission's line too.
+    s[car_key(s, "0100")]["Response"] = (can("41 00 BE 1D A8 13") +
+                                         can("41 00 00 18 00 01", "7E9"))
     # A made-up Ascent VIN (not the owner's), so the vPIC model decodes.
     vin = "4S4WMAHD0P3000001"
     s["VIN"] = {"Request": "^0902[0-9]?$", "Descr": "VIN", "Header": "7E0",

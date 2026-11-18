@@ -425,6 +425,55 @@ static void engine_header_setup(void)
     lv.volts_failed = true;
 }
 
+static void test_live_transmission_module(void)
+{
+    /* Its own supported PIDs, asked of the transmission module alone. */
+    static const uint8_t none[] = { 0 };
+    setup(none);
+    link.protocol = 6;
+    static obd_link_t tcm;
+    fake_io_reply(&f, "ATSH7E1", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "0100", "41 00 00 18 00 01 \r\r>", 30, 0);   /* 0C 0D, and 20 */
+    fake_io_reply(&f, "0120", "41 20 00 00 00 00 \r\r>", 30, 0);
+    fake_io_reply(&f, "ATSH7DF", "OK\r\r>", 10, 0);
+    CHECK_EQ_INT(obd_link_read_module(&elm, &link, OBD_MODULE_TRANSMISSION, &tcm, NULL, NULL),
+                 OBD_LINK_OK);
+    CHECK(obd_link_pid_supported(&tcm, 0x0C) && obd_link_pid_supported(&tcm, 0x0D));
+    CHECK(!obd_link_pid_supported(&tcm, 0x05));
+    CHECK_EQ_INT(tcm.ranges_read, 2);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* Polled with its own address. */
+    static const uint8_t want[] = { 0x0C, 0x0D, 0x05 };
+    CHECK_EQ_INT(obd_live_init(&lv, &tcm, want, 3), 2);
+    lv.use_engine_header = true;
+    lv.module = OBD_MODULE_TRANSMISSION;
+    lv.volts_failed = true;
+    fake_io_reply(&f, "ATSH7E1", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "010C", "41 0C 0B B8 \r\r>", 30, 0);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    CHECK_EQ_INT(obd_live_step(&lv, &elm, NULL, NULL), OBD_LIVE_READ);
+    float v = 0.0f;
+    CHECK(obd_live_value(&lv, 0x0C, &v) && v == 750.0f);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+
+    /* No transmission module: NO DATA, and every module is addressed again. */
+    setup(none);
+    link.protocol = 6;
+    fake_io_reply(&f, "ATSH7E1", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "0100", "NO DATA\r\r>", 30, 0);
+    fake_io_reply(&f, "ATSH7DF", "OK\r\r>", 10, 0);
+    CHECK_EQ_INT(obd_link_read_module(&elm, &link, OBD_MODULE_TRANSMISSION, &tcm, NULL, NULL),
+                 OBD_LINK_NO_VEHICLE);
+    CHECK_EQ_INT(f.unexpected_writes, 0);
+    /* Not a CAN car: nothing sent. */
+    link.protocol = 3;
+    CHECK_EQ_INT(obd_link_read_module(&elm, &link, OBD_MODULE_TRANSMISSION, &tcm, NULL, NULL),
+                 OBD_LINK_NO_VEHICLE);
+    CHECK(obd_module_header(3, OBD_MODULE_ENGINE) == NULL);
+    CHECK_EQ_STR(obd_module_header(7, OBD_MODULE_TRANSMISSION), "ATSHDA18F1");
+}
+
 static void test_live_engine_header(void)
 {
     /* The engine ECU only, and the response count on combined requests. */
@@ -747,5 +796,6 @@ void suite_live(void)
     RUN_TEST(test_live_priority_refresh_times);
     RUN_TEST(test_live_multi_pid_on_can);
     RUN_TEST(test_live_multi_pid_refused);
+    RUN_TEST(test_live_transmission_module);
     RUN_TEST(test_live_engine_header);
 }

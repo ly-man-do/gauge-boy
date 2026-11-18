@@ -285,8 +285,10 @@ int diag_items(const obd_diag_t *d, diag_tab_t tab, diag_item_t *items, int max)
         snprintf(row, sizeof row, "%s %s", c->code, text);
         fit_row(items[n].row, row);
         if (c->has_ecu) {
-            snprintf(items[n].detail, sizeof items[n].detail, "%s (%s, ECU %X): %s", c->code, kind,
-                     (unsigned)c->ecu, text);
+            char mod[24];
+            obd_diag_module_name(d->link.protocol, c->ecu, mod, sizeof mod);
+            snprintf(items[n].detail, sizeof items[n].detail, "%s (%s, from %s): %s", c->code, kind,
+                     mod, text);
         } else {
             snprintf(items[n].detail, sizeof items[n].detail, "%s (%s): %s", c->code, kind, text);
         }
@@ -398,6 +400,16 @@ int diag_facts(const obd_diag_t *d, int cols, char lines[][DIAG_VIEW_COLS + 1], 
     if (d->freeze.have) {
         snprintf(buf, sizeof buf, "%s (tap it on STORED)", d->freeze.code);
         fact(&v, "Freeze", buf);
+    }
+    if (d->have_modules) {
+        buf[0] = '\0';
+        for (int i = 0; i < d->module_count; i++) {
+            char mod[24];
+            obd_diag_module_name(d->link.protocol, d->module_id[i], mod, sizeof mod);
+            size_t used = strlen(buf);
+            snprintf(buf + used, sizeof buf - used, "%s%s", i > 0 ? ", " : "", mod);
+        }
+        fact(&v, "Modules", buf);
     }
     if (d->result != OBD_LINK_OK || d->stopped_at != OBD_DIAG_STEP_DONE) {
         snprintf(buf, sizeof buf, "stopped: %s", obd_diag_step_str(d->stopped_at));

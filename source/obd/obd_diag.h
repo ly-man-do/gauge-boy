@@ -23,6 +23,7 @@
 #include "obd_vin.h"
 
 #define OBD_DIAG_TIMEOUT_MS 5000u   /* code and VIN requests (multi-frame) */
+#define OBD_DIAG_MODULES_MAX 8
 
 typedef enum {
     OBD_DIAG_STEP_CONNECT = 0,
@@ -58,6 +59,10 @@ typedef struct {
     bool model_chosen;              /* model came from SETUP (no VIN model) */
     bool year_chosen;               /* model_year came from SETUP (no VIN) */
     bool vin_only;                  /* found after a connect (link and VIN), not scanned */
+
+    bool have_modules;              /* the modules that answered were read (headers on) */
+    int module_count;
+    uint32_t module_id[OBD_DIAG_MODULES_MAX];   /* CAN ID, or K-line / J1850 source address */
 } obd_diag_t;
 
 /* Progress callback: called before each step (for "Reading codes..."). */
@@ -84,6 +89,18 @@ const char *obd_diag_step_str(obd_diag_step_t step);
  */
 elm_status_t obd_diag_read_vin(elm_t *elm, int current_year, obd_diag_t *d,
                                obd_link_trace_fn trace, void *ctx);
+
+/*
+ * Which modules answer (0100 with headers on) and which module each stored
+ * and pending code came from (03 and 07 again with headers on: sets their
+ * has_ecu / ecu). Headers are turned off again after. Part of the scan;
+ * returns the adapter's status (lost: the connection dropped).
+ */
+elm_status_t obd_diag_read_modules(elm_t *elm, obd_diag_t *d, obd_link_trace_fn trace, void *ctx);
+
+/* A module's name from its ID on this protocol: "Engine", "Transmission",
+ * or "Module 7EA". Returns out. */
+char *obd_diag_module_name(int protocol, uint32_t id, char *out, size_t len);
 
 /*
  * Applies the make chosen in SETUP (a name from obd_dtc_make_name(), or

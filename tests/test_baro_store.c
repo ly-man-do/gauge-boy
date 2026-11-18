@@ -5,6 +5,20 @@
 #include "data/baro_store.h"
 #include "obd/obd_live.h"
 
+static void test_keyval_store(void)
+{
+    static char out[1024];
+    size_t n = keyval_store_set("", "car,km,date\n", "Geo/Tracker/1996", 48212.4f, "2026-11-18", out,
+                                sizeof out);
+    CHECK(n > 0);
+    CHECK_EQ_STR(out, "car,km,date\nGeo/Tracker/1996,48212.4,2026-11-18\n");
+    float km = 0.0f;
+    char date[16];
+    CHECK(baro_store_get(out, "Geo/Tracker/1996", &km, date, sizeof date));
+    CHECK(km > 48212.3f && km < 48212.5f);
+    CHECK_EQ_STR(date, "2026-11-18");
+}
+
 static void test_baro_store(void)
 {
     static obd_diag_t d;
@@ -75,6 +89,7 @@ static void test_live_seed_baro(void)
 
 void suite_baro_store(void)
 {
+    RUN_TEST(test_keyval_store);
     RUN_TEST(test_baro_store);
     RUN_TEST(test_live_seed_baro);
 }

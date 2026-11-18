@@ -18,18 +18,11 @@ static bool lost(elm_status_t st)
     return st == ELM_ERR_IO || st == ELM_ERR_TIMEOUT;
 }
 
-/* The engine ECU's (physical) and every ECU's (functional) request address
- * on the OBD CAN protocols; NULL for the others. */
-static const char *engine_header(int protocol)
-{
-    return protocol == 6 || protocol == 8 ? "ATSH7E0"
-         : protocol == 7 || protocol == 9 ? "ATSHDA10F1" : NULL;
-}
-
+/* The polled module's (physical) and every ECU's (functional) request
+ * address on the OBD CAN protocols; NULL for the others. */
 static const char *functional_header(int protocol)
 {
-    return protocol == 6 || protocol == 8 ? "ATSH7DF"
-         : protocol == 7 || protocol == 9 ? "ATSHDB33F1" : NULL;
+    return obd_functional_header(protocol);
 }
 
 static elm_status_t send_header(obd_live_t *lv, elm_t *elm, const char *cmd,
@@ -356,8 +349,11 @@ obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trac
     }
     obd_live_pid_t *p = &lv->pid[idx];
 
+    if (lv->module != OBD_MODULE_ENGINE && lv->header_refused) {
+        return OBD_LIVE_IDLE;   /* another module's view can't fall back to every ECU */
+    }
     if (lv->use_engine_header && !lv->header_set && !lv->header_refused) {
-        const char *cmd = engine_header(lv->protocol);
+        const char *cmd = obd_module_header(lv->protocol, lv->module);
         if (cmd == NULL) {
             lv->header_refused = true;   /* not an OBD CAN protocol */
         } else {

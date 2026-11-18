@@ -16,7 +16,7 @@
 
 #include "elm327/elm327.h"
 
-#define FAKE_MAX_REPLIES 16
+#define FAKE_MAX_REPLIES 32
 #define FAKE_MAX_PENDING 4096
 #define FAKE_WRITTEN_MAX 1024
 

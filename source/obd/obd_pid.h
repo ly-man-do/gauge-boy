@@ -29,6 +29,8 @@ typedef enum {
     OBD_UNIT_GRAMS_S,    /* mass air flow */
     OBD_UNIT_VOLTS,
     OBD_UNIT_SECONDS,
+    OBD_UNIT_KM,         /* odometer */
+    OBD_UNIT_RATIO,      /* transmission gear ratio */
 } obd_unit_t;
 
 typedef enum {

@@ -14,6 +14,8 @@ typedef enum {
     F_WORD,      /* 256A + B */
     F_MILLI,     /* (256A + B) / 1000 */
     F_MAP_WIDE,  /* PID 87: A = sensors present, (256B + C) / 32 or (256D + E) / 32 */
+    F_GEAR,      /* PID A4: A bit 1 = supported, (256C + D) / 1000 = actual gear ratio */
+    F_ODO,       /* PID A6: (A 2^24 + B 2^16 + C 2^8 + D) / 10 km */
 } formula_t;
 
 typedef struct {
@@ -46,6 +48,8 @@ static const pid_entry_t table[] = {
     { { 0x46, 1, "Ambient air temperature", "Ambient", OBD_UNIT_CELSIUS, -40.0f, 215.0f, 60000u }, F_TEMP },
     { { 0x5C, 1, "Engine oil temperature", "Oil", OBD_UNIT_CELSIUS, -40.0f, 210.0f, 15000u }, F_TEMP },
     { { 0x87, 5, "Intake manifold pressure (wide range)", "MAP", OBD_UNIT_KPA, 0.0f, 2048.0f, 0u }, F_MAP_WIDE },
+    { { 0xA4, 4, "Transmission gear ratio", "Gear ratio", OBD_UNIT_RATIO, 0.0f, 65.535f, 500u }, F_GEAR },
+    { { 0xA6, 4, "Odometer", "Odometer", OBD_UNIT_KM, 0.0f, 429496729.5f, 60000u }, F_ODO },
 };
 
 #define TABLE_COUNT ((int)(sizeof table / sizeof table[0]))
@@ -103,6 +107,18 @@ obd_pid_result_t obd_pid_decode(uint8_t pid, const uint8_t *data, size_t len, fl
         bool b_only = (data[0] & 0x01) == 0 && (data[0] & 0x02) != 0;
         const uint8_t *x = data + (b_only ? 3 : 1);
         v = (float)(x[0] * 256u + x[1]) / 32.0f;
+        break;
+    }
+    case F_GEAR:
+        if ((data[0] & 0x02) == 0) {
+            return OBD_PID_NO_REPLY;   /* the car says it doesn't report it */
+        }
+        v = (float)(data[2] * 256u + data[3]) / 1000.0f;
+        break;
+    case F_ODO: {
+        uint32_t raw = (uint32_t)data[0] << 24 | (uint32_t)data[1] << 16 | (uint32_t)data[2] << 8 |
+                       data[3];
+        v = (float)((double)raw / 10.0);
         break;
     }
     }
@@ -168,6 +184,7 @@ float obd_unit_convert(obd_unit_t unit, float metric, obd_units_t units)
     case OBD_UNIT_KMH:     return metric * 0.621371f;           /* mph */
     case OBD_UNIT_CELSIUS: return metric * 9.0f / 5.0f + 32.0f; /* F */
     case OBD_UNIT_KPA:     return metric * 0.2953f;             /* inHg */
+    case OBD_UNIT_KM:      return metric * 0.621371f;           /* miles */
     default:               return metric;
     }
 }
@@ -185,6 +202,8 @@ const char *obd_unit_label(obd_unit_t unit, obd_units_t units)
     case OBD_UNIT_GRAMS_S: return "g/s";
     case OBD_UNIT_VOLTS:   return "V";
     case OBD_UNIT_SECONDS: return "s";
+    case OBD_UNIT_KM:      return us ? "mi" : "km";
+    case OBD_UNIT_RATIO:   return ":1";
     default:               return "";
     }
 }
@@ -223,6 +242,7 @@ char *obd_pid_format(uint8_t pid, float value, obd_units_t units, char *out, siz
     case OBD_UNIT_DEGREES: decimals = 1; break;
     case OBD_UNIT_GRAMS_S: decimals = 1; break;
     case OBD_UNIT_VOLTS:   decimals = 2; break;
+    case OBD_UNIT_RATIO:   decimals = 2; break;
     case OBD_UNIT_PERCENT: decimals = is_trim(pid) ? 1 : 0; break;
     default:               decimals = 0; break;
     }

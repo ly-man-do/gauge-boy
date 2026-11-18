@@ -36,4 +36,10 @@ bool baro_store_get(const char *text, const char *key, float *kpa, char *date, s
 size_t baro_store_set(const char *text, const char *key, float kpa, const char *date, char *out,
                       size_t len);
 
+/* The same for any "key,value,date" file (one line per car, value with one
+ * decimal, newest last), with its own header line (e.g. "car,km,date\n";
+ * its first field must be "car"). baro_store_get() reads these too. */
+size_t keyval_store_set(const char *text, const char *header, const char *key, float value,
+                        const char *date, char *out, size_t len);
+
 #endif

@@ -59,6 +59,33 @@ typedef void (*obd_link_trace_fn)(void *ctx, const char *cmd, const elm_response
 obd_link_result_t obd_link_open_traced(elm_t *elm, bool reset, obd_link_t *out,
                                        obd_link_trace_fn trace, void *ctx);
 
+/* ---------- one module at a time (OBD CAN protocols 6-9) ---------- */
+
+typedef enum {
+    OBD_MODULE_ENGINE = 0,        /* 7E0 / DA10F1, replies 7E8 / 18DAF110 */
+    OBD_MODULE_TRANSMISSION,      /* 7E1 / DA18F1, replies 7E9 / 18DAF118 */
+    OBD_MODULE_COUNT
+} obd_module_t;
+
+/* The ATSH command that addresses only this module ("ATSH7E1"), or NULL
+ * if the protocol isn't OBD CAN (6-9). */
+const char *obd_module_header(int protocol, obd_module_t module);
+
+/* The ATSH command that addresses every module again ("ATSH7DF"), or NULL. */
+const char *obd_functional_header(int protocol);
+
+/* "Engine", "Transmission". */
+const char *obd_module_name(obd_module_t module);
+
+/*
+ * Reads one module's supported PIDs (0100, 0120, ...) by addressing it
+ * alone, then addresses every module again. out gets link's protocol and
+ * the module's own supported ranges; OBD_LINK_NO_VEHICLE if the module
+ * doesn't answer or the protocol isn't OBD CAN. trace may be NULL.
+ */
+obd_link_result_t obd_link_read_module(elm_t *elm, const obd_link_t *link, obd_module_t module,
+                                       obd_link_t *out, obd_link_trace_fn trace, void *ctx);
+
 /* True if the car said it supports Mode 01 PID pid (0x01-0xE0). */
 bool obd_link_pid_supported(const obd_link_t *link, uint8_t pid);
 

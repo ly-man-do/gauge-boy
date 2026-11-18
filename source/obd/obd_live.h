@@ -28,7 +28,7 @@
 #include "elm327/elm327.h"
 #include "obd_link.h"
 
-#define OBD_LIVE_MAX        20      /* PIDs at once */
+#define OBD_LIVE_MAX        24      /* PIDs at once (every PID obd_pid decodes) */
 #define OBD_LIVE_MAX_MISSES 3       /* NO DATA in a row before a PID is dropped */
 #define OBD_LIVE_VOLTS_MS   5000u   /* ATRV this often */
 #define OBD_LIVE_TIMEOUT_MS 2000u   /* per request */
@@ -81,7 +81,8 @@ typedef struct {
     bool multi_refused;      /* the car didn't answer them: one PID at a time */
     bool multi_worked;       /* a combined request got 2+ PIDs back: never refuse after */
     uint32_t multi_requests; /* requests that carried several PIDs */
-    bool use_engine_header;  /* CAN: ask the engine ECU only (ATSH 7E0): set after init */
+    bool use_engine_header;  /* CAN: ask one module only (ATSH 7E0): set after init */
+    obd_module_t module;     /* ... which one (engine unless set after init) */
     bool header_set;         /* the engine ECU's address is set in the adapter */
     bool header_checked;     /* and a reply came back with it */
     bool header_refused;     /* refused or unanswered: every ECU again */

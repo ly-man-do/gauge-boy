@@ -41,6 +41,13 @@ static void script_ridgeline(void)
     fake_io_reply(&f, "0902",
                   "49 02 01 00 00 00 32\r49 02 02 48 4A 59 4B\r49 02 03 31 36 36 31\r"
                   "49 02 04 38 48 30 30\r49 02 05 30 31 32 33\r\r>", 500, 0);
+    /* Which modules answer, with headers on: the engine (10) and, made up
+     * for the test, the transmission (18); the stored code is the engine's. */
+    fake_io_reply(&f, "ATH1", "OK\r\r>", 10, 0);
+    fake_io_reply(&f, "0100", "48 6B 10 41 00 BF BE A8 91 BA\r48 6B 18 41 00 80 00 00 00 8C\r\r>",
+                  80, 0);
+    fake_io_reply(&f, "03", "48 6B 10 43 01 71 14 56 00 00 E2\r\r>", 80, 0);
+    fake_io_reply(&f, "ATH0", "OK\r\r>", 10, 0);
 }
 
 /* The Tracker's layout (ISO 9141-2, no VIN over OBD) with a made-up Geo code. */
@@ -58,6 +65,7 @@ static void script_tracker(void)
     fake_io_reply(&f, "07", "NO DATA\r\r>", 80, 0);
     fake_io_reply(&f, "0A", "NO DATA\r\r>", 80, 0);
     fake_io_reply(&f, "0902", "NO DATA\r\r>", 80, 0);
+    fake_io_reply(&f, "ATH1", "?\r\r>", 10, 0);   /* an adapter without headers: skipped */
 }
 
 static int steps_seen;
@@ -130,6 +138,7 @@ static void test_chosen_make(void)
     setup();
     script_tracker();
     CHECK_EQ_INT(obd_diag_scan(&elm, true, 2026, &diag, NULL, NULL, NULL), OBD_LINK_OK);
+    CHECK(!diag.have_modules);
     CHECK(!diag.have_vin);
     CHECK(diag.maker == NULL && diag.make == -1 && !diag.make_chosen);
     CHECK_EQ_INT(diag.stored.count, 1);
@@ -280,11 +289,28 @@ static void test_paged_pieces(void)
     static diag_item_t items[DIAG_ITEMS_MAX];
     int n = diag_items(&diag, DIAG_TAB_STORED, items, DIAG_ITEMS_MAX);
     CHECK_EQ_INT(n, 2);
+    /* The modules that answered, and which one set each code. */
+    CHECK(diag.have_modules);
+    CHECK_EQ_INT(diag.module_count, 2);
+    CHECK(diag.stored.code[0].has_ecu && diag.stored.code[0].ecu == 0x10);
+    CHECK(strstr(items[0].detail, "from Engine") != NULL);
+    char mod[24];
+    CHECK_EQ_STR(obd_diag_module_name(3, 0x18, mod, sizeof mod), "Transmission");
+    CHECK_EQ_STR(obd_diag_module_name(6, 0x7E9, mod, sizeof mod), "Transmission");
+    CHECK_EQ_STR(obd_diag_module_name(7, 0x18DAF110, mod, sizeof mod), "Engine");
+    CHECK_EQ_STR(obd_diag_module_name(6, 0x7EA, mod, sizeof mod), "Module 7EA");
+    static char facts[DIAG_VIEW_MAX][DIAG_VIEW_COLS + 1];
+    int nf = diag_facts(&diag, DIAG_VIEW_COLS, facts, DIAG_VIEW_MAX);
+    bool listed = false;
+    for (int i = 0; i < nf; i++) {
+        listed = listed || strstr(facts[i], "Engine, Transmission") != NULL;
+    }
+    CHECK(listed);
     CHECK_EQ_STR(items[0].row, "P0171 System Too Lean Bank 1");
     CHECK_EQ_STR(items[1].row, "P1456 Evaporative Emission Control...");
     CHECK_EQ_INT((int)strlen(items[1].row), DIAG_ROW_COLS);
     CHECK_EQ_STR(items[1].detail,
-                 "P1456 (stored): Evaporative Emission Control System Leak Detected Fuel Tank System");
+                 "P1456 (stored, from Engine): Evaporative Emission Control System Leak Detected Fuel Tank System");
 
     CHECK_EQ_INT(diag_items(&diag, DIAG_TAB_PENDING, items, DIAG_ITEMS_MAX), 0);
     CHECK_EQ_STR(diag_empty_text(&diag, DIAG_TAB_PENDING), "No pending codes.");
@@ -311,7 +337,7 @@ static void test_paged_pieces(void)
     n = diag_facts(&empty, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
     CHECK_VIEW(n, "Not scanned yet");
 
-    n = diag_wrap("P1456 (stored): Evaporative Emission Control System Leak Detected Fuel Tank System",
+    n = diag_wrap("P1456 (stored, from Engine): Evaporative Emission Control System Leak Detected Fuel Tank System",
                   30, 2, lines, 8);
     CHECK(n >= 3);
     for (int i = 0; i < n; i++) {

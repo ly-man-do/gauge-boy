@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, TRACK > ACHIEVEMENTS, unlock pop-ups (gauge-boy-356.10; M4 in progress)
+**As of:** 2026-11-18, LIVE Transmission view, odometer, DIAG modules (gauge-boy-gnr, kcw, u86)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -33,7 +33,7 @@ Gauge Boy
         │   │   └── [BACK]           → TRACK                                      [B]
         │   ├── GARAGE               (no polling; top: one car's card: a picture frame (photo
         │   │   │                     in M5), nickname, year make model, VIN or "(set in
-        │   │   │                     SETUP)", logged distance and drives, personal bests;
+        │   │   │                     SETUP)", logged distance and drives, odometer, bests;
         │   │   │                     "Counting drive n of m..." while it reads new drives)
         │   │   ├── [<] [>]          the card before / after (the connected car's first)
         │   │   ├── [NICKNAME]       keyboard; saved to garage.csv (empty removes it)
@@ -77,7 +77,8 @@ Gauge Boy
         ├── LIVE view list           (top: the last view's values)
         │   ├── [Engine] [Idle & vacuum] [Air & fuel]
         │   ├── [Warm-up] [Drive] [All]
-        │   ├── [Custom]             tap a view → LIVE view (starts polling; green = last used)
+        │   ├── [Custom] [Transmission]  tap a view → LIVE view (starts polling; green = last used);
+        │   │                        Transmission polls the transmission module alone (CAN cars)
         │   ├── [BACK]               → HOME                                       [B]
         │   └── LIVE view            (top: view, purpose or refresh warning, values,
         │       │                    refresh rates, battery, vacuum)
@@ -100,7 +101,8 @@ Gauge Boy
         │   └── [START / STOP]       pauses or resumes polling (STOP also ends a recording)
         │
         ├── DIAG                     (top: car facts or the selected code's text; a stored
-        │                            code with a freeze frame adds its values)
+        │                            code with a freeze frame adds its values; facts list the
+        │                            modules that answered; a code's text says which set it)
         │   ├── [STORED] [PENDING] [PERM] [READY]   tabs (PERM hidden if unsupported)
         │   ├── [list rows]          3 per page, tap → full description on top
         │   ├── [BACK]               → HOME                                       [B]

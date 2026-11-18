@@ -40,6 +40,9 @@ typedef struct {
     char vin[18];                 /* "" if the key isn't a VIN */
     char nickname[GARAGE_NICK_MAX + 1];
     double km;                    /* logged in recorded drives */
+    bool have_odo;                /* odometer.csv has a reading (PID A6) */
+    double odo_km;
+    char odo_date[16];
     int drives;
 } garage_car_t;
 

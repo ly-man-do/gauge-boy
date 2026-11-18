@@ -81,6 +81,12 @@ bool baro_store_get(const char *text, const char *key, float *kpa, char *date, s
 size_t baro_store_set(const char *text, const char *key, float kpa, const char *date, char *out,
                       size_t len)
 {
+    return keyval_store_set(text, HEADER, key, kpa, date, out, len);
+}
+
+size_t keyval_store_set(const char *text, const char *header, const char *key, float value,
+                        const char *date, char *out, size_t len)
+{
     /* Keep the other cars' lines (newest last), then add this one. */
     char keep[BARO_STORE_MAX][128];
     int n = 0;
@@ -109,7 +115,7 @@ size_t baro_store_set(const char *text, const char *key, float kpa, const char *
         p += m + (eol != NULL ? 1 : 0);
     }
     size_t used = 0;
-    int w = snprintf(out, len, HEADER);
+    int w = snprintf(out, len, "%s", header);
     if (w < 0 || (size_t)w >= len) {
         return 0;
     }
@@ -121,7 +127,7 @@ size_t baro_store_set(const char *text, const char *key, float kpa, const char *
         }
         used += (size_t)w;
     }
-    w = snprintf(out + used, len - used, "%s,%.1f,%s\n", key, (double)kpa, date);
+    w = snprintf(out + used, len - used, "%s,%.1f,%s\n", key, (double)value, date);
     if (w < 0 || (size_t)w >= len - used) {
         return 0;
     }

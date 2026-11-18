@@ -21,6 +21,7 @@ typedef enum {
     LIVE_VIEW_DRIVE,
     LIVE_VIEW_ALL,
     LIVE_VIEW_CUSTOM,
+    LIVE_VIEW_TRANS,       /* the transmission module's own PIDs (CAN cars) */
     LIVE_VIEW_COUNT
 } live_view_id_t;
 
@@ -29,6 +30,10 @@ typedef enum {
 const char *live_view_name(int view);      /* "Idle & vacuum" */
 const char *live_view_key(int view);       /* "idle", for config.ini */
 const char *live_view_purpose(int view);   /* "Vacuum leaks, rough idle" */
+
+/* The module a view polls (the transmission view: the transmission
+ * module alone; the rest: the engine). */
+obd_module_t live_view_module(int view);
 
 /* The view for a config key, or -1. */
 int live_view_find(const char *key);
