@@ -84,6 +84,7 @@ static void read_line(void *ctx, const char *raw, char *line)
     if (o->n == MILEAGE_MAX) {   /* keep the newest */
         memmove(&o->e[0], &o->e[1], sizeof o->e[0] * (MILEAGE_MAX - 1));
         o->n--;
+        o->first++;
     }
     o->e[o->n++] = e;
 }
@@ -107,6 +108,8 @@ int mileage_read(const char *text, const char *car, mileage_list_t *out)
     }
     return out->n;
 }
+
+static void format_entry(char *line, size_t len, const char *car, const mileage_entry_t *e);
 
 /* Appends to out; false if it doesn't fit. */
 static bool put(char *out, size_t len, size_t *used, const char *text)
@@ -140,8 +143,7 @@ size_t mileage_add(const char *text, const char *car, const mileage_entry_t *e, 
         return 0;
     }
     char line[LINE_MAX_LEN];
-    snprintf(line, sizeof line, "%.63s,%.15s,%.1f,%.1f,%.3f,%.4f\n", car, e->date, e->start_km,
-             e->end_km, e->fuel_l, e->price_l > 0.0 ? e->price_l : 0.0);
+    format_entry(line, sizeof line, car, e);
     if (!put(out, len, &used, line)) {
         return 0;
     }
@@ -183,6 +185,60 @@ size_t mileage_delete_last(const char *text, const char *car, bool *removed, cha
     }
     out[cut + rest] = '\0';
     return cut + rest;
+}
+
+static void format_entry(char *line, size_t len, const char *car, const mileage_entry_t *e)
+{
+    snprintf(line, len, "%.63s,%.15s,%.1f,%.1f,%.3f,%.4f\n", car, e->date, e->start_km, e->end_km,
+             e->fuel_l, e->price_l > 0.0 ? e->price_l : 0.0);
+}
+
+size_t mileage_rewrite(const char *text, const char *car, int index, const mileage_entry_t *e,
+                       bool *found, char *out, size_t len)
+{
+    const char *p = text != NULL ? text : "";
+    size_t used = 0;
+    int k = 0;
+    *found = false;
+    if (len == 0) {
+        return 0;
+    }
+    out[0] = '\0';
+    while (*p != '\0') {
+        const char *eol = strchr(p, '\n');
+        size_t n = eol != NULL ? (size_t)(eol - p) + 1 : strlen(p);
+        char line[LINE_MAX_LEN];
+        bool target = false;
+        if (n < sizeof line) {
+            memcpy(line, p, n);
+            line[n] = '\0';
+            line[strcspn(line, "\r\n")] = '\0';
+            char *c;
+            mileage_entry_t parsed;
+            if (split(line, &c, &parsed) && strcmp(c, car) == 0) {
+                target = k++ == index;
+            }
+        }
+        if (target) {
+            *found = true;
+            if (e != NULL) {
+                char repl[LINE_MAX_LEN];
+                format_entry(repl, sizeof repl, car, e);
+                if (!put(out, len, &used, repl)) {
+                    return 0;
+                }
+            }
+        } else {
+            if (used + n >= len) {
+                return 0;
+            }
+            memcpy(out + used, p, n);
+            used += n;
+            out[used] = '\0';
+        }
+        p += n;
+    }
+    return used;
 }
 
 bool mileage_l100(double km, double fuel_l, double *l100)

@@ -136,6 +136,26 @@ static void test_mileage_log(void)
     CHECK(!removed);
     CHECK_EQ_STR(a, b);
 
+    /* Edit or delete any entry by its place among the car's entries. */
+    mileage_entry_t x = { "2026-11-21", 100.0, 200.0, 10.0, 0.0 }, y = { "2026-11-22", 200.0, 300.0, 9.0, 0.0 };
+    mileage_add("", "A", &x, a, sizeof a);
+    mileage_add(a, "B", &other, b, sizeof b);
+    mileage_add(b, "A", &y, a, sizeof a);                    /* A: x, y; B between them */
+    mileage_entry_t fixed = { "2026-11-22", 200.0, 310.0, 9.5, 1.0 };
+    bool found = false;
+    n = mileage_rewrite(a, "A", 1, &fixed, &found, b, sizeof b);   /* A's second: y */
+    CHECK(found && n > 0);
+    CHECK_EQ_INT(mileage_read(b, "A", &list), 2);
+    CHECK(list.e[1].end_km == 310.0 && list.e[1].price_l == 1.0 && list.e[0].end_km == 200.0);
+    CHECK_EQ_INT(mileage_read(b, "B", &list), 1);           /* B untouched */
+    n = mileage_rewrite(b, "A", 0, NULL, &found, a, sizeof a);     /* delete A's first */
+    CHECK(found && n > 0);
+    CHECK_EQ_INT(mileage_read(a, "A", &list), 1);
+    CHECK(list.e[0].end_km == 310.0 && list.first == 0);
+    mileage_rewrite(a, "A", 5, NULL, &found, b, sizeof b);
+    CHECK(!found);
+    CHECK_EQ_STR(b, a);                                      /* nothing changed */
+
     double v = 0;
     CHECK(mileage_parse("29,958", &v) && v == 29958.0);
     CHECK(mileage_parse(" 14.25 ", &v) && fabs(v - 14.25) < 1e-9);

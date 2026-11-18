@@ -41,6 +41,8 @@ typedef struct {
 typedef struct {
     mileage_entry_t e[MILEAGE_MAX];   /* oldest first */
     int n;
+    int first;                        /* e[0]'s place among the car's entries in the file
+                                       * (older ones beyond MILEAGE_MAX aren't read) */
     double km, fuel_l;                /* totals */
     double cost;                      /* spent on the entries with a price */
     double cost_km;                   /* the distance those entries cover */
@@ -58,6 +60,13 @@ size_t mileage_add(const char *text, const char *car, const mileage_entry_t *e, 
  * small); *removed says whether there was one. */
 size_t mileage_delete_last(const char *text, const char *car, bool *removed, char *out,
                            size_t len);
+
+/* text with car's entry number index (its place among car's entries in
+ * the file, oldest first: list.first + i) replaced by e, or deleted when e
+ * is NULL. Returns the length (0 if out is too small); *found says whether
+ * that entry was there. */
+size_t mileage_rewrite(const char *text, const char *car, int index, const mileage_entry_t *e,
+                       bool *found, char *out, size_t len);
 
 /* Litres per 100 km for a distance and fuel; false if either is 0 or less. */
 bool mileage_l100(double km, double fuel_l, double *l100);

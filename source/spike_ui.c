@@ -150,7 +150,6 @@
 #define BTN_RS_BEST       116    /* worker: high score (shared.hs_run): save the new one, read it */
 #define BTN_TRACK_ECO     (-144) /* UI: TRACK -> ECO CHALLENGE */
 #define BTN_ECO_RESET     (-145) /* UI: ECO: a new trip (parked) */
-#define BTN_TRACK_GARAGE  (-146) /* UI: TRACK -> GARAGE */
 #define BTN_GARAGE_PREV   (-147) /* UI: GARAGE: the card before / after */
 #define BTN_GARAGE_NEXT   (-148)
 #define BTN_GARAGE_NICK   (-149) /* UI: GARAGE: type a nickname (keyboard) */
@@ -163,10 +162,15 @@
 #define BTN_GARAGE_MILES  (-152) /* UI: GARAGE -> MILEAGE LOG */
 #define BTN_TRIP_RESET    (-153) /* UI: TRIP: start a new trip (parked) */
 #define BTN_MILES_NEW     (-154) /* UI: MILEAGE: type a new entry */
-#define BTN_MILES_DEL     (-155) /* UI: MILEAGE: delete the newest entry (tap twice) */
+#define BTN_MILES_DEL     (-155) /* UI: MILEAGE: delete the selected entry (tap twice) */
+#define BTN_MILES_EDIT    (-156) /* UI: MILEAGE: edit the selected entry */
+#define BTN_MILES_PREV    (-157) /* UI: MILEAGE: list page before / after */
+#define BTN_MILES_NEXT    (-158)
+#define BTN_MILES_ROW     (-160) /* UI: MILEAGE: list row (-160 - slot) */
 #define BTN_TRIP_SAVE     120    /* worker: trip.csv for shared.trip_key = shared.trip_km */
 #define BTN_MILES_ADD     121    /* worker: add shared.miles_new for shared.miles_key */
-#define BTN_MILES_DROP    122    /* worker: delete shared.miles_key's newest entry */
+#define BTN_MILES_DROP    122    /* worker: delete shared.miles_key's entry shared.miles_index */
+#define BTN_MILES_SET     123    /* worker: replace that entry with shared.miles_new */
 
 /* Bottom-screen buttons in 8x8 console cells: 12-13x6 cells = 96-104x48 px.
  * The third row has the Wi-Fi slot buttons, the last one the log ones. */
@@ -326,7 +330,6 @@ static const button_t track_buttons[] = {
     { "G-METER",     BTN_TRACK_GMETER,  0,  10, 19, 5 },
     { "REV SYNC",    BTN_TRACK_REVSYNC, 20, 10, 19, 5 },
     { "ECO",         BTN_TRACK_ECO,     0,  16, 19, 5 },
-    { "GARAGE",      BTN_TRACK_GARAGE,  20, 16, 19, 5 },
     { "BACK",        BTN_BACK,     0, 25, 8, 5 },
     { "ACHIEVEMENTS", BTN_TRACK_ACH,   9, 25, 30, 5 },
 };
@@ -381,9 +384,12 @@ static const button_t trip_buttons[] = {
 };
 #define TRIP_BUTTON_COUNT ((int)(sizeof trip_buttons / sizeof trip_buttons[0]))
 static const button_t miles_buttons[] = {
-    { "NEW ENTRY",   BTN_MILES_NEW, 0,  19, 19, 5 },
-    { "DELETE LAST", BTN_MILES_DEL, 20, 19, 19, 5 },
-    { "BACK",        BTN_BACK,      0,  25, 8, 5 },
+    { "NEW ENTRY", BTN_MILES_NEW,  24, 1,  15, 5 },
+    { "BACK",      BTN_BACK,       0,  25, 8, 5 },
+    { "<",         BTN_MILES_PREV, 9,  25, 5, 5 },
+    { ">",         BTN_MILES_NEXT, 17, 25, 5, 5 },
+    { "EDIT",      BTN_MILES_EDIT, 23, 25, 8, 5 },
+    { "DELETE",    BTN_MILES_DEL,  32, 25, 7, 5 },
 };
 #define MILES_BUTTON_COUNT ((int)(sizeof miles_buttons / sizeof miles_buttons[0]))
 
@@ -660,6 +666,7 @@ static struct {
     char trip_key[32];         /* UI: the car whose trip starts ... */
     float trip_km;             /* ... at this odometer reading */
     char miles_key[32];        /* UI: the car a mileage change is for */
+    int miles_index;           /* ... its entry (place among the car's entries) */
     mileage_entry_t miles_new;
     char garage_nick[GARAGE_NICK_MAX + 1];
     int rs_save_score;         /* UI: a finished game's score for the worker, 0 = none */
@@ -2031,25 +2038,29 @@ static void trip_save(spike_t *s)
     garage_load_logs();
 }
 
-/* MILEAGE (worker): add shared.miles_new, or drop the newest entry. */
-static void miles_change(spike_t *s, bool add)
+/* MILEAGE (worker): add shared.miles_new, replace entry shared.miles_index
+ * with it, or delete that entry. */
+static void miles_change(spike_t *s, int action)
 {
     static char text[8192], out[8192];
     char key[32];
     LightLock_Lock(&shared.lock);
     snprintf(key, sizeof key, "%s", shared.miles_key);
     mileage_entry_t e = shared.miles_new;
+    int index = shared.miles_index;
     LightLock_Unlock(&shared.lock);
     read_small_file(MILEAGE_PATH, text, sizeof text);
-    bool removed = true;
-    size_t n = add ? mileage_add(text, key, &e, out, sizeof out)
-                   : mileage_delete_last(text, key, &removed, out, sizeof out);
-    bool ok = removed && (n > 0 || !add) && write_text(MILEAGE_PATH, out, n > 0 ? n : 0);
-    if (!add && removed && n == 0) {
+    bool found = true;
+    size_t n = action == BTN_MILES_ADD ? mileage_add(text, key, &e, out, sizeof out)
+             : mileage_rewrite(text, key, index, action == BTN_MILES_SET ? &e : NULL, &found, out,
+                               sizeof out);
+    bool ok = found && n > 0 && write_text(MILEAGE_PATH, out, n);
+    if (found && n == 0 && action == BTN_MILES_DROP) {
         static const char header[] = "car,date,start_km,end_km,fuel_l,price_l\n";
-        ok = write_text(MILEAGE_PATH, header, sizeof header - 1);
+        ok = write_text(MILEAGE_PATH, header, sizeof header - 1);   /* it was the only line */
     }
-    spike_logf(s, "%sMILEAGE: %s%s", ok ? "" : "! ", add ? "entry added" : "newest entry deleted",
+    spike_logf(s, "%sMILEAGE: entry %s%s", ok ? "" : "! ",
+               action == BTN_MILES_ADD ? "added" : action == BTN_MILES_SET ? "changed" : "deleted",
                ok ? "" : " (not saved to mileage.csv)");
     garage_load_logs();
 }
@@ -2356,8 +2367,9 @@ static void worker_main(void *arg)
                 garage_save(spike);
             } else if (action == BTN_TRIP_SAVE) {
                 trip_save(spike);
-            } else if (action == BTN_MILES_ADD || action == BTN_MILES_DROP) {
-                miles_change(spike, action == BTN_MILES_ADD);
+            } else if (action == BTN_MILES_ADD || action == BTN_MILES_DROP ||
+                       action == BTN_MILES_SET) {
+                miles_change(spike, action);
             } else {
                 spike_run(spike, (spike_action_t)action);
             }
@@ -2597,8 +2609,10 @@ typedef struct {
     bool ta_dialog;            /* TIME ATTACK: closed-course notice showing */
     bool ta_warned;            /* ... accepted this session */
     int ta_run;                /* TIME ATTACK: the run picked (ta_run_t) */
-    screen_t garage_back;      /* where BACK goes from GARAGE (HOME or TRACK) */
-    uint64_t miles_del_armed;  /* MILEAGE: DELETE LAST tapped once, until this time */
+    screen_t garage_back;      /* where BACK goes from GARAGE (HOME) */
+    uint64_t miles_del_armed;  /* MILEAGE: DELETE tapped once, until this time */
+    int miles_page;            /* MILEAGE: list page */
+    int miles_sel;             /* ... selected entry, newest first; -1 = none */
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
@@ -3077,8 +3091,6 @@ static void draw_track_top(int busy, bool connected)
         "             (parked only)",
         "ECO          fuel economy and a score for",
         "             smooth driving",
-        "GARAGE       a card per car: logged distance",
-        "             and personal bests",
         "",
         "ACHIEVEMENTS stickers for milestones",
         "",
@@ -4000,7 +4012,7 @@ static void draw_trip_top(int busy, bool connected, int index, bool metric, bool
 }
 
 /* MILEAGE LOG top screen: the newest entries and the average. */
-static void draw_miles_top(int busy, bool connected, int index, bool metric, bool full)
+static void draw_miles_top(int busy, bool connected, int index, bool metric, bool full, int sel)
 {
     garage_car_t c;
     double now_km = 0.0;
@@ -4062,7 +4074,11 @@ static void draw_miles_top(int busy, bool connected, int index, bool metric, boo
         }
         snprintf(line, sizeof line, "%-5.5s %-8s %-7.1f %-6.2f %-6.1f %s", e->date + 5, b, d, f,
                  has ? econ : 0.0, cost);
-        print_row(row, TOP_COLS, line);
+        if (list.n - 1 - i == sel) {   /* the one selected below */
+            printf("\x1b[%d;1H\x1b[42;30m%-*.*s\x1b[0m", row + 1, TOP_COLS, TOP_COLS, line);
+        } else {
+            print_row(row, TOP_COLS, line);
+        }
     }
 }
 
@@ -4087,9 +4103,10 @@ static bool edit_number(const char *hint, const char *initial, bool optional, do
     return mileage_parse(text, out);
 }
 
-/* MILEAGE: NEW ENTRY's three questions. Returns a message for the notice
- * line (or NULL if cancelled); on success the entry is queued. */
-static const char *miles_new_entry(int index, bool metric)
+/* MILEAGE: NEW ENTRY's questions, or EDIT's for the entry shown newest-
+ * first at sel (-1: a new one). Returns a message for the notice line (or
+ * NULL if cancelled); on success the change is queued. */
+static const char *miles_new_entry(int index, bool metric, int sel)
 {
     garage_car_t c;
     double now_km = 0.0;
@@ -4106,8 +4123,17 @@ static const char *miles_new_entry(int index, bool metric)
     mileage_read(text, c.key, &list);
     double k = metric ? 1.0 : MILEAGE_KM_MI;   /* km per typed unit */
     double g = metric ? 1.0 : MILEAGE_L_GAL;   /* litres per typed unit */
+    const mileage_entry_t *old = NULL;
+    if (sel >= 0) {
+        if (sel >= list.n) {
+            return "Tap an entry first.";
+        }
+        old = &list.e[list.n - 1 - sel];
+    }
     char init[24] = "";
-    if (list.n > 0) {
+    if (old != NULL) {
+        snprintf(init, sizeof init, "%.1f", old->start_km / k);
+    } else if (list.n > 0) {
         snprintf(init, sizeof init, "%.1f", list.e[list.n - 1].end_km / k);
     } else if (have_odo) {
         snprintf(init, sizeof init, "%.1f", now_km / k);
@@ -4118,21 +4144,28 @@ static const char *miles_new_entry(int index, bool metric)
         return NULL;
     }
     init[0] = '\0';
-    if (have_odo && now_km / k > start) {
+    if (old != NULL) {
+        snprintf(init, sizeof init, "%.1f", old->end_km / k);
+    } else if (have_odo && now_km / k > start) {
         snprintf(init, sizeof init, "%.1f", now_km / k);
     }
     if (!edit_number(metric ? "Odometer at the end (km)" : "Odometer at the end (miles)", init,
                      false, &end)) {
         return NULL;
     }
-    if (!edit_number(metric ? "Fuel used (litres)" : "Fuel used (gallons)", "", false, &fuel)) {
+    init[0] = '\0';
+    if (old != NULL) {
+        snprintf(init, sizeof init, "%.2f", old->fuel_l / g);
+    }
+    if (!edit_number(metric ? "Fuel used (litres)" : "Fuel used (gallons)", init, false, &fuel)) {
         return NULL;
     }
     /* The price: per gallon or litre, as last time (empty: leave it out). */
     double price = 0.0;
     init[0] = '\0';
-    if (list.n > 0 && list.e[list.n - 1].price_l > 0.0) {
-        snprintf(init, sizeof init, "%.3f", list.e[list.n - 1].price_l * g);
+    const mileage_entry_t *pe = old != NULL ? old : list.n > 0 ? &list.e[list.n - 1] : NULL;
+    if (pe != NULL && pe->price_l > 0.0) {
+        snprintf(init, sizeof init, "%.3f", pe->price_l * g);
     }
     if (!edit_number(metric ? "Price per litre (empty: skip)" : "Price per gallon (empty: skip)",
                      init, true, &price)) {
@@ -4146,7 +4179,9 @@ static const char *miles_new_entry(int index, bool metric)
     memset(&e, 0, sizeof e);
     time_t t = time(NULL);
     struct tm *tm = localtime(&t);
-    if (tm != NULL) {
+    if (old != NULL) {
+        snprintf(e.date, sizeof e.date, "%s", old->date);   /* an edit keeps its date */
+    } else if (tm != NULL) {
         strftime(e.date, sizeof e.date, "%Y-%m-%d", tm);
     }
     e.start_km = start * k;
@@ -4156,9 +4191,10 @@ static const char *miles_new_entry(int index, bool metric)
     LightLock_Lock(&shared.lock);
     snprintf(shared.miles_key, sizeof shared.miles_key, "%s", c.key);
     shared.miles_new = e;
+    shared.miles_index = old != NULL ? list.first + (list.n - 1 - sel) : -1;
     LightLock_Unlock(&shared.lock);
-    enqueue(BTN_MILES_ADD);
-    return "Entry saved.";
+    enqueue(old != NULL ? BTN_MILES_SET : BTN_MILES_ADD);
+    return old != NULL ? "Entry changed." : "Entry saved.";
 }
 
 static void draw_ta_dialog(void)
@@ -4739,20 +4775,44 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         return;
     }
     if (ui->screen == SCREEN_MILEAGE) {
-        print_row(2, BOTTOM_COLS, "MILEAGE LOG");
-        print_row(4, BOTTOM_COLS, "NEW ENTRY asks for the odometer at the");
-        print_row(5, BOTTOM_COLS, "start and the end, the fuel used and");
-        print_row(6, BOTTOM_COLS, cfg->metric ? "its price per litre (optional), then"
-                                              : "its price per gallon (optional), then");
-        print_row(7, BOTTOM_COLS, "works out the economy and the cost.");
-        print_row(9, BOTTOM_COLS, "The start is filled in from the last");
-        print_row(10, BOTTOM_COLS, "entry, the end from the odometer.");
-        print_row(16, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        garage_car_t c;
+        double km;
+        bool live;
+        card_odometer(ui->page, &c, &km, &live);
+        static char text[sizeof shared.miles_text];
+        static mileage_list_t list;
+        LightLock_Lock(&shared.lock);
+        memcpy(text, shared.miles_text, sizeof text);
+        LightLock_Unlock(&shared.lock);
+        mileage_read(text, c.key, &list);
+        clear_rows(1, 24);
+        snprintf(line, sizeof line, "MILEAGE LOG: %d entr%s", list.n, list.n == 1 ? "y" : "ies");
+        print_row(2, 23, line);
+        print_row(4, 23, list.n > 0 ? "Tap one to EDIT it." : "NEW ENTRY to start.");
+        for (int slot = 0; slot < LIST_PAGE_ROWS; slot++) {
+            int k = ui->miles_page * LIST_PAGE_ROWS + slot;   /* newest first */
+            if (k >= list.n) {
+                break;
+            }
+            const mileage_entry_t *e = &list.e[list.n - 1 - k];
+            double d = e->end_km - e->start_km, econ = 0.0;
+            bool has = cfg->metric ? mileage_l100(d, e->fuel_l, &econ)
+                                   : mileage_mpg(d, e->fuel_l, &econ);
+            char odo[24], row[64];
+            obd_format_grouped((long long)((cfg->metric ? e->end_km : e->end_km / MILEAGE_KM_MI) +
+                                           0.5), odo, sizeof odo);
+            snprintf(row, sizeof row, "%.5s  %.12s %s  %.1f %s", e->date + 5, odo,
+                     cfg->metric ? "km" : "mi", has ? econ : 0.0, cfg->metric ? "L/100" : "mpg");
+            draw_list_row(slot, row, k == ui->miles_sel);
+        }
+        print_row(24, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        snprintf(line, sizeof line, "%d/%d", ui->miles_page + 1, page_count(list.n));
+        printf("\x1b[%d;15H%-3.3s", 27 + 1, line);
         bool armed = now < ui->miles_del_armed;
         for (int i = 0; i < MILES_BUTTON_COUNT; i++) {
             button_t b = miles_buttons[i];
             if (b.action == BTN_MILES_DEL && armed) {
-                b.label = "TAP AGAIN";
+                b.label = "AGAIN";
             }
             draw_button_ex(&b, flashing(b.action, now), b.action == BTN_MILES_DEL && armed, false);
         }
@@ -5417,7 +5477,7 @@ void spike_ui_run(void)
 
     ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false, -1, SCREEN_SETUP,
                       false, LIVE_VIEW_ENGINE, SCREEN_HOME, false, 0, 0.0, 0.0, 0.0,
-                      false, false, TA_RUN_LAUNCH, SCREEN_TRACK, 0 };
+                      false, false, TA_RUN_LAUNCH, SCREEN_HOME, 0, 0, -1 };
     gm_vec_t gm_raw = { 0, 0, 0 };   /* G-METER: the latest sensor reading */
     live_menu_count();
     uint64_t notice_until = 0;
@@ -5614,6 +5674,15 @@ void spike_ui_run(void)
                     button_t b = live_slot(slot);
                     if (button_at(&b, 1, tp.px, tp.py) == 0) {
                         action = b.action;
+                        tapped = true;
+                    }
+                }
+            } else if (ui.screen == SCREEN_MILEAGE) {
+                int row = tp.py / 8;
+                for (int slot = 0; slot < LIST_PAGE_ROWS; slot++) {
+                    int top = LIST_FIRST_ROW + slot * LIST_ROW_PITCH;
+                    if (row >= top && row < top + LIST_ROW_H) {
+                        action = BTN_MILES_ROW - slot;
                         tapped = true;
                     }
                 }
@@ -5829,8 +5898,7 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_HOME_GARAGE:
-            case BTN_TRACK_GARAGE:
-                ui.garage_back = action == BTN_HOME_GARAGE ? SCREEN_HOME : SCREEN_TRACK;
+                ui.garage_back = SCREEN_HOME;
                 ui.screen = SCREEN_GARAGE;
                 ui.page = 0;   /* the connected car's card comes first */
                 if (worker != NULL) {
@@ -5875,6 +5943,8 @@ void spike_ui_run(void)
             case BTN_GARAGE_MILES:
                 ui.screen = SCREEN_MILEAGE;
                 ui.miles_del_armed = 0;
+                ui.miles_page = 0;
+                ui.miles_sel = -1;
                 bottom_full = top_dirty = true;
                 break;
             case BTN_TRIP_RESET: {
@@ -5908,33 +5978,92 @@ void spike_ui_run(void)
                     notice_until = now + 3000;
                     break;
                 }
-                ui.notice = miles_new_entry(ui.page, cfg.metric);
+                ui.notice = miles_new_entry(ui.page, cfg.metric, -1);
                 notice_until = now + 4000;
+                ui.miles_sel = -1;
+                ui.miles_page = 0;
                 bottom_full = top_dirty = true;   /* the keyboard covered both screens */
                 break;
-            case BTN_MILES_DEL:
+            case BTN_MILES_EDIT:
+                if (ui.miles_sel < 0) {
+                    ui.notice = "Tap an entry first.";
+                    notice_until = now + 3000;
+                    break;
+                }
+                ui.notice = miles_new_entry(ui.page, cfg.metric, ui.miles_sel);
+                notice_until = now + 4000;
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_MILES_DEL: {
+                if (ui.miles_sel < 0) {
+                    ui.notice = "Tap an entry first.";
+                    notice_until = now + 3000;
+                    break;
+                }
                 if (now >= ui.miles_del_armed) {
                     ui.miles_del_armed = now + 4000;   /* tap again within 4 s */
-                    ui.notice = "Tap DELETE LAST again to delete the newest entry.";
+                    ui.notice = "Tap AGAIN to delete the selected entry.";
                     notice_until = now + 4000;
                     break;
                 }
                 ui.miles_del_armed = 0;
-                {
-                    garage_car_t c;
-                    double km;
-                    bool live;
-                    card_odometer(ui.page, &c, &km, &live);
-                    LightLock_Lock(&shared.lock);
-                    snprintf(shared.miles_key, sizeof shared.miles_key, "%s", c.key);
-                    LightLock_Unlock(&shared.lock);
+                garage_car_t c;
+                double km;
+                bool live;
+                card_odometer(ui.page, &c, &km, &live);
+                static char mtext[sizeof shared.miles_text];
+                static mileage_list_t ml;
+                LightLock_Lock(&shared.lock);
+                memcpy(mtext, shared.miles_text, sizeof mtext);
+                LightLock_Unlock(&shared.lock);
+                mileage_read(mtext, c.key, &ml);
+                if (ui.miles_sel >= ml.n) {
+                    break;
                 }
+                LightLock_Lock(&shared.lock);
+                snprintf(shared.miles_key, sizeof shared.miles_key, "%s", c.key);
+                shared.miles_index = ml.first + (ml.n - 1 - ui.miles_sel);
+                LightLock_Unlock(&shared.lock);
                 if (worker != NULL) {
                     enqueue(BTN_MILES_DROP);
                 }
-                ui.notice = "Newest entry deleted.";
+                ui.miles_sel = -1;
+                ui.notice = "Entry deleted.";
                 notice_until = now + 3000;
+                top_dirty = true;
                 break;
+            }
+            case BTN_MILES_PREV:
+            case BTN_MILES_NEXT:
+            case BTN_MILES_ROW:
+            case BTN_MILES_ROW - 1:
+            case BTN_MILES_ROW - 2: {
+                garage_car_t c;
+                double km;
+                bool live;
+                card_odometer(ui.page, &c, &km, &live);
+                static char rtext[sizeof shared.miles_text];
+                static mileage_list_t rl;
+                LightLock_Lock(&shared.lock);
+                memcpy(rtext, shared.miles_text, sizeof rtext);
+                LightLock_Unlock(&shared.lock);
+                int count = mileage_read(rtext, c.key, &rl);
+                if (action == BTN_MILES_PREV || action == BTN_MILES_NEXT) {
+                    int np = ui.miles_page + (action == BTN_MILES_NEXT ? 1 : -1);
+                    if (np >= 0 && np < page_count(count)) {
+                        ui.miles_page = np;
+                        ui.miles_sel = -1;
+                    }
+                } else {
+                    int k = ui.miles_page * LIST_PAGE_ROWS + (BTN_MILES_ROW - action);
+                    if (k < count) {
+                        ui.miles_sel = k;
+                        ui.miles_del_armed = 0;
+                    }
+                }
+                top_dirty = true;
+                break;
+            }
             case BTN_GARAGE_NICK:
                 if (edit_nickname(ui.page) && worker != NULL) {
                     enqueue(BTN_GARAGE_SAVE);
@@ -6468,7 +6597,7 @@ void spike_ui_run(void)
                 draw_trip_top(busy, connected, ui.page, cfg.metric, top_dirty);
                 live_drawn_at = now;
             } else if (ui.screen == SCREEN_MILEAGE) {
-                draw_miles_top(busy, connected, ui.page, cfg.metric, top_dirty);
+                draw_miles_top(busy, connected, ui.page, cfg.metric, top_dirty, ui.miles_sel);
             } else if (ui.screen == SCREEN_ACHIEVE) {
                 draw_achieve_top(busy, connected, top_dirty);
             } else if (ui.screen == SCREEN_GARAGE) {

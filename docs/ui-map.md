@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, HOME My Garage card, GARAGE trip meter and mileage log (gauge-boy-6s9, jhf, fvs)
+**As of:** 2026-11-18, MILEAGE LOG select / EDIT / DELETE; GARAGE only from HOME (gauge-boy-u8b, b0z)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -13,6 +13,32 @@ Gauge Boy
     └── HOME                         (graphics; top screen: car facts, found by itself
                                      after connecting: car, VIN, protocol)
         ├── [My Garage card]         → GARAGE (BACK returns to HOME)
+        │   └── GARAGE               (no polling; top: one car's card: a picture frame (photo
+        │       │                     in M5), nickname, year make model, VIN or "(set in
+        │       │                     SETUP)", logged distance and drives, odometer, bests;
+        │       │                     "Counting drive n of m..." while it reads new drives)
+        │       ├── [TRIP]           → TRIP METER
+        │       ├── [MILEAGE LOG]    → MILEAGE LOG
+        │       ├── [<] [>]          the card before / after (the connected car's first)
+        │       ├── [NICKNAME]       keyboard; saved to garage.csv (empty removes it)
+        │       ├── [BACK]           → HOME                                       [B]
+        │       ├── TRIP METER       (the card's car: odometer now (live if it's the connected
+        │       │   │                 car: polls PID A6, else the last saved), trip distance
+        │       │   │                 in big digits since RESET TRIP, its date and start)
+        │       │   ├── [RESET TRIP] a new trip from the odometer now; refused while moving
+        │       │   └── [BACK]       → GARAGE (stops polling)                     [B]
+        │       └── MILEAGE LOG      (the card's car: average economy, then the newest
+        │           │                 entries: date, end odometer, distance, fuel, mpg / L/100,
+        │           │                 cost; "Spent" total and cost a mile / km)
+        │           │                 (bottom: the entries newest first, 3 a page; tap one to
+        │           │                 select it, green; it's highlighted on top too)
+        │           ├── [NEW ENTRY]  number pad x4: start odometer (from the last entry),
+        │           │                 end odometer (from the odometer), fuel, price per gallon
+        │           │                 (US) or litre (metric), optional; refused while moving
+        │           ├── [<] n/m [>]  list pages
+        │           ├── [EDIT]       the selected entry: the same questions, filled in with it
+        │           ├── [DELETE]     the selected entry, after a second tap ("AGAIN")
+        │           └── [BACK]       → GARAGE                                     [B]
         ├── [Adapter card]           → Wi-Fi guide (shows Connected / Not connected)
         ├── [LIVE  · Dash gauges]    → LIVE view list
         ├── [DIAG  · Codes & CEL]    → DIAG (amber with a lit lamp and "CEL ON" when the CEL is on)
@@ -25,34 +51,11 @@ Gauge Boy
         │   │   ├── [G-METER]        → G-METER
         │   │   ├── [REV SYNC]       → REV SYNC
         │   │   ├── [ECO]            → ECO CHALLENGE
-        │   │   ├── [GARAGE]         → GARAGE (reads the cars and counts drives)
         │   │   ├── [ACHIEVEMENTS]   → ACHIEVEMENTS (next to BACK)
         │   │   └── [BACK]           → HOME                                       [B]
         │   ├── ACHIEVEMENTS         (top: the 12 stickers, unlocked with a date, or locked
         │   │   │                     with how to get them; "n of 12 unlocked")
         │   │   └── [BACK]           → TRACK                                      [B]
-        │   ├── GARAGE               (no polling; top: one car's card: a picture frame (photo
-        │   │   │                     in M5), nickname, year make model, VIN or "(set in
-        │   │   │                     SETUP)", logged distance and drives, odometer, bests;
-        │   │   │                     "Counting drive n of m..." while it reads new drives)
-        │   │   ├── [TRIP]           → TRIP METER
-        │   │   ├── [MILEAGE LOG]    → MILEAGE LOG
-        │   │   ├── [<] [>]          the card before / after (the connected car's first)
-        │   │   ├── [NICKNAME]       keyboard; saved to garage.csv (empty removes it)
-        │   │   ├── [BACK]           → TRACK, or HOME if opened from My Garage    [B]
-        │   │   ├── TRIP METER       (the card's car: odometer now (live if it's the connected
-        │   │   │   │                 car: polls PID A6, else the last saved), trip distance
-        │   │   │   │                 in big digits since RESET TRIP, its date and start)
-        │   │   │   ├── [RESET TRIP] a new trip from the odometer now; refused while moving
-        │   │   │   └── [BACK]       → GARAGE (stops polling)                     [B]
-        │   │   └── MILEAGE LOG      (the card's car: average economy, then the newest
-        │   │       │                 entries: date, end odometer, distance, fuel, mpg / L/100,
-        │   │       │                 cost; "Spent" total and cost a mile / km)
-        │   │       ├── [NEW ENTRY]  number pad x4: start odometer (from the last entry),
-        │   │       │                 end odometer (from the odometer), fuel, price per gallon
-        │   │       │                 (US) or litre (metric), optional; refused while moving
-        │   │       ├── [DELETE LAST] tap twice ("TAP AGAIN") to delete the newest entry
-        │   │       └── [BACK]       → GARAGE                                     [B]
         │   ├── ECO CHALLENGE        (polls speed, RPM, MAF or MAP, intake temp; top: trip
         │   │   │                     score in big digits and its rank once ranked, economy now
         │   │   │                     and for the trip, distance, fuel, driving / idling time,

@@ -6,6 +6,7 @@ All notable changes to Gauge Boy are recorded here. The format follows [Keep a C
 
 ### Changed
 
+- **GARAGE is reached from HOME's My Garage card only** (the GARAGE button left TRACK).
 - **No license for now**: the MIT license is removed (owner decision); all rights are reserved until the owner chooses one. Copies published before (up to 0.2.0) stay MIT. About no longer says MIT. Third-party parts keep their own licenses (CREDITS.md).
 - **FUN is now TRACK**: the HOME card reads TRACK, "Track modes", for the timers, shift light, G-meter and the other modes coming in version 0.4.
 - **GRAPH draws smooth curves**: the line passes smoothly through each reading (a monotone cubic, so it never overshoots and invents no peaks) instead of stepping from one held value to the next, and a faint band behind it shows each moment's lowest and highest value, so short spikes stay visible.
@@ -15,7 +16,7 @@ All notable changes to Gauge Boy are recorded here. The format follows [Keep a C
 
 - **My Garage on HOME**: the top-left status card is now My Garage (a teal car), which opens the garage cards. The CEL lamp moved to the DIAG card: it turns amber with a lit lamp and says "CEL ON" when the check engine light is on.
 - **Trip meter** (GARAGE > TRIP): distance from the car's own odometer since RESET TRIP (parked), in big digits, live when it's the connected car and otherwise from the last saved reading. Cars without the odometer PID are pointed to the mileage log. Kept per car in `trip.csv`.
-- **Mileage log** (GARAGE > MILEAGE LOG): NEW ENTRY asks on the number pad for the odometer at the start (filled in from the last entry) and the end (from the odometer when known), the fuel used and its price per gallon (US) or litre (metric; optional, filled in from the last entry), and shows each entry's mpg (or L/100 km) and cost, the average economy, the total spent and the cost a mile (or km). DELETE LAST removes the newest entry after a second tap. Kept per car in `mileage.csv` (km and litres).
+- **Mileage log** (GARAGE > MILEAGE LOG): NEW ENTRY asks on the number pad for the odometer at the start (filled in from the last entry) and the end (from the odometer when known), the fuel used and its price per gallon (US) or litre (metric; optional, filled in from the last entry), and shows each entry's mpg (or L/100 km) and cost, the average economy, the total spent and the cost a mile (or km). The entries are a list on the bottom screen (newest first, 3 a page): tap one to select it, then EDIT asks the same questions filled in with it, or DELETE removes it after a second tap. Kept per car in `mileage.csv` (km and litres).
 - **Odometer readings with commas** (29,958 mi) in LIVE, the garage card and the trip meter.
 - **Odometer** (PID A6, newer cars such as the Ascent): in LIVE's Drive view (and All and Custom), recorded by REC, and kept per car in `odometer.csv` so the garage card shows the last reading. Also the **transmission gear ratio** (PID A4) where the car reports it.
 - **LIVE > Transmission**: on CAN cars, a view of the transmission module's own standard PIDs, asked of that module alone (it reads which ones it supports first). Older cars (K-line, J1850) say it needs a CAN car.
