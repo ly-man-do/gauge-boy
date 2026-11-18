@@ -4,7 +4,7 @@
  * Screens: DIAG (default: scan, codes, readiness), SETUP (Wi-Fi slot,
  * SAVE LOG, the adapter test screen) and TEST (the M0 adapter test
  * screen). The bottom screen of DIAG and SETUP has the main menu
- * (LIVE / DIAG / TRIM / FUN / LOG / SETUP); M1 enables DIAG and SETUP.
+ * (LIVE / DIAG / TRIM / TRACK / LOG / SETUP); M1 enables DIAG and SETUP.
  *
  * The UI thread never does network or file I/O after startup; the worker
  * thread runs the button actions and writes the log file.
@@ -99,7 +99,7 @@
 #define BTN_MENU_LIVE    (-10) /* UI: main menu */
 #define BTN_MENU_DIAG    (-11)
 #define BTN_MENU_TRIM    (-12)
-#define BTN_MENU_FUN     (-13)
+#define BTN_MENU_TRACK   (-13)
 #define BTN_MENU_LOG     (-14)
 #define BTN_MENU_SETUP   (-15)
 #define BTN_HOME_CEL     (-16) /* UI: HOME status cards */
@@ -156,7 +156,7 @@ static const button_t home_buttons[] = {
     { "LIVE",  BTN_MENU_LIVE,  0,  3, 12, 9 },
     { "DIAG",  BTN_MENU_DIAG,  13, 3, 13, 9 },
     { "TRIM",  BTN_MENU_TRIM,  27, 3, 12, 9 },
-    { "FUN",   BTN_MENU_FUN,   0, 14, 12, 9 },
+    { "TRACK", BTN_MENU_TRACK, 0, 14, 12, 9 },
     { "LOG",   BTN_MENU_LOG,   13, 14, 13, 9 },
     { "SETUP", BTN_MENU_SETUP, 27, 14, 12, 9 },
 };
@@ -1132,7 +1132,7 @@ static void log_delete(spike_t *s)
     log_scan(s);
 }
 
-/* Recent values of the polled PIDs (worker): for live graphs and fun modes. */
+/* Recent values of the polled PIDs (worker): for live graphs and track modes. */
 static history_t live_history;
 
 /* Vacuum on cars without a baro PID: the engine-off MAP saved per car. */
@@ -1837,7 +1837,7 @@ static int home_item_action(int item)
     case HOME_LIVE:    return BTN_MENU_LIVE;
     case HOME_DIAG:    return BTN_MENU_DIAG;
     case HOME_TRIM:    return BTN_MENU_TRIM;
-    case HOME_FUN:     return BTN_MENU_FUN;
+    case HOME_TRACK:   return BTN_MENU_TRACK;
     case HOME_LOG:     return BTN_MENU_LOG;
     case HOME_SETUP:   return BTN_MENU_SETUP;
     case HOME_CLOSE:   return BTN_HOME_CLOSE;
@@ -3370,8 +3370,8 @@ void spike_ui_run(void)
                     notice_until = now + 3000;
                 }
                 break;
-            case BTN_MENU_FUN:
-                ui.notice = "FUN: track modes come in version 0.4";
+            case BTN_MENU_TRACK:
+                ui.notice = "TRACK: track modes come in version 0.4";
                 notice_until = now + 3000;
                 break;
             case BTN_TAB_STORED:

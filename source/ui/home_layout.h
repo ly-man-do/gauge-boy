@@ -8,7 +8,7 @@
  *
  *   [ CEL off ] [ Not connected ]      status cards (tap: DIAG / Wi-Fi guide)
  *   [ LIVE ] [ DIAG ] [ TRIM ]         menu cards: icon, label, second line
- *   [ FUN  ] [ LOG  ] [ SETUP ]
+ *   [ TRACK ] [ LOG ] [ SETUP ]
  *   ======= START Close =======        bar: tap to close, like START
  */
 
@@ -24,7 +24,7 @@ typedef enum {
     HOME_LIVE,
     HOME_DIAG,
     HOME_TRIM,
-    HOME_FUN,
+    HOME_TRACK,
     HOME_LOG,
     HOME_SETUP,
     HOME_CLOSE,          /* the START Close bar */

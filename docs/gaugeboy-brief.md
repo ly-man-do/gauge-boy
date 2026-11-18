@@ -1,6 +1,6 @@
 # Project Brief: Gauge Boy: OBD-II Deluxe
 
-**Version:** 1.18.0
+**Version:** 1.19.0
 **Product name:** Gauge Boy: OBD-II Deluxe (short name: Gauge Boy)
 **Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -23,7 +23,7 @@ Build Gauge Boy: OBD-II Deluxe, a homebrew Nintendo 3DS application that connect
 - Use the dual screens well: gauges on the top screen, touch controls and menus on the bottom.
 - Make the app look and feel like a Nintendo 3DS game: bright, colorful, chunky low-poly models with thin dark outlines, toy-like gauges and a teal mascot car, with full stereoscopic 3D support on the top screen (see section 5b).
 - All menu navigation happens by touch on the bottom screen.
-- Include fun modes (timers, a G-meter, achievements and more) that make the app enjoyable beyond diagnostics (see section 5e).
+- Include track modes (timers, a G-meter, achievements and more) that make the app enjoyable beyond diagnostics (see section 5e).
 - Include original music and sound effects in the style of a 3DS game (see section 5f).
 - Let users install the app by scanning a QR code on the 3DS (see section 5c).
 - Log sessions to the SD card as CSV for later review.
@@ -126,7 +126,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 **Screen layout:**
 - **Top screen (400x240, 3D):** Main gauge cluster on the orange backdrop; selectable layouts (single big tach, 4-gauge grid, data list).
-- **Bottom screen (320x240, touch):** Touch panel of big rounded buttons for LIVE (dash gauges) / DIAG (CEL codes) / TRIM (fuel trims) / FUN (fun modes) / LOG / SETUP, with sub-menus on the same panel. An amber CEL warning lamp on the panel lights when the CEL is on.
+- **Bottom screen (320x240, touch):** Touch panel of big rounded buttons for LIVE (dash gauges) / DIAG (CEL codes) / TRIM (fuel trims) / TRACK (track modes) / LOG / SETUP, with sub-menus on the same panel. An amber CEL warning lamp on the panel lights when the CEL is on.
 
 **Brand and IP rule:** The app looks and feels like a 3DS game. All artwork, models, icons and the app logo are original. Fonts must be open-licensed (e.g. SIL OFL) so they can ship in the open-source repo.
 
@@ -185,9 +185,9 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 - **Bank detection:** The app checks supported PIDs and shows one bank only on inline engines.
 - **Link to codes:** If lean or rich codes (P0171 / P0172 / P0174 / P0175) are stored, the DIAG screen offers a button to jump to the TRIM screen.
 
-## 5e. Fun Modes (FUN menu)
+## 5e. Track Modes (TRACK menu)
 
-**Safety rule for all fun modes:** Performance timers are for closed courses, track days and passenger use only. Each timer shows a one-time warning, the app has no online leaderboards, and no mode asks the driver to look at or touch the 3DS while moving.
+**Safety rule for all track modes:** Performance timers are for closed courses, track days and passenger use only. Each timer shows a one-time warning, the app has no online leaderboards, and no mode asks the driver to look at or touch the 3DS while moving.
 
 | Mode | What it does | Data source |
 |---|---|---|
@@ -209,7 +209,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 **Style:** Original music in the style of a 3DS game soundtrack: bright, catchy and melodic, with bouncy rhythms and playful instruments (for example light pop, funk, jazz fusion and chiptune-flavored synths), mixed to sound good on the 3DS speakers. Menu sounds are short, soft and cheerful. No melodies, samples or sound effects are taken from real games.
 
 **Music:**
-- Separate tracks for the main menu, gauge screens, fun modes, results screens and attract mode.
+- Separate tracks for the main menu, gauge screens, track modes, results screens and attract mode.
 - In-app jukebox in SETUP to pick, skip or shuffle tracks.
 - Users can add their own tracks by putting `.ogg` files in `sdmc:/3ds/gauge-boy/music/`.
 - Music keeps playing across menu changes and loops cleanly.
@@ -324,7 +324,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 | UI looks too close to a real brand | Trademark complaints, repo takedown | Original logo and art only; no brand names or marks; open-licensed fonts |
 | 3DS-game look plus the Gauge Boy name reads as an official Nintendo app | Trademark complaint or repo takedown | Original models, art and fonts only; nothing copied, traced or converted from Nintendo games; no Nintendo characters or UI elements; README disclaimer |
 | Solo developer scope creep (3D models and art are time-consuming) | Delayed release | Keep text dashboard working first (M2) and finish the features before the visual style (logging is M3 and track modes M4; the visual style is M5, built on every screen at once); build one finished gauge in full detail before making the rest; stretch items stay out of 1.0 |
-| Fun modes encourage street racing | Safety, reputation | Closed-course warning, no online leaderboards, Rev Sync locked unless stopped, no touch input needed while moving |
+| Track modes encourage street racing | Safety, reputation | Closed-course warning, no online leaderboards, Rev Sync locked unless stopped, no touch input needed while moving |
 | Slow OBD speed updates | Inaccurate timers | Poll speed only during timer runs; label results as estimates |
 | Sourcing original music as a solo developer | Delayed audio milestone | Start with CC0 / CC-BY tracks from open music libraries; commission or compose originals later; user music folder covers the gap |
 | Music, gauges and polling all at once | Stutter or frame drops | Audio and polling on separate threads; stream music instead of loading it into memory |
@@ -361,6 +361,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.19.0 | 2026-11-18 | Owner request: the FUN menu is renamed TRACK, subtitle "Track modes" (sections 2, 5b, 5e, 5f, 8); the safety rules are unchanged; `CLAUDE.md` updated to 1.24.0 |
 | 1.18.0 | 2026-11-17 | Owner decision: the track modes (were fun modes) are built before the UI polish: M4 is Track modes (0.4.x), M5 UI polish (0.5.x), M6 Audio (0.6.x) (section 8); freeze-frame data and recording from TRIM join M3 (sections 5d, 8); `CLAUDE.md` updated to 1.23.0 |
 | 1.17.0 | 2026-11-17 | Owner decision: the name is written "Gauge Boy" (two words), full name "Gauge Boy: OBD-II Deluxe"; files and folders use `gauge-boy` (`gauge-boy.cia`, `gauge-boy.3dsx`, `sdmc:/3ds/gauge-boy/`), and the app moves an old `sdmc:/3ds/gaugeboy/` folder's files once; `CLAUDE.md` updated to 1.22.0 |
 | 1.16.0 | 2026-11-16 | Owner decision: Logging and UI polish swap places, so features come before the visual style: M3 is Logging (0.3.x), M4 is UI polish (0.4.x) (section 8); `CLAUDE.md` updated to 1.21.0 |

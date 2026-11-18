@@ -21,7 +21,7 @@ static const struct {
     [HOME_LIVE]    = { "LIVE",  "Dash gauges" },
     [HOME_DIAG]    = { "DIAG",  "Codes & CEL" },
     [HOME_TRIM]    = { "TRIM",  "Fuel trims" },
-    [HOME_FUN]     = { "FUN",   "Fun modes" },
+    [HOME_TRACK]   = { "TRACK", "Track modes" },
     [HOME_LOG]     = { "LOG",   "Record drives" },
     [HOME_SETUP]   = { "SETUP", "Settings" },
     [HOME_CLOSE]   = { "", NULL },

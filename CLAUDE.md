@@ -1,7 +1,7 @@
 # CLAUDE.md: Gauge Boy: OBD-II Deluxe
 
-**Version:** 1.23.0
-**Matches project brief:** 1.18.0 (`docs/gaugeboy-brief.md`)
+**Version:** 1.24.0
+**Matches project brief:** 1.19.0 (`docs/gaugeboy-brief.md`)
 
 You are the developer on Gauge Boy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
 
@@ -95,7 +95,7 @@ docs/          Project brief, compatibility list
 - Mascot car: a teal 1995 Suzuki Sidekick, with no maker names, badges or logos.
 - Music and sound effects: 3DS-game style (bright, catchy, playful); see brief section 5f.
 - Top screen: display only, stereoscopic 3D with layered gauges (housing, face, needle, glass). Depth follows the 3D slider; respect the max-depth setting.
-- Bottom screen: all navigation by touch. Buttons at least 40x40 px (exception: the HOME START Close bar, full width and 32 px tall). Menus: LIVE / DIAG / TRIM / FUN / LOG / SETUP.
+- Bottom screen: all navigation by touch. Buttons at least 40x40 px (exception: the HOME START Close bar, full width and 32 px tall). Menus: LIVE / DIAG / TRIM / TRACK / LOG / SETUP.
 - Must hold 60 fps on the top screen with the 3D slider at maximum. Pre-render static layers; redraw only needles and digits each frame.
 - Physical buttons are optional shortcuts only; every function must be reachable by touch.
 - Labels are English only; no Japanese sub-labels or Japanese font.
@@ -105,7 +105,7 @@ docs/          Project brief, compatibility list
 
 - Startup safety notice: not for use by the driver while driving.
 - Clearing codes always needs a confirmation dialog explaining it turns off the CEL and resets readiness monitors.
-- Fun-mode timers show a closed-course warning. No online leaderboards.
+- Track-mode timers show a closed-course warning. No online leaderboards.
 - Time Attack timers are armed while stopped and start automatically when the car moves; starting, stopping and dismissing results never needs a touch while moving.
 - Rev Sync is locked unless vehicle speed is 0.
 - No feature may require touching the 3DS while the vehicle is moving.
@@ -143,6 +143,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.24.0 | 2026-11-18 | Matches brief 1.19.0: the FUN menu is TRACK (sections 5, 6); safety rules unchanged |
 | 1.23.0 | 2026-11-17 | Matches brief 1.18.0: M4 is Track modes (were fun modes), M5 UI polish, M6 Audio (section 1) |
 | 1.22.0 | 2026-11-17 | Matches brief 1.17.0: the name is "Gauge Boy"; files and folders `gauge-boy` (sections 2, 7) |
 | 1.21.0 | 2026-11-16 | Matches brief 1.16.0: M3 is Logging and M4 is UI polish (section 1) |

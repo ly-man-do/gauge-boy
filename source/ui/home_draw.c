@@ -32,7 +32,7 @@ static const u32 icon_colors[HOME_ITEM_COUNT] = {
     [HOME_LIVE]  = RGB(46, 124, 214),
     [HOME_DIAG]  = RGB(30, 160, 150),
     [HOME_TRIM]  = RGB(196, 72, 190),
-    [HOME_FUN]   = RGB(220, 84, 60),
+    [HOME_TRACK] = RGB(220, 84, 60),
     [HOME_LOG]   = RGB(236, 150, 40),
     [HOME_SETUP] = RGB(180, 150, 40),
 };
@@ -284,7 +284,7 @@ static void icon_wifi(float cx, float cy, u32 c)
 typedef void (*icon_fn)(float cx, float cy, u32 c, u32 bg);
 static const icon_fn icons[HOME_ITEM_COUNT] = {
     [HOME_LIVE] = icon_gauge,   [HOME_DIAG] = icon_magnifier, [HOME_TRIM] = icon_sliders,
-    [HOME_FUN] = icon_flag,     [HOME_LOG] = icon_document,   [HOME_SETUP] = icon_gear,
+    [HOME_TRACK] = icon_flag,     [HOME_LOG] = icon_document,   [HOME_SETUP] = icon_gear,
 };
 
 /* ---------- the screen ---------- */

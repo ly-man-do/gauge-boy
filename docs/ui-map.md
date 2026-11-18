@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-17, freeze frames on DIAG (gauge-boy-43v.9; M3 in progress)
+**As of:** 2026-11-18, FUN renamed TRACK (gauge-boy-356.3; M4 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -17,7 +17,7 @@ Gauge Boy
         ├── [LIVE  · Dash gauges]    → LIVE view list
         ├── [DIAG  · Codes & CEL]    → DIAG
         ├── [TRIM  · Fuel trims]     → TRIM (starts polling)
-        ├── [FUN   · Fun modes]      → notice "track modes come in version 0.4"
+        ├── [TRACK · Track modes]    → notice "track modes come in version 0.4"
         ├── [LOG   · Record drives]  → LOG (lists the drives on the SD card)
         ├── [SETUP · Settings]       → SETUP
         └── [START Close bar]        → closes Gauge Boy            [START]
