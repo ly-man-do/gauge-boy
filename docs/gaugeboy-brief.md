@@ -1,6 +1,6 @@
 # Project Brief: Gauge Boy: OBD-II Deluxe
 
-**Version:** 1.20.0
+**Version:** 1.21.0
 **Product name:** Gauge Boy: OBD-II Deluxe (short name: Gauge Boy)
 **Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -105,7 +105,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 **Design language:**
 - **Colors:** Warm tan-orange backdrop (`#C58B4C`) with a darker tan (`#876B39`) for patterns and panel edges; near-black ink (`#1A1610`) for outlines and linework; lime green (`#8FD42A`, highlight `#C6F27A`, shadow `#5E9A1A`) as the main UI accent; teal (`#2BAE9F`, highlight `#7ADBCD`, shadow `#1A7A70`) for the mascot car; navy-to-blue glass (`#323868` to `#6C7AC8`); light neutrals for trim and panels. Signal colors stay for function only: amber for the CEL warning, red for redline, green for live values.
-- **Type:** A rounded, bold display font for headings; a clean UI font for menus and lists; bold digit styles for live values. Labels are in English only; there are no Japanese sub-labels.
+- **Type:** Text uses the 3DS system font (the Rodin-based font of the console's own menus), loaded from the console at runtime through citro2d; it is never copied into the app or the repo. Headings use the same font, larger. Live values use bold, LCD-style digits drawn by the app or set in an open-licensed font. Labels are in English only; there are no Japanese sub-labels.
 - **Gauges:** Mix of chunky analog dials, bar graphs and digital readouts; peak-hold markers; redline flash.
 - **Motion:** Bouncy, springy transitions; startup "sweep" where needles go to max and back; the selected item pulses.
 - **Sound:** Full music and sound effects; see section 5f.
@@ -128,7 +128,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 - **Top screen (400x240, 3D):** Main gauge cluster on the orange backdrop; selectable layouts (single big tach, 4-gauge grid, data list).
 - **Bottom screen (320x240, touch):** Touch panel of big rounded buttons for LIVE (dash gauges) / DIAG (CEL codes) / TRIM (fuel trims) / TRACK (track modes) / LOG / SETUP, with sub-menus on the same panel. An amber CEL warning lamp on the panel lights when the CEL is on.
 
-**Brand and IP rule:** The app looks and feels like a 3DS game. All artwork, models, icons and the app logo are original. Fonts must be open-licensed (e.g. SIL OFL) so they can ship in the open-source repo.
+**Brand and IP rule:** The app looks and feels like a 3DS game. All artwork, models, icons and the app logo are original. Fonts are either the console's own system font, loaded at runtime and never shipped, or open-licensed (e.g. SIL OFL) so they can ship in the public repo.
 
 **Theme system:** Colors and gauge styles live in a theme file on the SD card, so alternate color schemes can be added without code changes.
 
@@ -321,8 +321,8 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 | "Gauge Boy" name is close to Nintendo's Game Boy trademark | Trademark complaint or repo takedown | Original logo and lettering only (no Game Boy-style logo, fonts, colors or console art); README states the project is unofficial and not affiliated with Nintendo; keep a backup name ready |
 | Claude Code marks hardware-dependent work as done without a real test | Bugs only found in the car | `needs-hardware` label; only the owner closes those issues |
 | Agent loses track of long-running work across sessions | Repeated or half-finished work | Beads as the single task list; `bd ready` at the start of every session |
-| UI looks too close to a real brand | Trademark complaints, repo takedown | Original logo and art only; no brand names or marks; open-licensed fonts |
-| 3DS-game look plus the Gauge Boy name reads as an official Nintendo app | Trademark complaint or repo takedown | Original models, art and fonts only; nothing copied, traced or converted from Nintendo games; no Nintendo characters or UI elements; README disclaimer |
+| UI looks too close to a real brand | Trademark complaints, repo takedown | Original logo and art only; no brand names or marks; fonts open-licensed or the console's own system font, never shipped |
+| 3DS-game look plus the Gauge Boy name reads as an official Nintendo app | Trademark complaint or repo takedown | Original models and art only; fonts open-licensed or the console's own system font, never shipped; nothing copied, traced or converted from Nintendo games; no Nintendo characters or UI elements; README disclaimer |
 | Solo developer scope creep (3D models and art are time-consuming) | Delayed release | Keep text dashboard working first (M2) and finish the features before the visual style (logging is M3 and track modes M4; the visual style is M5, built on every screen at once); build one finished gauge in full detail before making the rest; stretch items stay out of 1.0 |
 | Track modes encourage street racing | Safety, reputation | Closed-course warning, no online leaderboards, Rev Sync locked unless stopped, no touch input needed while moving |
 | Slow OBD speed updates | Inaccurate timers | Poll speed only during timer runs; label results as estimates |
@@ -361,6 +361,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.21.0 | 2026-11-18 | Owner decision: text uses the 3DS system font, loaded from the console at runtime and never shipped; other fonts stay open-licensed (sections 5b, 8); `CLAUDE.md` updated to 1.26.0 |
 | 1.20.0 | 2026-11-18 | Owner decision: the MIT license is removed for now (may be reviewed later); copies published before stay MIT; third-party licenses and notices are kept (sections 2, 5a, 10); `CLAUDE.md` updated to 1.25.0 |
 | 1.19.0 | 2026-11-18 | Owner request: the FUN menu is renamed TRACK, subtitle "Track modes" (sections 2, 5b, 5e, 5f, 8); the safety rules are unchanged; `CLAUDE.md` updated to 1.24.0 |
 | 1.18.0 | 2026-11-17 | Owner decision: the track modes (were fun modes) are built before the UI polish: M4 is Track modes (0.4.x), M5 UI polish (0.5.x), M6 Audio (0.6.x) (section 8); freeze-frame data and recording from TRIM join M3 (sections 5d, 8); `CLAUDE.md` updated to 1.23.0 |
