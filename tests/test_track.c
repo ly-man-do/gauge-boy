@@ -301,11 +301,12 @@ static void test_gmeter_calibration_fails(void)
 {
     gm_init(&gm);
     gm_cal_start(&gm);
-    gm_vec_t g0 = { 0, 0, 512 }, shaken = { 0, 60, 512 }, zero = { 0, 0, 0 };
+    gm_vec_t g0 = { 0, 0, 512 }, jolt = { 0, 200, 512 }, zero = { 0, 0, 0 };
     for (int i = 0; i < GM_CAL_SAMPLES; i++) {
-        gm_cal_add(&gm, i == 10 ? shaken : g0);
+        gm_cal_add(&gm, i == 10 ? jolt : g0);             /* one bump of 0.39 g */
     }
     CHECK_EQ_INT(gm.cal, GM_CAL_MOVED);
+    CHECK(gm.cal_max_g > 0.3f);
     gm_sample(&gm, g0, 16.7f);
     CHECK(!gm.have);                                      /* not calibrated: nothing */
     gm_cal_start(&gm);
@@ -313,6 +314,47 @@ static void test_gmeter_calibration_fails(void)
         gm_cal_add(&gm, zero);
     }
     CHECK_EQ_INT(gm.cal, GM_CAL_NO_SENSOR);
+}
+
+static void test_gmeter_jitter_and_vibration(void)
+{
+    /* At rest the 3DS sensor jitters a couple of raw units on every axis
+     * (seen on hardware 2026-11-18): calibration still works. */
+    gm_init(&gm);
+    gm_cal_start(&gm);
+    for (int i = 0; i < GM_CAL_SAMPLES; i++) {
+        gm_vec_t r = { (float)(i % 5 - 2), (float)((i * 3) % 5 - 2), 512.0f + (float)((i * 7) % 5 - 2) };
+        gm_cal_add(&gm, r);
+    }
+    CHECK_EQ_INT(gm.cal, GM_CAL_OK);
+    CHECK(NEAR(gm.scale, 512.0f) && gm.cal_rms_g < 0.01f);
+
+    /* An idling engine shaking the mount, plus one 0.12 g bump: still OK. */
+    gm_cal_start(&gm);
+    for (int i = 0; i < GM_CAL_SAMPLES; i++) {
+        float shake = i % 2 == 0 ? 12.0f : -12.0f;
+        gm_vec_t r = { shake, i == 30 ? 60.0f : 0.0f, 512.0f - shake };
+        gm_cal_add(&gm, r);
+    }
+    CHECK_EQ_INT(gm.cal, GM_CAL_OK);
+
+    /* Held in a hand, wobbling 0.1 g the whole time: moved. */
+    gm_cal_start(&gm);
+    for (int i = 0; i < GM_CAL_SAMPLES; i++) {
+        gm_vec_t r = { i % 2 == 0 ? 51.0f : -51.0f, 0, 512 };
+        gm_cal_add(&gm, r);
+    }
+    CHECK_EQ_INT(gm.cal, GM_CAL_MOVED);
+    CHECK(gm.cal_rms_g > GM_CAL_RMS);
+
+    /* The readout is steady: jitter of 2 units moves it well under 1. */
+    gm_init(&gm);
+    gm_vec_t base = { 10, -500, 40 };
+    for (int i = 0; i < 120; i++) {
+        gm_vec_t r = { base.x + (i % 2 ? 2.0f : -2.0f), base.y, base.z };
+        gm_raw_watch(&gm, r, 16.7f);
+    }
+    CHECK(fabsf(gm.raw_avg.x - base.x) < 0.2f && NEAR(gm.raw_avg.y, base.y));
 }
 
 static void test_gmeter_learns_forward(void)
@@ -612,6 +654,7 @@ void suite_track(void)
     RUN_TEST(test_rev_sync_locks);
     RUN_TEST(test_gmeter_flat);
     RUN_TEST(test_gmeter_calibration_fails);
+    RUN_TEST(test_gmeter_jitter_and_vibration);
     RUN_TEST(test_gmeter_learns_forward);
     RUN_TEST(test_shift_light);
     RUN_TEST(test_shift_predict);

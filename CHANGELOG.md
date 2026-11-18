@@ -13,6 +13,10 @@ All notable changes to Gauge Boy are recorded here. The format follows [Keep a C
 - **GRAPH draws smooth curves**: the line passes smoothly through each reading (a monotone cubic, so it never overshoots and invents no peaks) instead of stepping from one held value to the next, and a faint band behind it shows each moment's lowest and highest value, so short spikes stay visible.
 - **The name is now "Gauge Boy"** (two words), full name "Gauge Boy: OBD-II Deluxe", on the HOME menu, the banner, every screen, the logs and the docs. Files and folders follow: the release files are `gauge-boy.cia` and `gauge-boy.3dsx`, and the SD card folder is `sdmc:/3ds/gauge-boy/`. On its first start, Gauge Boy moves the settings, logs, drives and code history from the old `sdmc:/3ds/gaugeboy/` folder (an old `.3dsx` stays there; delete it once the new one runs). The `.cia` keeps its title ID, so it installs over the old one. Drive logs recorded before the change still open in LOG.
 
+### Fixed
+
+- **G-meter calibration works with the sensor's normal jitter**: at rest the 3DS motion sensor's numbers wobble a couple of units (about 0.005 g), and an idling engine shakes the mount a little more. CALIBRATE now averages a second of readings and only fails on real movement (a typical shake over 0.05 g, or one bump over 0.3 g), shows its progress, and says how much it shook if it fails. The sensor numbers on the top screen are smoothed so they hold still, and the session log records each calibration.
+
 ### Added
 
 - **Garage on HOME**: the top-left status card is now Garage (a teal car), which opens the garage cards. The CEL lamp moved to the DIAG card: it turns amber with a lit lamp and says "CEL ON" when the check engine light is on.

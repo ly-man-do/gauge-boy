@@ -69,11 +69,18 @@ gm_cal_t gm_cal_add(gmeter_t *gm, gm_vec_t raw)
         gm->cal = GM_CAL_NO_SENSOR;
         return gm->cal;
     }
+    double sq = 0.0;
+    float worst = 0.0f;
     for (int i = 0; i < GM_CAL_SAMPLES; i++) {
-        if (vlen(vsub(gm->cal_samples[i], mean)) > GM_CAL_STILL * g) {
-            gm->cal = GM_CAL_MOVED;
-            return gm->cal;
-        }
+        float d = vlen(vsub(gm->cal_samples[i], mean)) / g;
+        sq += (double)d * d;
+        worst = fmaxf(worst, d);
+    }
+    gm->cal_rms_g = (float)sqrt(sq / GM_CAL_SAMPLES);
+    gm->cal_max_g = worst;
+    if (gm->cal_rms_g > GM_CAL_RMS || gm->cal_max_g > GM_CAL_MAX) {
+        gm->cal = GM_CAL_MOVED;
+        return gm->cal;
     }
     gm_vec_t up = vscale(mean, 1.0f / g);
     if (gm->forward_learned && vdot(up, gm->up) < 0.95f) {
@@ -99,6 +106,19 @@ gm_cal_t gm_cal_add(gmeter_t *gm, gm_vec_t raw)
     gm_reset_peaks(gm);
     gm->cal = GM_CAL_OK;
     return gm->cal;
+}
+
+void gm_raw_watch(gmeter_t *gm, gm_vec_t raw, float dt_ms)
+{
+    if (!gm->raw_have) {
+        gm->raw_avg = raw;
+        gm->raw_have = true;
+        return;
+    }
+    float k = dt_ms > 0.0f ? dt_ms / (GM_RAW_TAU_MS + dt_ms) : 1.0f;
+    gm->raw_avg.x += k * (raw.x - gm->raw_avg.x);
+    gm->raw_avg.y += k * (raw.y - gm->raw_avg.y);
+    gm->raw_avg.z += k * (raw.z - gm->raw_avg.z);
 }
 
 void gm_sample(gmeter_t *gm, gm_vec_t raw, float dt_ms)

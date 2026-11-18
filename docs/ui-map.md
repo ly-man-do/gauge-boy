@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, SETUP > WI-FI: CHECK & CONNECT and CONNECTION GUIDE (gauge-boy-a1z)
+**As of:** 2026-11-18, G-METER: CALIBRATE averages out sensor jitter (gauge-boy-gnt)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -72,7 +72,7 @@ Gauge Boy
         │   │   │                     circle, 1 g at the edge, ring at 0.5 g, ACCEL up,
         │   │   │                     BRAKE down, the ball; side / long / total g, peaks,
         │   │   │                     forward guessed or learned, raw sensor values)
-        │   │   ├── [CALIBRATE]      measures gravity (hold still); refused while moving
+        │   │   ├── [CALIBRATE]      measures gravity (about 1 s, averaged; hold still); refused while moving
         │   │   ├── [RESET PEAKS]    clears the peaks; refused while moving
         │   │   └── [BACK]           → TRACK (accelerometer off, stops polling)   [B]
         │   ├── SHIFT LIGHT          (polls RPM, speed every second; top: a row of 10 LEDs,

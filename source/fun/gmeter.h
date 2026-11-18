@@ -24,8 +24,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define GM_CAL_SAMPLES    30        /* about half a second at 60 frames a second */
-#define GM_CAL_STILL      0.04f     /* each sample within 4 % of the average */
+#define GM_CAL_SAMPLES    60        /* about a second at 60 frames a second */
+/* The sensor jitters a few raw units at rest (about 0.005 g) and an idling
+ * engine shakes the mount a little more; both average out. Only real
+ * movement fails a calibration: */
+#define GM_CAL_RMS        0.05f     /* typical sample further than this (g) from the average */
+#define GM_CAL_MAX        0.30f     /* or any one sample further than this (g) */
+#define GM_RAW_TAU_MS     500.0f    /* smoothing of the raw readout shown on screen */
 #define GM_TAU_MS         150.0f    /* smoothing time constant */
 #define GM_LEARN_KMH      10.0f     /* a launch: 0 to this ... */
 #define GM_LEARN_MS       4000u     /* ... within this */
@@ -47,6 +52,9 @@ typedef struct {
     gm_cal_t cal;
     int cal_n;
     gm_vec_t cal_samples[GM_CAL_SAMPLES];
+    float cal_rms_g, cal_max_g;   /* last calibration's shake, g (for the log) */
+    gm_vec_t raw_avg;    /* smoothed raw reading, for the readout */
+    bool raw_have;
     gm_vec_t g0;         /* gravity at calibration, raw */
     float scale;         /* raw units per g */
     gm_vec_t up, fwd0;   /* unit vectors (raw axes) */
@@ -75,6 +83,10 @@ void gm_cal_start(gmeter_t *gm);
 /* One raw sample while calibrating. Returns the state: RUNNING until it
  * has GM_CAL_SAMPLES, then OK, MOVED or NO_SENSOR. */
 gm_cal_t gm_cal_add(gmeter_t *gm, gm_vec_t raw);
+
+/* Every raw reading, calibrated or not: keeps raw_avg, a steady readout
+ * (the raw numbers jitter by a few units at rest). */
+void gm_raw_watch(gmeter_t *gm, gm_vec_t raw, float dt_ms);
 
 /* One raw sample dt_ms after the last (calibrated only): smoothing, peaks,
  * learning. */

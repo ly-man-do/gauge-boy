@@ -2943,18 +2943,31 @@ static void gmeter_stop(void)
 }
 
 /* G-METER, every frame: a sensor reading, and the speed when it's new. */
-static void gmeter_frame(uint64_t now, gm_vec_t *raw_out)
+static void gmeter_frame(spike_t *s, uint64_t now, gm_vec_t *raw_out)
 {
     static uint64_t last;
     static uint32_t reads_seen;
     accelVector v;
     hidAccelRead(&v);
     gm_vec_t raw = { (float)v.x, (float)v.y, (float)v.z };
-    *raw_out = raw;
+    float dt = last != 0 && now > last ? (float)(now - last) : 16.7f;
+    gm_raw_watch(&gmeter, raw, dt);
+    *raw_out = gmeter.raw_avg;   /* steady: the sensor jitters a few units at rest */
     if (gmeter.cal == GM_CAL_RUNNING) {
-        gm_cal_add(&gmeter, raw);
+        gm_cal_t r = gm_cal_add(&gmeter, raw);
+        if (r == GM_CAL_OK) {
+            spike_logf(s, "G-METER: calibrated, 1 g = %.0f raw, shake %.3f g typical, %.3f g most",
+                       (double)gmeter.scale, (double)gmeter.cal_rms_g, (double)gmeter.cal_max_g);
+        } else if (r == GM_CAL_MOVED) {
+            spike_logf(s, "! G-METER: moved while calibrating, shake %.3f g typical (limit %.2f), "
+                       "%.3f g most (limit %.2f)", (double)gmeter.cal_rms_g, (double)GM_CAL_RMS,
+                       (double)gmeter.cal_max_g, (double)GM_CAL_MAX);
+        } else if (r == GM_CAL_NO_SENSOR) {
+            spike_logf(s, "! G-METER: no motion sensor readings (raw %d %d %d)", (int)raw.x,
+                       (int)raw.y, (int)raw.z);
+        }
     } else {
-        gm_sample(&gmeter, raw, last != 0 && now > last ? (float)(now - last) : 16.7f);
+        gm_sample(&gmeter, raw, dt);
         if (gmeter.cal == GM_CAL_OK && gmeter.peak_total >= ACHIEVE_G) {
             achieve_ask(ACH_PULLING_GS);
         }
@@ -3478,13 +3491,16 @@ static void draw_gmeter_top(int busy, bool connected, gm_vec_t raw, bool full)
     int row = 5;
     if (gm->cal == GM_CAL_RUNNING) {
         printf("\x1b[%d;%dHCalibrating:", row++, col);
-        printf("\x1b[%d;%dHhold still...", row++, col);
+        printf("\x1b[%d;%dHhold still... %d%%", row++, col,
+               gm->cal_n * 100 / GM_CAL_SAMPLES);
     } else if (gm->cal == GM_CAL_NONE) {
         printf("\x1b[%d;%dHMount the 3DS,", row++, col);
         printf("\x1b[%d;%dHthen CALIBRATE.", row++, col);
     } else if (gm->cal == GM_CAL_MOVED) {
         printf("\x1b[%d;%dH\x1b[33mIt moved: hold it\x1b[0m", row++, col);
         printf("\x1b[%d;%dH\x1b[33mstill, CALIBRATE\x1b[0m", row++, col);
+        snprintf(line, sizeof line, "(shook %.2f g)", (double)gm->cal_max_g);
+        printf("\x1b[%d;%dH%s", row++, col, line);
     } else if (gm->cal == GM_CAL_NO_SENSOR) {
         printf("\x1b[%d;%dH\x1b[33mNo motion sensor\x1b[0m", row++, col);
         printf("\x1b[%d;%dH\x1b[33mreadings.\x1b[0m", row++, col);
@@ -3515,7 +3531,8 @@ static void draw_gmeter_top(int busy, bool connected, gm_vec_t raw, bool full)
             printf("\x1b[%d;%dH first launch)", row++, col);
         }
     }
-    snprintf(line, sizeof line, "raw %d %d %d", (int)raw.x, (int)raw.y, (int)raw.z);
+    snprintf(line, sizeof line, "sensor %d %d %d", (int)lroundf(raw.x), (int)lroundf(raw.y),
+             (int)lroundf(raw.z));
     printf("\x1b[%d;%dH%s", TOP_ROWS - 3, col, line);
     print_row(TOP_ROWS - 1, TOP_COLS, "Display only: no touch needed while moving.");
 }
@@ -4941,6 +4958,8 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         print_row(10, BOTTOM_COLS, "Which way is forward is learned on");
         print_row(11, BOTTOM_COLS, "the first launch (OBD speed).");
         print_row(13, BOTTOM_COLS, "Calibrate again after moving it.");
+        print_row(14, BOTTOM_COLS, "The sensor numbers wobble a little at");
+        print_row(15, BOTTOM_COLS, "rest: that's normal and averaged out.");
         print_row(16, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
         draw_list(gm_buttons, GM_BUTTON_COUNT, now, busy, 0, false);
         return;
@@ -5603,7 +5622,7 @@ void spike_ui_run(void)
         u32 down = hidKeysDown();
         uint64_t now = tp_now_ms();
         if (ui.screen == SCREEN_GMETER) {
-            gmeter_frame(now, &gm_raw);
+            gmeter_frame(&spike, now, &gm_raw);
         }
         if (ui.screen == SCREEN_ECO) {
             eco_frame((float)cfg.engine_dl / 10.0f);
