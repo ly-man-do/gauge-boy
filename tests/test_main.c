@@ -19,6 +19,7 @@ void suite_drive_log(void);
 void suite_history(void);
 void suite_baro_store(void);
 void suite_track(void);
+void suite_garage(void);
 
 int main(void)
 {
@@ -40,5 +41,6 @@ int main(void)
     suite_history();
     suite_baro_store();
     suite_track();
+    suite_garage();
     return gb_test_summary();
 }

@@ -26,6 +26,7 @@
 #include "data/diag_view.h"
 #include "data/drive_list.h"
 #include "data/drive_log.h"
+#include "data/garage.h"
 #include "data/history.h"
 #include "data/live_view.h"
 #include "data/live_views.h"
@@ -147,6 +148,12 @@
 #define BTN_RS_BEST       116    /* worker: high score (shared.hs_run): save the new one, read it */
 #define BTN_TRACK_ECO     (-144) /* UI: TRACK -> ECO CHALLENGE */
 #define BTN_ECO_RESET     (-145) /* UI: ECO: a new trip (parked) */
+#define BTN_TRACK_GARAGE  (-146) /* UI: TRACK -> GARAGE */
+#define BTN_GARAGE_PREV   (-147) /* UI: GARAGE: the card before / after */
+#define BTN_GARAGE_NEXT   (-148)
+#define BTN_GARAGE_NICK   (-149) /* UI: GARAGE: type a nickname (keyboard) */
+#define BTN_GARAGE_SCAN   117    /* worker: build the cards, count logged distance */
+#define BTN_GARAGE_SAVE   118    /* worker: save shared.garage_nick for shared.garage_nick_key */
 
 /* Bottom-screen buttons in 8x8 console cells: 12-13x6 cells = 96-104x48 px.
  * The third row has the Wi-Fi slot buttons, the last one the log ones. */
@@ -292,7 +299,8 @@ typedef enum {
     SCREEN_SHIFT,              /* TRACK > SHIFT LIGHT: RPM, LEDs on the top screen */
     SCREEN_GMETER,             /* TRACK > G-METER: the 3DS accelerometer */
     SCREEN_REVSYNC,            /* TRACK > REV SYNC: parked-only throttle blip game */
-    SCREEN_ECO                 /* TRACK > ECO CHALLENGE: fuel economy and a smooth-driving score */
+    SCREEN_ECO,                /* TRACK > ECO CHALLENGE: fuel economy and a smooth-driving score */
+    SCREEN_GARAGE              /* TRACK > GARAGE: a card per car */
 } screen_t;
 
 /* TRACK: one button per mode built so far, then BACK. */
@@ -302,6 +310,7 @@ static const button_t track_buttons[] = {
     { "G-METER",     BTN_TRACK_GMETER,  0,  10, 19, 5 },
     { "REV SYNC",    BTN_TRACK_REVSYNC, 20, 10, 19, 5 },
     { "ECO",         BTN_TRACK_ECO,     0,  16, 19, 5 },
+    { "GARAGE",      BTN_TRACK_GARAGE,  20, 16, 19, 5 },
     { "BACK",        BTN_BACK,     0, 25, 8, 5 },
 };
 #define TRACK_BUTTON_COUNT ((int)(sizeof track_buttons / sizeof track_buttons[0]))
@@ -330,6 +339,15 @@ static const button_t gm_buttons[] = {
     { "BACK",        BTN_BACK,     0,  25, 8, 5 },
 };
 #define GM_BUTTON_COUNT ((int)(sizeof gm_buttons / sizeof gm_buttons[0]))
+
+/* GARAGE: < NICKNAME >, then BACK. */
+static const button_t garage_buttons[] = {
+    { "<",        BTN_GARAGE_PREV, 0,  19, 8, 5 },
+    { "NICKNAME", BTN_GARAGE_NICK, 9,  19, 21, 5 },
+    { ">",        BTN_GARAGE_NEXT, 31, 19, 8, 5 },
+    { "BACK",     BTN_BACK,        0,  25, 8, 5 },
+};
+#define GARAGE_BUTTON_COUNT ((int)(sizeof garage_buttons / sizeof garage_buttons[0]))
 
 /* ECO CHALLENGE: RESET TRIP, then BACK. */
 static const button_t eco_buttons[] = {
@@ -587,6 +605,14 @@ static struct {
     bool revsync_on;           /* REV SYNC: RPM and speed, no ATRV */
     bool eco_on;               /* ECO: speed, RPM, MAF / MAP, intake temperature, no ATRV */
     const char *hs_run;        /* UI: which high score BTN_RS_BEST handles ("revsync", "eco") */
+    garage_t garage;           /* GARAGE: the cards (worker) */
+    char garage_bests[4096];   /* bests.csv's text, for the cards */
+    char garage_current[32];   /* the connected car's key, "" if not known */
+    bool garage_scanning;
+    char garage_msg[48];       /* progress or a problem, "" */
+    unsigned garage_version;
+    char garage_nick_key[32];  /* UI: the card a new nickname is for */
+    char garage_nick[GARAGE_NICK_MAX + 1];
     int rs_save_score;         /* UI: a finished game's score for the worker, 0 = none */
     bool rs_car_known;         /* worker: the high score can be saved */
     bool rs_have_best;
@@ -1750,6 +1776,191 @@ static void live_poll(spike_t *s)
     rec_step(s, &lv, &link);
 }
 
+/* ---------- GARAGE (worker) ---------- */
+
+#define GARAGE_PATH        CONFIG_DIR "/" GARAGE_FILE
+#define GARAGE_DRIVES_PATH CONFIG_DIR "/" GARAGE_DRIVES_FILE
+
+static void garage_progress(const char *msg)
+{
+    LightLock_Lock(&shared.lock);
+    snprintf(shared.garage_msg, sizeof shared.garage_msg, "%s", msg);
+    shared.garage_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
+/* The distance in one drive file, read line by line. */
+static double garage_drive_km(FILE *f, const char *head, size_t head_len)
+{
+    static char buf[4096 + 512 + 1];
+    drive_dist_t dd;
+    if (!drive_dist_begin(&dd, head, head_len)) {
+        return 0.0;
+    }
+    fseek(f, 0, SEEK_SET);
+    size_t keep = 0;
+    for (;;) {
+        size_t n = fread(buf + keep, 1, 4096, f);
+        size_t len = keep + n, start = 0;
+        for (size_t i = 0; i < len; i++) {
+            if (buf[i] == '\n') {
+                buf[i] = '\0';
+                drive_dist_line(&dd, buf + start);
+                start = i + 1;
+            }
+        }
+        keep = len - start;
+        if (keep > 512) {
+            keep = 0;
+        }
+        memmove(buf, buf + start, keep);
+        if (n == 0) {
+            break;
+        }
+    }
+    return dd.km;
+}
+
+static void garage_scan(spike_t *s)
+{
+    static garage_t g;
+    static char text[8192], cache_old[16384], cache_new[16384];
+    static char names[256][32];
+    static char head[DRIVE_HEAD_BYTES];
+    static struct { double km; char vin[18]; char car[64]; bool ok; } drv[256];
+    LightLock_Lock(&shared.lock);
+    shared.garage_scanning = true;
+    char current[32];
+    baro_store_key(&shared.diag, app_cfg->car_make, app_cfg->car_model, app_cfg->car_year, current,
+                   sizeof current);
+    snprintf(shared.garage_current, sizeof shared.garage_current, "%s", current);
+    LightLock_Unlock(&shared.lock);
+    garage_progress("Reading the cars...");
+
+    time_t now = time(NULL);
+    struct tm *tm = gmtime(&now);
+    int year = tm != NULL ? tm->tm_year + 1900 : 0;
+    memset(&g, 0, sizeof g);
+    garage_add(&g, current, year);
+    read_small_file(BESTS_PATH, text, sizeof text);
+    garage_add_from_csv(&g, text, year);
+    LightLock_Lock(&shared.lock);
+    snprintf(shared.garage_bests, sizeof shared.garage_bests, "%s", text);
+    LightLock_Unlock(&shared.lock);
+    read_small_file(BARO_PATH, text, sizeof text);
+    garage_add_from_csv(&g, text, year);
+    read_small_file(GARAGE_PATH, text, sizeof text);
+    garage_add_from_csv(&g, text, year);
+    garage_read_nicknames(&g, text);
+
+    /* Logged distance: every drive file, from the cache when unchanged. */
+    int n = 0;
+    DIR *dir = opendir(DRIVES_DIR);
+    if (dir != NULL) {
+        struct dirent *e;
+        while ((e = readdir(dir)) != NULL && n < 256) {
+            if (drive_list_is_log_name(e->d_name)) {
+                snprintf(names[n++], sizeof names[0], "%.31s", e->d_name);
+            }
+        }
+        closedir(dir);
+    }
+    read_small_file(GARAGE_DRIVES_PATH, cache_old, sizeof cache_old);
+    size_t used = 0;
+    cache_new[0] = '\0';
+    int read_now = 0;
+    for (int i = 0; i < n; i++) {
+        char path[96];
+        snprintf(path, sizeof path, "%s/%.31s", DRIVES_DIR, names[i]);
+        FILE *f = fopen(path, "rb");
+        if (f == NULL) {
+            continue;
+        }
+        fseek(f, 0, SEEK_END);
+        long size = ftell(f);
+        uint32_t sz = size > 0 ? (uint32_t)size : 0;
+        double km = 0.0;
+        char vin[18] = "", car[64] = "";
+        if (!garage_cache_get(cache_old, names[i], sz, &km, vin, sizeof vin, car, sizeof car)) {
+            char msg[48];
+            snprintf(msg, sizeof msg, "Counting drive %d of %d...", i + 1, n);
+            garage_progress(msg);
+            size_t got = 0;
+            read_part(f, 0, head, sizeof head, &got);
+            drive_info_t d;
+            memset(&d, 0, sizeof d);
+            drive_info_parse_head(&d, head, got);
+            snprintf(vin, sizeof vin, "%s", d.vin);
+            snprintf(car, sizeof car, "%s", d.car);
+            km = garage_drive_km(f, head, got);
+            read_now++;
+        }
+        fclose(f);
+        garage_cache_add(cache_new, sizeof cache_new, &used, names[i], sz, km, vin, car);
+        drv[i].ok = true;
+        drv[i].km = km;
+        snprintf(drv[i].vin, sizeof drv[i].vin, "%s", vin);
+        snprintf(drv[i].car, sizeof drv[i].car, "%s", car);
+        if (vin[0] != '\0') {
+            garage_add(&g, vin, year);   /* a drive's car with a VIN gets a card too */
+        }
+    }
+    for (int i = 0; i < n; i++) {
+        int c = drv[i].ok ? garage_find_drive(&g, drv[i].vin, drv[i].car) : -1;
+        if (c >= 0) {
+            g.car[c].km += drv[i].km;
+            g.car[c].drives++;
+        }
+        drv[i].ok = false;
+    }
+    if (read_now > 0 || strcmp(cache_old, cache_new) != 0) {
+        FILE *f = fopen(GARAGE_DRIVES_PATH, "wb");
+        if (f != NULL) {
+            fwrite(cache_new, 1, used, f);
+            fclose(f);
+        }
+    }
+    spike_logf(s, "GARAGE: %d car%s, %d drive%s (%d read now)", g.count, g.count == 1 ? "" : "s",
+               n, n == 1 ? "" : "s", read_now);
+    LightLock_Lock(&shared.lock);
+    shared.garage = g;
+    shared.garage_scanning = false;
+    shared.garage_msg[0] = '\0';
+    shared.garage_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
+static void garage_save(spike_t *s)
+{
+    static char text[4096], out[4096];
+    char key[32], nick[GARAGE_NICK_MAX + 1];
+    LightLock_Lock(&shared.lock);
+    snprintf(key, sizeof key, "%s", shared.garage_nick_key);
+    snprintf(nick, sizeof nick, "%s", shared.garage_nick);
+    LightLock_Unlock(&shared.lock);
+    if (key[0] == '\0') {
+        return;
+    }
+    read_small_file(GARAGE_PATH, text, sizeof text);
+    size_t n = garage_set_nickname(text, key, nick, out, sizeof out);
+    FILE *f = n > 0 ? fopen(GARAGE_PATH, "wb") : NULL;
+    bool ok = f != NULL && fwrite(out, 1, n, f) == n;
+    if (f != NULL && fclose(f) != 0) {
+        ok = false;
+    }
+    spike_logf(s, "%sGARAGE: nickname %s%s", ok ? "" : "! ", nick[0] ? "saved" : "removed",
+               ok ? "" : " (not saved to garage.csv)");
+    LightLock_Lock(&shared.lock);
+    for (int i = 0; i < shared.garage.count; i++) {
+        if (strcmp(shared.garage.car[i].key, key) == 0) {
+            snprintf(shared.garage.car[i].nickname, sizeof shared.garage.car[i].nickname, "%s",
+                     nick);
+        }
+    }
+    shared.garage_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
 /* REV SYNC (worker): save a finished game's score if it's this car's
  * best, then read the best. */
 static void rs_best_io(spike_t *s)
@@ -1880,6 +2091,10 @@ static void worker_main(void *arg)
                 shift_save(spike);
             } else if (action == BTN_RS_BEST) {
                 rs_best_io(spike);
+            } else if (action == BTN_GARAGE_SCAN) {
+                garage_scan(spike);
+            } else if (action == BTN_GARAGE_SAVE) {
+                garage_save(spike);
             } else {
                 spike_run(spike, (spike_action_t)action);
             }
@@ -2578,9 +2793,11 @@ static void draw_track_top(int busy, bool connected)
         "             (parked only)",
         "ECO          fuel economy and a score for",
         "             smooth driving",
+        "GARAGE       a card per car: logged distance",
+        "             and personal bests",
         "",
-        "Coming in version 0.4: garage card,",
-        "achievements and attract mode.",
+        "Coming in version 0.4: achievements and",
+        "attract mode.",
         "",
         "For closed courses, track days and passengers",
         "only. Nothing here needs a touch while moving:",
@@ -3208,6 +3425,147 @@ static void draw_eco_top(int busy, bool connected, const gb_config_t *cfg, uint6
     print_row(TOP_ROWS - 1, TOP_COLS, "Display only: no touch needed while moving.");
 }
 
+/* GARAGE top screen: one car's card. */
+static void draw_garage_top(int busy, bool connected, int index, bool metric, bool full)
+{
+    static garage_t g;
+    static char bests[sizeof shared.garage_bests];
+    LightLock_Lock(&shared.lock);
+    g = shared.garage;
+    memcpy(bests, shared.garage_bests, sizeof bests);
+    char current[32], msg[48];
+    snprintf(current, sizeof current, "%s", shared.garage_current);
+    snprintf(msg, sizeof msg, "%s", shared.garage_msg);
+    bool scanning = shared.garage_scanning;
+    LightLock_Unlock(&shared.lock);
+
+    char header[TOP_COLS + 1], line[TOP_COLS + 48];
+    spike_format_header(header, sizeof header, connected, busy);
+    consoleSelect(&top_console);
+    printf(full ? "\x1b[0m\x1b[2J" : "\x1b[0m");
+    print_row(0, TOP_COLS, header);
+    print_row(1, TOP_COLS, "-------------------------------------------------");
+    for (int r = 2; r < TOP_ROWS; r++) {
+        print_row(r, TOP_COLS, "");
+    }
+    if (g.count == 0) {
+        print_row(2, TOP_COLS, "GARAGE");
+        print_row(4, TOP_COLS, scanning ? msg : "No cars yet. Connect to a car (or set it in");
+        if (!scanning) {
+            print_row(5, TOP_COLS, "SETUP > VEHICLE), record a drive or set a best.");
+        }
+        return;
+    }
+    if (index >= g.count) {
+        index = g.count - 1;
+    }
+    const garage_car_t *c = &g.car[index];
+    snprintf(line, sizeof line, "GARAGE   car %d of %d%s", index + 1, g.count,
+             strcmp(c->key, current) == 0 ? "   (connected)" : "");
+    print_row(2, TOP_COLS, line);
+
+    /* The picture: a frame for now (the photo and mascot come with M5). */
+    static const char *const frame[] = {
+        "+----------------+", "|                |", "|   photo with   |", "|  the 3DS camera|",
+        "|  comes in v0.5 |", "|                |", "+----------------+",
+    };
+    for (int i = 0; i < 7; i++) {
+        printf("\x1b[%d;1H\x1b[36m%s\x1b[0m", 4 + i + 1, frame[i]);
+    }
+    int col = 21;
+    const char *name = c->nickname[0] != '\0' ? c->nickname : c->title;
+    printf("\x1b[%d;%dH\x1b[33m%.28s\x1b[0m", 4 + 1, col, name);
+    int row = 5;
+    if (c->nickname[0] != '\0') {
+        printf("\x1b[%d;%dH%.28s", ++row, col, c->title);
+    }
+    if (c->vin[0] != '\0') {
+        printf("\x1b[%d;%dHVIN %s", ++row, col, c->vin);
+    } else {
+        printf("\x1b[%d;%dH(set in SETUP)", ++row, col);
+    }
+    double dist = metric ? c->km : c->km / 1.609344;
+    snprintf(line, sizeof line, "Logged %.1f %s", dist, metric ? "km" : "mi");
+    printf("\x1b[%d;%dH%.28s", row + 2, col, line);
+    snprintf(line, sizeof line, "in %d drive%s", c->drives, c->drives == 1 ? "" : "s");
+    printf("\x1b[%d;%dH%.28s", row + 3, col, line);
+
+    print_row(12, TOP_COLS, "Personal bests");
+    static const struct { const char *run; const char *name; } runs[] = {
+        { "0-60", "0-60 mph" }, { "0-100", "0-100 km/h" }, { "60-0", "60-0 mph" },
+        { "100-0", "100-0 km/h" }, { "quarter", "1/4 mile" }, { "revsync", "Rev Sync" },
+        { "eco", "Eco trip" },
+    };
+    row = 13;
+    for (size_t i = 0; i < sizeof runs / sizeof runs[0]; i++) {
+        track_best_t b;
+        if (!track_bests_get(bests, c->key, runs[i].run, &b)) {
+            continue;
+        }
+        char extra[24] = "";
+        if (strcmp(runs[i].run, "quarter") == 0 && b.extra > 0.0f) {
+            snprintf(extra, sizeof extra, "%.0f %s", (double)(metric ? b.extra : b.extra / 1.609344f),
+                     metric ? "km/h" : "mph");
+        } else if ((strcmp(runs[i].run, "60-0") == 0 || strcmp(runs[i].run, "100-0") == 0) &&
+                   b.extra > 0.0f) {
+            snprintf(extra, sizeof extra, "%.0f %s", (double)(metric ? b.extra : b.extra * 3.28084f),
+                     metric ? "m" : "ft");
+        }
+        if (strcmp(runs[i].run, "revsync") == 0) {
+            snprintf(line, sizeof line, "  %-11s %6d  rank %-2s       %s", runs[i].name,
+                     (int)b.seconds, rs_rank((int)b.seconds), b.date);
+        } else if (strcmp(runs[i].run, "eco") == 0) {
+            snprintf(line, sizeof line, "  %-11s %6d  rank %-2s       %s", runs[i].name,
+                     (int)b.seconds, eco_rank((int)b.seconds), b.date);
+        } else {
+            snprintf(line, sizeof line, "  %-11s %6.2f s %-12s %s", runs[i].name, (double)b.seconds,
+                     extra, b.date);
+        }
+        print_row(row++, TOP_COLS, line);
+    }
+    if (row == 13) {
+        print_row(row++, TOP_COLS, "  none yet: TIME ATTACK, REV SYNC, ECO");
+    }
+    if (scanning) {
+        print_row(TOP_ROWS - 2, TOP_COLS, msg);
+    }
+}
+
+/* GARAGE: type a nickname for card index (UI thread; the keyboard covers
+ * both screens). True if it changed. */
+static bool edit_nickname(int index)
+{
+    char key[32], text[GARAGE_NICK_MAX + 1];
+    LightLock_Lock(&shared.lock);
+    bool ok = index >= 0 && index < shared.garage.count;
+    if (ok) {
+        snprintf(key, sizeof key, "%s", shared.garage.car[index].key);
+        snprintf(text, sizeof text, "%s", shared.garage.car[index].nickname);
+    }
+    LightLock_Unlock(&shared.lock);
+    if (!ok) {
+        return false;
+    }
+    SwkbdState kb;
+    swkbdInit(&kb, SWKBD_TYPE_NORMAL, 2, GARAGE_NICK_MAX);
+    swkbdSetHintText(&kb, "Nickname (empty: none)");
+    swkbdSetInitialText(&kb, text);
+    swkbdSetValidation(&kb, SWKBD_ANYTHING, 0, 0);
+    char out[GARAGE_NICK_MAX + 1];
+    if (swkbdInputText(&kb, out, sizeof out) != SWKBD_BUTTON_CONFIRM) {
+        return false;
+    }
+    config_clean_text(out);
+    if (strcmp(out, text) == 0) {
+        return false;
+    }
+    LightLock_Lock(&shared.lock);
+    snprintf(shared.garage_nick_key, sizeof shared.garage_nick_key, "%s", key);
+    snprintf(shared.garage_nick, sizeof shared.garage_nick, "%s", out);
+    LightLock_Unlock(&shared.lock);
+    return true;
+}
+
 static void draw_ta_dialog(void)
 {
     static const char *const text[] = {
@@ -3761,6 +4119,18 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         draw_list(track_buttons, TRACK_BUTTON_COUNT, now, busy, 0, false);
         print_row(22, BOTTOM_COLS, "The top screen says what each one does.");
         print_row(23, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        return;
+    }
+    if (ui->screen == SCREEN_GARAGE) {
+        print_row(2, BOTTOM_COLS, "GARAGE");
+        print_row(4, BOTTOM_COLS, "A card for each car Gauge Boy knows:");
+        print_row(5, BOTTOM_COLS, "by its VIN, or the make, model and");
+        print_row(6, BOTTOM_COLS, "year set in SETUP > VEHICLE.");
+        print_row(8, BOTTOM_COLS, "Logged distance counts recorded");
+        print_row(9, BOTTOM_COLS, "drives (LIVE or TRIM, REC).");
+        print_row(11, BOTTOM_COLS, "< > for the other cars.");
+        print_row(16, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        draw_list(garage_buttons, GARAGE_BUTTON_COUNT, now, busy, 0, false);
         return;
     }
     if (ui->screen == SCREEN_ECO) {
@@ -4585,6 +4955,7 @@ void spike_ui_run(void)
             case SCREEN_GMETER:    list = gm_buttons;        count = GM_BUTTON_COUNT;        break;
             case SCREEN_REVSYNC:   list = rs_buttons;        count = RS_BUTTON_COUNT;        break;
             case SCREEN_ECO:       list = eco_buttons;       count = ECO_BUTTON_COUNT;       break;
+            case SCREEN_GARAGE:    list = garage_buttons;    count = GARAGE_BUTTON_COUNT;    break;
             case SCREEN_TEST:  break;
             }
             int i = ui.screen == SCREEN_HOME && home_gfx ? -1 : button_at(list, count, tp.px, tp.py);
@@ -4811,6 +5182,31 @@ void spike_ui_run(void)
                 shift_start();
                 bottom_full = top_dirty = true;
                 break;
+            case BTN_TRACK_GARAGE:
+                ui.screen = SCREEN_GARAGE;
+                ui.page = 0;   /* the connected car's card comes first */
+                if (worker != NULL) {
+                    enqueue(BTN_GARAGE_SCAN);
+                }
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_GARAGE_PREV:
+            case BTN_GARAGE_NEXT: {
+                LightLock_Lock(&shared.lock);
+                int cars = shared.garage.count;
+                LightLock_Unlock(&shared.lock);
+                if (cars > 0) {
+                    ui.page = (ui.page + (action == BTN_GARAGE_NEXT ? 1 : cars - 1)) % cars;
+                }
+                top_dirty = true;
+                break;
+            }
+            case BTN_GARAGE_NICK:
+                if (edit_nickname(ui.page) && worker != NULL) {
+                    enqueue(BTN_GARAGE_SAVE);
+                }
+                bottom_full = top_dirty = true;   /* the keyboard covered both screens */
+                break;
             case BTN_TRACK_ECO:
                 ui.screen = SCREEN_ECO;
                 eco_start();
@@ -5027,6 +5423,12 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
+                if (ui.screen == SCREEN_GARAGE) {
+                    ui.page = 0;
+                    ui.screen = SCREEN_TRACK;
+                    bottom_full = top_dirty = true;
+                    break;
+                }
                 if (ui.screen == SCREEN_ECO) {
                     eco_stop();
                     if (eco_ranked(&eco) && worker != NULL) {
@@ -5220,6 +5622,16 @@ void spike_ui_run(void)
                            ui.screen == SCREEN_LIVE_MENU || ui.screen == SCREEN_TRIM;
         bool live_due = live_screen && live_version != drawn_live_version &&
                         now - live_drawn_at >= 100;
+        if (ui.screen == SCREEN_GARAGE) {
+            static unsigned garage_drawn = ~0u;
+            LightLock_Lock(&shared.lock);
+            unsigned gv = shared.garage_version;
+            LightLock_Unlock(&shared.lock);
+            if (gv != garage_drawn) {
+                garage_drawn = gv;
+                top_dirty = true;
+            }
+        }
         /* TIME ATTACK: the countdown and the running time move on their own. */
         bool ta_due = (ui.screen == SCREEN_TIME_ATTACK && now - live_drawn_at >= 100) ||
                       ((ui.screen == SCREEN_SHIFT || ui.screen == SCREEN_GMETER ||
@@ -5260,6 +5672,8 @@ void spike_ui_run(void)
             if (ui.screen == SCREEN_TIME_ATTACK) {
                 draw_ta_top(busy, connected, cfg.metric, now);
                 live_drawn_at = now;
+            } else if (ui.screen == SCREEN_GARAGE) {
+                draw_garage_top(busy, connected, ui.page, cfg.metric, top_dirty);
             } else if (ui.screen == SCREEN_ECO) {
                 draw_eco_top(busy, connected, &cfg, now, top_dirty);
                 live_drawn_at = now;
