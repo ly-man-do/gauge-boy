@@ -6,6 +6,8 @@
 
 #include "harness.h"
 #include "data/garage.h"
+#include "data/mileage.h"
+#include "data/baro_store.h"
 
 static garage_t g;
 
@@ -92,8 +94,57 @@ static void test_garage_distance(void)
     CHECK_EQ_INT((long long)c, (long long)full);
 }
 
+static void test_mileage_log(void)
+{
+    static char a[2048], b[2048];
+    mileage_entry_t e = { "2026-11-18", 77140.2, 77502.6, 30.28 };
+    size_t n = mileage_add("", "Geo/Tracker/1996", &e, a, sizeof a);
+    CHECK(n > 0);
+    CHECK_EQ_STR(a, "car,date,start_km,end_km,fuel_l\nGeo/Tracker/1996,2026-11-18,77140.2,77502.6,30.28\n");
+    mileage_entry_t e2 = { "2026-11-20", 77502.6, 77900.0, 33.10 };
+    mileage_add(a, "Geo/Tracker/1996", &e2, b, sizeof b);
+    mileage_entry_t other = { "2026-11-19", 1000.0, 1400.0, 40.0 };
+    mileage_add(b, "2HJYK16528H000123", &other, a, sizeof a);
+
+    static mileage_list_t list;
+    CHECK_EQ_INT(mileage_read(a, "Geo/Tracker/1996", &list), 2);
+    CHECK(fabs(list.km - 759.8) < 0.01 && fabs(list.fuel_l - 63.38) < 0.001);
+    CHECK_EQ_STR(list.e[1].date, "2026-11-20");
+    double mpg = 0, l100 = 0;
+    CHECK(mileage_mpg(list.e[0].end_km - list.e[0].start_km, list.e[0].fuel_l, &mpg));
+    CHECK(fabs(mpg - 28.15) < 0.02);                      /* 225.2 mi on 8.0 gal */
+    CHECK(mileage_l100(400.0, 40.0, &l100) && fabs(l100 - 10.0) < 1e-9);
+    CHECK(!mileage_mpg(0.0, 10.0, &mpg) && !mileage_l100(100.0, 0.0, &l100));
+
+    bool removed = false;
+    n = mileage_delete_last(a, "Geo/Tracker/1996", &removed, b, sizeof b);
+    CHECK(removed && n > 0);
+    CHECK_EQ_INT(mileage_read(b, "Geo/Tracker/1996", &list), 1);
+    CHECK_EQ_INT(mileage_read(b, "2HJYK16528H000123", &list), 1);   /* other cars untouched */
+    mileage_delete_last(b, "nobody", &removed, a, sizeof a);
+    CHECK(!removed);
+    CHECK_EQ_STR(a, b);
+
+    double v = 0;
+    CHECK(mileage_parse("29,958", &v) && v == 29958.0);
+    CHECK(mileage_parse(" 14.25 ", &v) && fabs(v - 14.25) < 1e-9);
+    CHECK(!mileage_parse("12a", &v) && !mileage_parse("", &v) && !mileage_parse("-5", &v));
+    CHECK(!mileage_parse("1.2.3", &v));
+    CHECK(mileage_check(100, 200, 10) == NULL);
+    CHECK(mileage_check(200, 100, 10) != NULL);
+    CHECK(mileage_check(100, 200, 0) != NULL);
+    CHECK(mileage_check(100, 100 + 9000 * MILEAGE_KM_MI, 10) != NULL);
+
+    /* The trip meter's file: a reading per car. */
+    n = keyval_store_set("", TRIP_HEADER, "Geo/Tracker/1996", 77502.6f, "2026-11-20", a, sizeof a);
+    float km = 0;
+    CHECK(n > 0 && baro_store_get(a, "Geo/Tracker/1996", &km, NULL, 0));
+    CHECK(fabsf(km - 77502.6f) < 0.01f);
+}
+
 void suite_garage(void)
 {
+    RUN_TEST(test_mileage_log);
     RUN_TEST(test_garage_cars);
     RUN_TEST(test_garage_distance);
 }

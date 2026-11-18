@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, LIVE Transmission view, odometer, DIAG modules (gauge-boy-gnr, kcw, u86)
+**As of:** 2026-11-18, HOME My Garage card, GARAGE trip meter and mileage log (gauge-boy-6s9, jhf, fvs)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -12,10 +12,10 @@ Gauge Boy
 └── Safety notice                    (tap the touch screen to continue)
     └── HOME                         (graphics; top screen: car facts, found by itself
                                      after connecting: car, VIN, protocol)
-        ├── [CEL card]               → DIAG        (shows CEL off / CEL ON / CEL not read)
+        ├── [My Garage card]         → GARAGE (BACK returns to HOME)
         ├── [Adapter card]           → Wi-Fi guide (shows Connected / Not connected)
         ├── [LIVE  · Dash gauges]    → LIVE view list
-        ├── [DIAG  · Codes & CEL]    → DIAG
+        ├── [DIAG  · Codes & CEL]    → DIAG (amber with a lit lamp and "CEL ON" when the CEL is on)
         ├── [TRIM  · Fuel trims]     → TRIM (starts polling)
         ├── [TRACK · Track modes]    → TRACK
         │   ├── TRACK                (top: the modes, closed-course rules)
@@ -35,9 +35,22 @@ Gauge Boy
         │   │   │                     in M5), nickname, year make model, VIN or "(set in
         │   │   │                     SETUP)", logged distance and drives, odometer, bests;
         │   │   │                     "Counting drive n of m..." while it reads new drives)
+        │   │   ├── [TRIP]           → TRIP METER
+        │   │   ├── [MILEAGE LOG]    → MILEAGE LOG
         │   │   ├── [<] [>]          the card before / after (the connected car's first)
         │   │   ├── [NICKNAME]       keyboard; saved to garage.csv (empty removes it)
-        │   │   └── [BACK]           → TRACK                                      [B]
+        │   │   ├── [BACK]           → TRACK, or HOME if opened from My Garage    [B]
+        │   │   ├── TRIP METER       (the card's car: odometer now (live if it's the connected
+        │   │   │   │                 car: polls PID A6, else the last saved), trip distance
+        │   │   │   │                 in big digits since RESET TRIP, its date and start)
+        │   │   │   ├── [RESET TRIP] a new trip from the odometer now; refused while moving
+        │   │   │   └── [BACK]       → GARAGE (stops polling)                     [B]
+        │   │   └── MILEAGE LOG      (the card's car: average economy, then the newest
+        │   │       │                 entries: date, end odometer, distance, fuel, mpg / L/100)
+        │   │       ├── [NEW ENTRY]  number pad x3: start odometer (from the last entry),
+        │   │       │                 end odometer (from the odometer), fuel; refused while moving
+        │   │       ├── [DELETE LAST] tap twice ("TAP AGAIN") to delete the newest entry
+        │   │       └── [BACK]       → GARAGE                                     [B]
         │   ├── ECO CHALLENGE        (polls speed, RPM, MAF or MAP, intake temp; top: trip
         │   │   │                     score in big digits and its rank once ranked, economy now
         │   │   │                     and for the trip, distance, fuel, driving / idling time,

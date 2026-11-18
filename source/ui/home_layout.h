@@ -6,7 +6,7 @@
  * Platform-free so the layout and touch zones are unit-tested; drawing is
  * in home_draw.c (citro2d).
  *
- *   [ CEL off ] [ Not connected ]      status cards (tap: DIAG / Wi-Fi guide)
+ *   [ My Garage ] [ Not connected ]    status cards (tap: GARAGE / Wi-Fi guide)
  *   [ LIVE ] [ DIAG ] [ TRIM ]         menu cards: icon, label, second line
  *   [ TRACK ] [ LOG ] [ SETUP ]
  *   ======= START Close =======        bar: tap to close, like START
@@ -19,7 +19,7 @@
 #define HOME_BAR_Y    208   /* 32 px bar, as in the preview (owner decision) */
 
 typedef enum {
-    HOME_CEL = 0,
+    HOME_GARAGE = 0,
     HOME_ADAPTER,
     HOME_LIVE,
     HOME_DIAG,
@@ -59,9 +59,14 @@ int home_hit(int px, int py);
 const char *home_item_label(home_item_t item);
 const char *home_item_sub(home_item_t item);
 
-/* Status card text: "CEL off", "CEL ON", "CEL not read"; "Connected",
- * "Not connected". */
+/* "CEL off", "CEL ON", "CEL not read"; "Connected", "Not connected". */
 const char *home_cel_text(const home_view_t *v);
+
+/* The DIAG card's second line: "CEL ON" (the card turns amber, the panel's
+ * CEL lamp) when the light is on, else "Codes & CEL". */
+const char *home_diag_sub(const home_view_t *v);
+
+#define HOME_GARAGE_TEXT "My Garage"
 const char *home_adapter_text(const home_view_t *v);
 
 #endif

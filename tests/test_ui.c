@@ -28,7 +28,7 @@ static void test_home_rects_fit_and_dont_overlap(void)
     /* symmetric margins */
     home_rect_t a = home_item_rect(HOME_LIVE), c = home_item_rect(HOME_TRIM);
     CHECK_EQ_INT(a.x, HOME_SCREEN_W - (c.x + c.w));
-    home_rect_t cel = home_item_rect(HOME_CEL), ad = home_item_rect(HOME_ADAPTER);
+    home_rect_t cel = home_item_rect(HOME_GARAGE), ad = home_item_rect(HOME_ADAPTER);
     CHECK_EQ_INT(cel.x, a.x);
     CHECK_EQ_INT(ad.x + ad.w, c.x + c.w);
 }
@@ -41,7 +41,7 @@ static void test_home_hit(void)
         CHECK_EQ_INT(home_hit(r.x, r.y), i);
         CHECK_EQ_INT(home_hit(r.x + r.w - 1, r.y + r.h - 1), i);
     }
-    CHECK_EQ_INT(home_hit(20, 0), HOME_CEL);         /* strip above the status card */
+    CHECK_EQ_INT(home_hit(20, 0), HOME_GARAGE);         /* strip above the status card */
     CHECK_EQ_INT(home_hit(300, 39), HOME_ADAPTER);
     CHECK_EQ_INT(home_hit(5, 100), -1);              /* margin */
     CHECK_EQ_INT(home_hit(110, 100), -1);            /* gap */
@@ -58,7 +58,7 @@ static void test_home_text(void)
     CHECK_EQ_STR(home_item_label(HOME_LIVE), "LIVE");
     CHECK_EQ_STR(home_item_sub(HOME_LIVE), "Dash gauges");
     CHECK_EQ_STR(home_item_label(HOME_SETUP), "SETUP");
-    CHECK(home_item_sub(HOME_CEL) == NULL);
+    CHECK(home_item_sub(HOME_GARAGE) == NULL);
     home_view_t v;
     memset(&v, 0, sizeof v);
     CHECK_EQ_STR(home_cel_text(&v), "CEL not read");
@@ -68,6 +68,9 @@ static void test_home_text(void)
     v.cel_on = true;
     v.connected = true;
     CHECK_EQ_STR(home_cel_text(&v), "CEL ON");
+    CHECK_EQ_STR(home_diag_sub(&v), "CEL ON");                  /* the lamp moved to DIAG */
+    v.cel_on = false;
+    CHECK_EQ_STR(home_diag_sub(&v), "Codes & CEL");
     CHECK_EQ_STR(home_adapter_text(&v), "Connected");
 }
 

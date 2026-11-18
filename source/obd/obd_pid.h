@@ -78,6 +78,10 @@ int obd_pid_parse_multi(const uint8_t *msg, size_t len, uint8_t *pids, float *va
 
 /* ---------- display ---------- */
 
+/* A whole number with thousands separators: 29958 -> "29,958". Negative
+ * numbers get a leading '-'. Returns out. */
+char *obd_format_grouped(long long n, char *out, size_t len);
+
 /* A metric value in the display units, and the unit's label ("mph"). */
 float obd_unit_convert(obd_unit_t unit, float metric, obd_units_t units);
 const char *obd_unit_label(obd_unit_t unit, obd_units_t units);

@@ -219,8 +219,15 @@ static void test_pid_odometer_gear(void)
     float v = 0.0f;
     CHECK_EQ_INT(obd_pid_decode(0xA6, odo, 4, &v), OBD_PID_OK);
     CHECK_NEAR(v, 50000.0f);
-    CHECK_EQ_STR(obd_pid_format(0xA6, v, OBD_UNITS_US, text, sizeof text), "31069 mi");
-    CHECK_EQ_STR(obd_pid_format(0xA6, v, OBD_UNITS_METRIC, text, sizeof text), "50000 km");
+    CHECK_EQ_STR(obd_pid_format(0xA6, v, OBD_UNITS_US, text, sizeof text), "31,069 mi");
+    CHECK_EQ_STR(obd_pid_format(0xA6, v, OBD_UNITS_METRIC, text, sizeof text), "50,000 km");
+    char g[16];
+    CHECK_EQ_STR(obd_format_grouped(0, g, sizeof g), "0");
+    CHECK_EQ_STR(obd_format_grouped(999, g, sizeof g), "999");
+    CHECK_EQ_STR(obd_format_grouped(1000, g, sizeof g), "1,000");
+    CHECK_EQ_STR(obd_format_grouped(1234567, g, sizeof g), "1,234,567");
+    CHECK_EQ_STR(obd_format_grouped(-45210, g, sizeof g), "-45,210");
+    CHECK_EQ_STR(obd_format_grouped(1234567, g, 6), "1,234");                /* cut, no overflow */
     CHECK_EQ_INT(obd_pid_decode(0xA6, odo, 3, &v), OBD_PID_SHORT);
     /* Gear ratio: supported bit A1, 0x0D7A = 3450 -> 3.45. */
     uint8_t gear[4] = { 0x02, 0x00, 0x0D, 0x7A };

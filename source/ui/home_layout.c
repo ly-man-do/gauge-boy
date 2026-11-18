@@ -16,7 +16,7 @@ static const struct {
     const char *label;
     const char *sub;
 } names[HOME_ITEM_COUNT] = {
-    [HOME_CEL]     = { "", NULL },
+    [HOME_GARAGE]     = { "", NULL },
     [HOME_ADAPTER] = { "", NULL },
     [HOME_LIVE]    = { "LIVE",  "Dash gauges" },
     [HOME_DIAG]    = { "DIAG",  "Codes & CEL" },
@@ -31,7 +31,7 @@ home_rect_t home_item_rect(home_item_t item)
 {
     home_rect_t r = { 0, 0, 0, 0 };
     int status_w = (HOME_SCREEN_W - 2 * MARGIN - GAP) / 2;   /* 144 */
-    if (item == HOME_CEL || item == HOME_ADAPTER) {
+    if (item == HOME_GARAGE || item == HOME_ADAPTER) {
         r.x = MARGIN + (item == HOME_ADAPTER ? status_w + GAP : 0);
         r.y = STATUS_Y;
         r.w = status_w;
@@ -54,7 +54,7 @@ home_rect_t home_item_rect(home_item_t item)
 home_rect_t home_item_touch(home_item_t item)
 {
     home_rect_t r = home_item_rect(item);
-    if (item == HOME_CEL || item == HOME_ADAPTER) {
+    if (item == HOME_GARAGE || item == HOME_ADAPTER) {
         r.h += r.y + 3;   /* from the top edge: 40 px */
         r.y = 0;
     }
@@ -88,6 +88,11 @@ const char *home_cel_text(const home_view_t *v)
         return "CEL not read";
     }
     return v->cel_on ? "CEL ON" : "CEL off";
+}
+
+const char *home_diag_sub(const home_view_t *v)
+{
+    return v->cel_known && v->cel_on ? "CEL ON" : home_item_sub(HOME_DIAG);
 }
 
 const char *home_adapter_text(const home_view_t *v)

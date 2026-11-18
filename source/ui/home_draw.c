@@ -273,6 +273,17 @@ static void icon_lamp(float cx, float cy, bool on)
     circle(cx, cy, 5, on ? COL_AMBER : COL_OFF);
 }
 
+/* The mascot's teal, as a small side-on car. */
+static void icon_car(float cx, float cy)
+{
+    u32 body = RGB(43, 174, 159), dark = RGB(26, 122, 112);
+    rrect(cx - 9, cy - 7, 13, 6, 2, body);    /* cab */
+    rrect(cx - 12, cy - 2, 24, 7, 2, body);   /* body */
+    rect(cx - 7, cy - 5, 4, 3, RGB(200, 235, 245));   /* window */
+    circle(cx - 6, cy + 5, 3, dark);
+    circle(cx + 6, cy + 5, 3, dark);
+}
+
 static void icon_wifi(float cx, float cy, u32 c)
 {
     for (int r = 4; r <= 12; r += 4) {
@@ -290,7 +301,7 @@ static const icon_fn icons[HOME_ITEM_COUNT] = {
 /* ---------- the screen ---------- */
 
 /* A status card: icon then text, centred together. */
-static void status_card(home_item_t item, const char *label, bool lamp, bool on, u32 fill,
+static void status_card(home_item_t item, const char *label, bool garage, bool on, u32 fill,
                         const home_view_t *v)
 {
     home_rect_t r = home_item_rect(item);
@@ -298,8 +309,8 @@ static void status_card(home_item_t item, const char *label, bool lamp, bool on,
     float scale = SCALE_STATUS;
     float w = 22 + text_width(font_big, label, scale);
     float x = r.x + (r.w - w) / 2;
-    if (lamp) {
-        icon_lamp(x + 8, r.y + 16, on);
+    if (garage) {
+        icon_car(x + 9, r.y + 15);
     } else {
         icon_wifi(x + 8, r.y + 13, on ? RGB(62, 172, 109) : COL_OFF);
     }
@@ -318,17 +329,22 @@ void home_draw(const home_view_t *v)
     C2D_SceneBegin(target);
 
     bool cel_on = v->cel_known && v->cel_on;
-    status_card(HOME_CEL, home_cel_text(v), true, cel_on, cel_on ? COL_CEL_CARD : COL_CARD, v);
+    status_card(HOME_GARAGE, HOME_GARAGE_TEXT, true, false, COL_CARD, v);
     status_card(HOME_ADAPTER, home_adapter_text(v), false, v->connected, COL_CARD, v);
 
     for (int i = HOME_LIVE; i <= HOME_SETUP; i++) {
         home_rect_t r = home_item_rect((home_item_t)i);
-        u32 fill = v->pressed == i ? COL_PRESSED : COL_CARD;
+        bool lamp = i == HOME_DIAG && cel_on;   /* the panel's CEL lamp */
+        u32 fill = v->pressed == i ? COL_PRESSED : lamp ? COL_CEL_CARD : COL_CARD;
         float cx = r.x + r.w / 2.0f;
         card(r, fill, v->selected == i);
         icons[i](cx, r.y + 20, icon_colors[i], fill);
+        if (lamp) {
+            icon_lamp(r.x + r.w - 13, r.y + 13, true);
+        }
         text(font_big, home_item_label((home_item_t)i), cx, r.y + 34, SCALE_LABEL, COL_INK, true);
-        text(font_small, home_item_sub((home_item_t)i), cx, r.y + 56, SCALE_SUB, COL_SUB, true);
+        text(font_small, i == HOME_DIAG ? home_diag_sub(v) : home_item_sub((home_item_t)i), cx,
+             r.y + 56, SCALE_SUB, COL_SUB, true);
     }
 
     /* Bar: "START Close" (tap to close), or a notice. */

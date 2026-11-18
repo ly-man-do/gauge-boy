@@ -1,6 +1,7 @@
 #include "obd_pid.h"
 
 #include <stdio.h>
+#include <string.h>
 
 /* How the data bytes become a value (SAE J1979). */
 typedef enum {
@@ -251,6 +252,11 @@ char *obd_pid_format(uint8_t pid, float value, obd_units_t units, char *out, siz
         snprintf(out, out_len, "%u:%02u", s / 60u, s % 60u);
         return out;
     }
+    if (info->unit == OBD_UNIT_KM) {   /* odometer: 29,958 mi */
+        obd_format_grouped((long long)(v + 0.5f), num, sizeof num);
+        snprintf(out, out_len, "%s %s", num, obd_unit_label(info->unit, units));
+        return out;
+    }
     number(num, sizeof num, v, decimals, is_trim(pid));
     snprintf(out, out_len, "%s %s", num, obd_unit_label(info->unit, units));
     return out;
@@ -283,5 +289,31 @@ char *obd_vacuum_format(float vacuum_kpa, obd_units_t units, char *out, size_t o
     bool us = units == OBD_UNITS_US;
     number(num, sizeof num, obd_unit_convert(OBD_UNIT_KPA, vacuum_kpa, units), us ? 1 : 0, false);
     snprintf(out, out_len, "%s %s", num, us ? "inHg" : "kPa");
+    return out;
+}
+
+char *obd_format_grouped(long long n, char *out, size_t len)
+{
+    char digits[32];
+    bool neg = n < 0;
+    unsigned long long u = neg ? (unsigned long long)(-(n + 1)) + 1u : (unsigned long long)n;
+    snprintf(digits, sizeof digits, "%llu", u);
+    size_t d = strlen(digits), o = 0;
+    if (len == 0) {
+        return out;
+    }
+    if (neg && o + 1 < len) {
+        out[o++] = '-';
+    }
+    for (size_t i = 0; i < d && o + 1 < len; i++) {
+        if (i > 0 && (d - i) % 3 == 0) {
+            if (o + 2 >= len) {
+                break;
+            }
+            out[o++] = ',';
+        }
+        out[o++] = digits[i];
+    }
+    out[o] = '\0';
     return out;
 }
