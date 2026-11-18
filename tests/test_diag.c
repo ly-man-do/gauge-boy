@@ -491,6 +491,10 @@ static void test_wifi_check_text(void)
     CHECK_EQ_STR(l[n - 1], "guide: manual, IP and DNS 192.168.0.11.");
     c.slot_matches = true;
     CHECK_EQ_INT(wifi_check_lines(&c, l, 8), n - 2);
+    c.slot_matches = false;
+    c.tcp = WIFI_TCP_REFUSED;                       /* reached the network: no slot hint */
+    n = wifi_check_lines(&c, l, 8);
+    CHECK_EQ_STR(l[n - 1], "adapter on, and the port right?");
     c.failed = WIFI_STEP_WIFI;
     wifi_check_lines(&c, l, 8);
     CHECK_EQ_STR(l[0], "Failed at: Wi-Fi");

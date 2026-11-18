@@ -158,7 +158,9 @@ int wifi_check_lines(const wifi_check_t *c, char lines[][WIFI_CHECK_COLS + 1], i
         say(&o, "Failed at: reaching the adapter");
         say(&o, "No answer at %.15s:%u.", c->host, c->port);
         if (c->tcp == WIFI_TCP_REFUSED) {
-            say(&o, "It refused: is the port right?");
+            say(&o, "Nothing is listening there: is the");
+            say(&o, "adapter on, and the port right?");
+            return o.n;   /* the network itself works: not the slot */
         } else {
             say(&o, "Is the address right, and the");
             say(&o, "adapter plugged in with the key on?");
