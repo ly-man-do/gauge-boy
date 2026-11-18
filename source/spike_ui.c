@@ -32,6 +32,7 @@
 #include "data/trim_view.h"
 #include "data/wifi_guide.h"
 #include "data/textlog.h"
+#include "fun/gmeter.h"
 #include "fun/shift_light.h"
 #include "fun/time_attack.h"
 #include "fun/track_bests.h"
@@ -133,6 +134,9 @@
 #define BTN_SHIFT_DOWN    (-134) /* UI: SHIFT LIGHT: shift point -100 / +100 rpm */
 #define BTN_SHIFT_UP      (-135)
 #define BTN_SHIFT_SAVE    115    /* worker: save the shift point to config.ini */
+#define BTN_TRACK_GMETER  (-136) /* UI: TRACK -> G-METER */
+#define BTN_GM_CAL        (-137) /* UI: G-METER: calibrate (parked) */
+#define BTN_GM_RESET      (-138) /* UI: G-METER: reset the peaks (parked) */
 
 /* Bottom-screen buttons in 8x8 console cells: 12-13x6 cells = 96-104x48 px.
  * The third row has the Wi-Fi slot buttons, the last one the log ones. */
@@ -272,13 +276,15 @@ typedef enum {
     SCREEN_GRAPH,              /* LOG > GRAPH: one value of a drive against time */
     SCREEN_TRACK,              /* TRACK: the track modes */
     SCREEN_TIME_ATTACK,        /* TRACK > TIME ATTACK: speed alone, timed runs */
-    SCREEN_SHIFT               /* TRACK > SHIFT LIGHT: RPM, LEDs on the top screen */
+    SCREEN_SHIFT,              /* TRACK > SHIFT LIGHT: RPM, LEDs on the top screen */
+    SCREEN_GMETER              /* TRACK > G-METER: the 3DS accelerometer */
 } screen_t;
 
 /* TRACK: one button per mode built so far, then BACK. */
 static const button_t track_buttons[] = {
     { "TIME ATTACK", BTN_TRACK_TA,    0,  4, 19, 5 },
     { "SHIFT LIGHT", BTN_TRACK_SHIFT, 20, 4, 19, 5 },
+    { "G-METER",     BTN_TRACK_GMETER, 0, 10, 19, 5 },
     { "BACK",        BTN_BACK,     0, 25, 8, 5 },
 };
 #define TRACK_BUTTON_COUNT ((int)(sizeof track_buttons / sizeof track_buttons[0]))
@@ -299,6 +305,14 @@ static const button_t shift_buttons[] = {
     { "BACK", BTN_BACK,       0,  25, 8, 5 },
 };
 #define SHIFT_BUTTON_COUNT ((int)(sizeof shift_buttons / sizeof shift_buttons[0]))
+
+/* G-METER: CALIBRATE, RESET PEAKS, then BACK. */
+static const button_t gm_buttons[] = {
+    { "CALIBRATE",   BTN_GM_CAL,   0,  19, 19, 5 },
+    { "RESET PEAKS", BTN_GM_RESET, 20, 19, 19, 5 },
+    { "BACK",        BTN_BACK,     0,  25, 8, 5 },
+};
+#define GM_BUTTON_COUNT ((int)(sizeof gm_buttons / sizeof gm_buttons[0]))
 
 /* The closed-course notice, once a session. */
 static const button_t ta_warn_buttons[] = {
@@ -538,6 +552,7 @@ static struct {
     /* TIME ATTACK. The UI sets ta_on, ta_gen and the run; the worker times. */
     bool ta_on;                /* speed alone, no ATRV */
     bool shift_on;             /* SHIFT LIGHT: RPM (and speed slowly), no ATRV */
+    bool gmeter_on;            /* G-METER: speed, no ATRV */
     unsigned ta_gen;           /* bumped to arm ta_want_run */
     int ta_want_run;           /* ta_run_t */
     bool ta_want_metric;
@@ -1584,7 +1599,7 @@ static void live_poll(spike_t *s)
     uint32_t periods[OBD_LIVE_MAX];
     int n = shared.live_want_count;
     bool speed_only = shared.ta_on;
-    bool no_volts = shared.ta_on || shared.shift_on;
+    bool no_volts = shared.ta_on || shared.shift_on || shared.gmeter_on;
     memcpy(pids, shared.live_want, sizeof pids);
     memcpy(periods, shared.live_want_period, sizeof periods);
     LightLock_Unlock(&shared.lock);
@@ -2220,6 +2235,72 @@ static void shift_stop(void)
     LightLock_Unlock(&shared.lock);
 }
 
+/* G-METER: speed (for learning forward and the parked check), the
+ * accelerometer on. */
+static gmeter_t gmeter;
+static bool gm_accel_on;
+
+static void gmeter_start(void)
+{
+    static const uint8_t pids[] = { 0x0D };
+    static const uint32_t periods[] = { 0 };
+    if (gmeter.forward_sign == 0) {
+        gm_init(&gmeter);   /* first time: not calibrated */
+    }
+    if (!gm_accel_on) {
+        gm_accel_on = R_SUCCEEDED(HIDUSER_EnableAccelerometer());
+    }
+    LightLock_Lock(&shared.lock);
+    shared.ta_on = false;
+    shared.shift_on = false;
+    shared.gmeter_on = true;
+    live_start_locked(pids, periods, 1);
+    LightLock_Unlock(&shared.lock);
+    LightEvent_Signal(&shared.wake);
+}
+
+static void gmeter_stop(void)
+{
+    if (gm_accel_on) {
+        HIDUSER_DisableAccelerometer();
+        gm_accel_on = false;
+    }
+    LightLock_Lock(&shared.lock);
+    shared.gmeter_on = false;
+    shared.live_on = false;
+    shared.live_ui_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
+/* G-METER, every frame: a sensor reading, and the speed when it's new. */
+static void gmeter_frame(uint64_t now, gm_vec_t *raw_out)
+{
+    static uint64_t last;
+    static uint32_t reads_seen;
+    accelVector v;
+    hidAccelRead(&v);
+    gm_vec_t raw = { (float)v.x, (float)v.y, (float)v.z };
+    *raw_out = raw;
+    if (gmeter.cal == GM_CAL_RUNNING) {
+        gm_cal_add(&gmeter, raw);
+    } else {
+        gm_sample(&gmeter, raw, last != 0 && now > last ? (float)(now - last) : 16.7f);
+    }
+    last = now;
+    LightLock_Lock(&shared.lock);
+    const obd_live_pid_t *p = shared.live_have ? obd_live_get(&shared.live, 0x0D) : NULL;
+    bool fresh = p != NULL && p->have && p->reads != reads_seen;
+    uint64_t at = fresh ? p->at_ms : 0;
+    float kmh = fresh ? p->value : 0.0f;
+    if (fresh) {
+        reads_seen = p->reads;
+    }
+    LightLock_Unlock(&shared.lock);
+    if (fresh) {
+        gm_speed(&gmeter, at, kmh);
+    }
+}
+
 /* The car is moving (speed read in the last few seconds above 0). */
 static bool car_moving(uint64_t now)
 {
@@ -2279,9 +2360,11 @@ static void draw_track_top(int busy, bool connected)
         "SHIFT LIGHT  LEDs that fill with RPM and flash",
         "             at your shift point",
         "",
-        "Coming in version 0.4: G-meter, Rev Sync, Eco",
-        "Challenge, garage card, achievements and",
-        "attract mode.",
+        "G-METER      the car's G-forces from the 3DS's",
+        "             own motion sensor, with peaks",
+        "",
+        "Coming in version 0.4: Rev Sync, Eco Challenge,",
+        "garage card, achievements and attract mode.",
         "",
         "For closed courses, track days and passengers",
         "only. Nothing here needs a touch while moving:",
@@ -2536,6 +2619,105 @@ static void draw_shift_top(int busy, bool connected, int shift_rpm, uint64_t now
     snprintf(line, sizeof line, "The LEDs light from %d rpm and flash at %d.",
              shift_rpm * SHIFT_START_PCT / 100, shift_rpm);
     print_row(TOP_ROWS - 2, TOP_COLS, line);
+    print_row(TOP_ROWS - 1, TOP_COLS, "Display only: no touch needed while moving.");
+}
+
+/* G-METER top screen: a friction circle (1 g at the edge, a ring at
+ * 0.5 g), the values and the peaks. */
+static void draw_gmeter_top(int busy, bool connected, gm_vec_t raw, bool full)
+{
+    const gmeter_t *gm = &gmeter;
+    char header[TOP_COLS + 1], line[TOP_COLS + 32];
+    spike_format_header(header, sizeof header, connected, busy);
+    consoleSelect(&top_console);
+    printf(full ? "\x1b[0m\x1b[2J" : "\x1b[0m");   /* first draw: nothing left from before */
+    print_row(0, TOP_COLS, header);
+    print_row(1, TOP_COLS, "-------------------------------------------------");
+    print_row(2, TOP_COLS, "G-METER");
+
+    enum { R = 10, CX = 11, CY = 15 };   /* 1-based console cell of the centre */
+    bool ok = gm->cal == GM_CAL_OK && gm->have;
+    int bx = 0, by = 0;
+    if (ok) {
+        float x = gm->lat, y = gm->lon;
+        float d = sqrtf(x * x + y * y);
+        if (d > 1.0f) {   /* past 1 g: pinned to the edge */
+            x /= d;
+            y /= d;
+        }
+        bx = (int)lroundf(x * R);
+        by = (int)lroundf(-y * R);
+    }
+    print_row(3, TOP_COLS, "");
+    printf("\x1b[%d;%dHACCEL", CY - R - 1, CX - 2);
+    for (int dy = -R; dy <= R; dy++) {
+        printf("\x1b[%d;1H", CY + dy);
+        for (int dx = -R - 1; dx <= R + 1; dx++) {
+            float d = sqrtf((float)(dx * dx + dy * dy));
+            if (ok && dx == bx && dy == by) {
+                printf("\x1b[42;30mO\x1b[0m");
+            } else if (fabsf(d - R) < 0.5f || fabsf(d - R / 2) < 0.5f) {
+                printf("\x1b[32m.\x1b[0m");
+            } else if (dx == 0 && dy == 0) {
+                printf("+");
+            } else if (dx == 0 || dy == 0) {
+                printf("\x1b[2m%c\x1b[0m", dx == 0 ? ':' : '-');
+            } else {
+                printf(" ");
+            }
+        }
+        printf("  ");
+    }
+    printf("\x1b[%d;%dHBRAKE", CY + R + 1, CX - 2);
+    printf("\x1b[%d;1HL\x1b[%d;%dHR", CY + 1, CY + 1, CX + R + 2);
+
+    /* The values, right of the circle. */
+    int col = 26;
+    for (int r = 3; r < TOP_ROWS; r++) {
+        printf("\x1b[%d;%dH%*s", r + 1, col, TOP_COLS - col + 1, "");
+    }
+    int row = 5;
+    if (gm->cal == GM_CAL_RUNNING) {
+        printf("\x1b[%d;%dHCalibrating:", row++, col);
+        printf("\x1b[%d;%dHhold still...", row++, col);
+    } else if (gm->cal == GM_CAL_NONE) {
+        printf("\x1b[%d;%dHMount the 3DS,", row++, col);
+        printf("\x1b[%d;%dHthen CALIBRATE.", row++, col);
+    } else if (gm->cal == GM_CAL_MOVED) {
+        printf("\x1b[%d;%dH\x1b[33mIt moved: hold it\x1b[0m", row++, col);
+        printf("\x1b[%d;%dH\x1b[33mstill, CALIBRATE\x1b[0m", row++, col);
+    } else if (gm->cal == GM_CAL_NO_SENSOR) {
+        printf("\x1b[%d;%dH\x1b[33mNo motion sensor\x1b[0m", row++, col);
+        printf("\x1b[%d;%dH\x1b[33mreadings.\x1b[0m", row++, col);
+    } else if (ok) {
+        snprintf(line, sizeof line, "Side  %.2f g %s", (double)fabsf(gm->lat),
+                 gm->lat > 0.02f ? "R" : gm->lat < -0.02f ? "L" : "");
+        printf("\x1b[%d;%dH%s", row++, col, line);
+        snprintf(line, sizeof line, "Long  %.2f g %s", (double)fabsf(gm->lon),
+                 gm->lon > 0.02f ? "acc" : gm->lon < -0.02f ? "brk" : "");
+        printf("\x1b[%d;%dH%s", row++, col, line);
+        snprintf(line, sizeof line, "Total %.2f g", (double)gm_total(gm));
+        printf("\x1b[%d;%dH%s", row++, col, line);
+        row++;
+        printf("\x1b[%d;%dHPeaks", row++, col);
+        snprintf(line, sizeof line, "Left  %.2f Right %.2f", (double)fabsf(gm->peak_left),
+                 (double)fabsf(gm->peak_right));
+        printf("\x1b[%d;%dH%s", row++, col, line);
+        snprintf(line, sizeof line, "Accel %.2f Brake %.2f", (double)fabsf(gm->peak_accel),
+                 (double)fabsf(gm->peak_brake));
+        printf("\x1b[%d;%dH%s", row++, col, line);
+        snprintf(line, sizeof line, "Total %.2f g", (double)gm->peak_total);
+        printf("\x1b[%d;%dH%s", row++, col, line);
+        row++;
+        printf("\x1b[%d;%dH%s", row++, col,
+               gm->forward_learned ? "Forward: learned" : "Forward: guessed");
+        if (!gm->forward_learned) {
+            printf("\x1b[%d;%dH(learned on the", row++, col);
+            printf("\x1b[%d;%dH first launch)", row++, col);
+        }
+    }
+    snprintf(line, sizeof line, "raw %d %d %d", (int)raw.x, (int)raw.y, (int)raw.z);
+    printf("\x1b[%d;%dH%s", TOP_ROWS - 3, col, line);
     print_row(TOP_ROWS - 1, TOP_COLS, "Display only: no touch needed while moving.");
 }
 
@@ -3082,11 +3264,25 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
     if (ui->screen == SCREEN_TRACK) {
         print_row(2, BOTTOM_COLS, "TRACK  Track modes");
         draw_list(track_buttons, TRACK_BUTTON_COUNT, now, busy, 0, false);
-        print_row(11, BOTTOM_COLS, "TIME ATTACK: 0-60, 60-0, 1/4 mile.");
-        print_row(12, BOTTOM_COLS, "SHIFT LIGHT: LEDs that flash at your");
-        print_row(13, BOTTOM_COLS, "shift point.");
-        print_row(15, BOTTOM_COLS, "More modes come in version 0.4.");
-        print_row(22, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        print_row(16, BOTTOM_COLS, "TIME ATTACK: 0-60, 60-0, 1/4 mile.");
+        print_row(17, BOTTOM_COLS, "SHIFT LIGHT: LEDs that flash at your");
+        print_row(18, BOTTOM_COLS, "shift point. G-METER: G-forces.");
+        print_row(20, BOTTOM_COLS, "More modes come in version 0.4.");
+        print_row(23, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        return;
+    }
+    if (ui->screen == SCREEN_GMETER) {
+        print_row(2, BOTTOM_COLS, "G-METER");
+        print_row(4, BOTTOM_COLS, "Mount the 3DS firmly, screen facing");
+        print_row(5, BOTTOM_COLS, "you, then tap CALIBRATE parked with");
+        print_row(6, BOTTOM_COLS, "the engine idling (the 3DS still).");
+        print_row(8, BOTTOM_COLS, "Up on the circle is speeding up, down");
+        print_row(9, BOTTOM_COLS, "is braking, sides are cornering.");
+        print_row(10, BOTTOM_COLS, "Which way is forward is learned on");
+        print_row(11, BOTTOM_COLS, "the first launch (OBD speed).");
+        print_row(13, BOTTOM_COLS, "Calibrate again after moving it.");
+        print_row(16, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        draw_list(gm_buttons, GM_BUTTON_COUNT, now, busy, 0, false);
         return;
     }
     if (ui->screen == SCREEN_SHIFT) {
@@ -3690,6 +3886,7 @@ void spike_ui_run(void)
     ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false, -1, SCREEN_SETUP,
                       false, LIVE_VIEW_ENGINE, SCREEN_HOME, false, 0, 0.0, 0.0, 0.0,
                       false, false, TA_RUN_LAUNCH };
+    gm_vec_t gm_raw = { 0, 0, 0 };   /* G-METER: the latest sensor reading */
     live_menu_count();
     uint64_t notice_until = 0;
     int scroll = 0;                /* log (SETUP, TEST) */
@@ -3713,6 +3910,9 @@ void spike_ui_run(void)
         hidScanInput();
         u32 down = hidKeysDown();
         uint64_t now = tp_now_ms();
+        if (ui.screen == SCREEN_GMETER) {
+            gmeter_frame(now, &gm_raw);
+        }
 
         if (down & KEY_START) {
             break;
@@ -3824,6 +4024,7 @@ void spike_ui_run(void)
             case SCREEN_TRACK:     list = track_buttons;     count = TRACK_BUTTON_COUNT;     break;
             case SCREEN_TIME_ATTACK: list = ta_buttons;      count = TA_BUTTON_COUNT;        break;
             case SCREEN_SHIFT:     list = shift_buttons;     count = SHIFT_BUTTON_COUNT;     break;
+            case SCREEN_GMETER:    list = gm_buttons;        count = GM_BUTTON_COUNT;        break;
             case SCREEN_TEST:  break;
             }
             int i = ui.screen == SCREEN_HOME && home_gfx ? -1 : button_at(list, count, tp.px, tp.py);
@@ -4050,6 +4251,26 @@ void spike_ui_run(void)
                 shift_start();
                 bottom_full = top_dirty = true;
                 break;
+            case BTN_TRACK_GMETER:
+                ui.screen = SCREEN_GMETER;
+                gmeter_start();
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_GM_CAL:
+            case BTN_GM_RESET:
+                if (car_moving(now)) {
+                    ui.notice = action == BTN_GM_CAL ? "Calibrate while parked."
+                                                     : "Reset the peaks while parked.";
+                    notice_until = now + 3000;
+                    break;
+                }
+                if (action == BTN_GM_CAL) {
+                    gm_cal_start(&gmeter);
+                } else {
+                    gm_reset_peaks(&gmeter);
+                }
+                top_dirty = true;
+                break;
             case BTN_SHIFT_DOWN:
             case BTN_SHIFT_UP:
                 if (car_moving(now)) {
@@ -4196,6 +4417,12 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
+                if (ui.screen == SCREEN_GMETER) {
+                    gmeter_stop();
+                    ui.screen = SCREEN_TRACK;
+                    bottom_full = top_dirty = true;
+                    break;
+                }
                 if (ui.screen == SCREEN_SHIFT) {
                     shift_stop();
                     ui.screen = SCREEN_TRACK;
@@ -4366,7 +4593,8 @@ void spike_ui_run(void)
                         now - live_drawn_at >= 100;
         /* TIME ATTACK: the countdown and the running time move on their own. */
         bool ta_due = (ui.screen == SCREEN_TIME_ATTACK && now - live_drawn_at >= 100) ||
-                      (ui.screen == SCREEN_SHIFT && now - live_drawn_at >= 30);
+                      ((ui.screen == SCREEN_SHIFT || ui.screen == SCREEN_GMETER) &&
+                       now - live_drawn_at >= 30);
 
         LightLock_Lock(&shared.lock);
         unsigned drive_version = shared.drive_version;
@@ -4401,6 +4629,9 @@ void spike_ui_run(void)
                        : !live_screen && diag_version != drawn_diag_version)) {
             if (ui.screen == SCREEN_TIME_ATTACK) {
                 draw_ta_top(busy, connected, cfg.metric, now);
+                live_drawn_at = now;
+            } else if (ui.screen == SCREEN_GMETER) {
+                draw_gmeter_top(busy, connected, gm_raw, top_dirty);
                 live_drawn_at = now;
             } else if (ui.screen == SCREEN_SHIFT) {
                 draw_shift_top(busy, connected, cfg.shift_rpm, now);

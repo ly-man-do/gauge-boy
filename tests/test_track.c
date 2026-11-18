@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "fun/gmeter.h"
 #include "fun/shift_light.h"
 #include "fun/time_attack.h"
 #include "fun/track_bests.h"
@@ -227,8 +228,124 @@ static void test_shift_predict(void)
     CHECK(shift_rpm_now(&sl, 1700) == 0.0f);              /* never negative */
 }
 
+static gmeter_t gm;
+
+static void gm_calibrate(gm_vec_t g0)
+{
+    gm_init(&gm);
+    gm_cal_start(&gm);
+    for (int i = 0; i < GM_CAL_SAMPLES - 1; i++) {
+        CHECK_EQ_INT(gm_cal_add(&gm, g0), GM_CAL_RUNNING);
+    }
+    CHECK_EQ_INT(gm_cal_add(&gm, g0), GM_CAL_OK);
+}
+
+/* Feeds a steady reading long enough for the smoothing to settle. */
+static void gm_hold(gm_vec_t raw)
+{
+    for (int i = 0; i < 120; i++) {
+        gm_sample(&gm, raw, 16.7f);
+    }
+}
+
+#define NEAR(a, b) (fabsf((a) - (b)) < 0.02f)
+
+static void test_gmeter_flat(void)
+{
+    /* Lying flat: gravity on +z, 512 raw a g; forward guess +y, right +x. */
+    gm_vec_t g0 = { 0, 0, 512 };
+    gm_calibrate(g0);
+    CHECK(NEAR(gm.scale, 512.0f));
+    gm_hold(g0);
+    CHECK(NEAR(gm.lat, 0.0f) && NEAR(gm.lon, 0.0f));
+    gm_vec_t accel = { 0, 0.3f * 512, 512 };
+    gm_hold(accel);
+    CHECK(NEAR(gm.lon, 0.3f) && NEAR(gm.lat, 0.0f));
+    gm_vec_t right_turn = { 0.5f * 512, 0, 512 };
+    gm_hold(right_turn);
+    CHECK(NEAR(gm.lat, 0.5f) && NEAR(gm.lon, 0.0f));
+    gm_vec_t brake_left = { -0.2f * 512, -0.8f * 512, 512 };
+    gm_hold(brake_left);
+    CHECK(NEAR(gm.lat, -0.2f) && NEAR(gm.lon, -0.8f));
+    CHECK(NEAR(gm.peak_accel, 0.3f) && NEAR(gm.peak_right, 0.5f));
+    CHECK(NEAR(gm.peak_brake, 0.8f) && NEAR(gm.peak_left, 0.2f));
+    CHECK(gm.peak_total > 0.81f && gm.peak_total < 0.84f);
+    gm_vec_t bump = { 0, 0, 1.5f * 512 };                 /* straight up: ignored */
+    gm_hold(bump);
+    CHECK(NEAR(gm.lat, 0.0f) && NEAR(gm.lon, 0.0f));
+    gm_reset_peaks(&gm);
+    CHECK(gm.peak_brake == 0.0f);
+
+    /* Smoothing: one jolt moves it only a little. */
+    gm_hold(g0);
+    gm_sample(&gm, accel, 16.7f);
+    CHECK(gm.lon > 0.01f && gm.lon < 0.1f);
+}
+
+static void test_gmeter_calibration_fails(void)
+{
+    gm_init(&gm);
+    gm_cal_start(&gm);
+    gm_vec_t g0 = { 0, 0, 512 }, shaken = { 0, 60, 512 }, zero = { 0, 0, 0 };
+    for (int i = 0; i < GM_CAL_SAMPLES; i++) {
+        gm_cal_add(&gm, i == 10 ? shaken : g0);
+    }
+    CHECK_EQ_INT(gm.cal, GM_CAL_MOVED);
+    gm_sample(&gm, g0, 16.7f);
+    CHECK(!gm.have);                                      /* not calibrated: nothing */
+    gm_cal_start(&gm);
+    for (int i = 0; i < GM_CAL_SAMPLES; i++) {
+        gm_cal_add(&gm, zero);
+    }
+    CHECK_EQ_INT(gm.cal, GM_CAL_NO_SENSOR);
+}
+
+static void test_gmeter_learns_forward(void)
+{
+    /* Upright, gravity on -y: the forward guess is +z, but the car's
+     * forward is -z. A launch teaches it. */
+    gm_vec_t g0 = { 0, -512, 0 };
+    gm_calibrate(g0);
+    gm_vec_t launch = { 0, -512, -0.3f * 512 };
+    gm_hold(launch);
+    CHECK(NEAR(gm.lon, -0.3f));                           /* guessed wrong */
+    gm_speed(&gm, 1000, 0.0f);
+    gm_speed(&gm, 1200, 2.0f);                            /* moving off */
+    CHECK(gm.learning);
+    gm_hold(launch);
+    gm_speed(&gm, 2500, 8.0f);
+    gm_hold(launch);
+    gm_speed(&gm, 3000, 12.0f);
+    CHECK(gm.forward_learned && gm.forward_sign == -1 && !gm.learning);
+    gm_hold(launch);
+    CHECK(NEAR(gm.lon, 0.3f));
+    CHECK(gm.peak_brake < 0.01f);                         /* the mirrored peaks went */
+    /* Right from forward and up: right-handed, so +x on this mounting is left. */
+    gm_vec_t turn = { 0.4f * 512, -512, 0 };
+    gm_hold(turn);
+    CHECK(NEAR(gm.lat, -0.4f));
+
+    /* Recalibrating at the same mounting keeps what it learned. */
+    gm_cal_start(&gm);
+    for (int i = 0; i < GM_CAL_SAMPLES; i++) {
+        gm_cal_add(&gm, g0);
+    }
+    CHECK(gm.forward_learned && gm.forward_sign == -1);
+
+    /* A slow roll-off doesn't teach anything. */
+    gm_calibrate(g0);
+    gm_speed(&gm, 0, 0.0f);
+    gm_speed(&gm, 100, 1.0f);
+    gm_hold(launch);
+    gm_speed(&gm, 9000, 10.0f);                           /* too slow */
+    CHECK(!gm.forward_learned && !gm.learning);
+}
+
 void suite_track(void)
 {
+    RUN_TEST(test_gmeter_flat);
+    RUN_TEST(test_gmeter_calibration_fails);
+    RUN_TEST(test_gmeter_learns_forward);
     RUN_TEST(test_shift_light);
     RUN_TEST(test_shift_predict);
     RUN_TEST(test_ta_launch);

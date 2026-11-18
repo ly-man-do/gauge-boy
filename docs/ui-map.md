@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, TRACK > SHIFT LIGHT (gauge-boy-356.5; M4 in progress)
+**As of:** 2026-11-18, TRACK > G-METER (gauge-boy-356.6; M4 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -22,7 +22,15 @@ Gauge Boy
         │   │   ├── [TIME ATTACK]    → closed-course notice (once a session), then TIME ATTACK
         │   │   │                      notice: [BACK] → TRACK [B]   [I UNDERSTAND] → TIME ATTACK
         │   │   ├── [SHIFT LIGHT]    → SHIFT LIGHT
+        │   │   ├── [G-METER]        → G-METER
         │   │   └── [BACK]           → HOME                                       [B]
+        │   ├── G-METER              (3DS accelerometer on; polls speed; top: a friction
+        │   │   │                     circle, 1 g at the edge, ring at 0.5 g, ACCEL up,
+        │   │   │                     BRAKE down, the ball; side / long / total g, peaks,
+        │   │   │                     forward guessed or learned, raw sensor values)
+        │   │   ├── [CALIBRATE]      measures gravity (hold still); refused while moving
+        │   │   ├── [RESET PEAKS]    clears the peaks; refused while moving
+        │   │   └── [BACK]           → TRACK (accelerometer off, stops polling)   [B]
         │   ├── SHIFT LIGHT          (polls RPM, speed every second; top: a row of 10 LEDs,
         │   │   │                     green / amber / red, filling from 60 % of the shift
         │   │   │                     point and flashing at it with SHIFT!, RPM in big digits)
