@@ -34,6 +34,15 @@ static const view_pid_t air_fuel[] = {
     { 0x10, D }, { 0x0B, D }, { 0x87, D }, { 0x0F, D }, { 0x11, D },
     { 0x06, D }, { 0x08, D }, { 0x07, 2000 }, { 0x09, 2000 }, { 0x33, D },
 };
+/* O2 sensors: is each one switching (narrow band) or near 1.000 (wide
+ * band)? Whichever kind and sensors the car has; RPM and the short-term
+ * trims beside them. */
+static const view_pid_t o2[] = {
+    { 0x0C, D }, { 0x06, D }, { 0x08, D },
+    { 0x14, D }, { 0x15, D }, { 0x16, D }, { 0x17, D }, { 0x18, D }, { 0x19, D }, { 0x1A, D }, { 0x1B, D },
+    { 0x24, D }, { 0x25, D }, { 0x26, D }, { 0x27, D }, { 0x28, D }, { 0x29, D }, { 0x2A, D }, { 0x2B, D },
+    { 0x34, D }, { 0x35, D }, { 0x36, D }, { 0x37, D }, { 0x38, D }, { 0x39, D }, { 0x3A, D }, { 0x3B, D },
+};
 /* Warm-up: thermostat, cold start; the temperatures are the point here. */
 static const view_pid_t warmup[] = {
     { 0x05, 1000 }, { 0x0F, 2000 }, { 0x5C, 2000 }, { 0x46, D }, { 0x1F, 1000 }, { 0x0C, D },
@@ -51,6 +60,7 @@ static const view_def_t views[LIVE_VIEW_COUNT] = {
     [LIVE_VIEW_IDLE]     = { "Idle & vacuum", "idle", "Vacuum leaks, rough idle", idle, N(idle) },
     [LIVE_VIEW_AIR_FUEL] = { "Air & fuel", "airfuel", "Lean or rich, air flow", air_fuel,
                              N(air_fuel) },
+    [LIVE_VIEW_O2]       = { "O2 sensors", "o2", "Is each oxygen sensor working?", o2, N(o2) },
     [LIVE_VIEW_WARMUP]   = { "Warm-up", "warmup", "Thermostat, cold start", warmup, N(warmup) },
     [LIVE_VIEW_DRIVE]    = { "Drive", "drive", "Load under acceleration", drive, N(drive) },
     [LIVE_VIEW_ALL]      = { "All", "all", "Every PID the car supports", NULL, 0 },

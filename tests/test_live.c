@@ -755,6 +755,11 @@ static void test_live_views(void)
     CHECK_EQ_INT(live_view_request(LIVE_VIEW_CUSTOM, mine, 2, pids, periods, OBD_LIVE_MAX), 2);
     CHECK_EQ_INT(pids[0], 0x0D);
     CHECK_EQ_INT(live_view_request(LIVE_VIEW_ALL, NULL, 0, pids, periods, 3), 3);   /* capped */
+    /* O2 sensors: every kind and position (the car's support picks). */
+    n = live_view_request(LIVE_VIEW_O2, NULL, 0, pids, periods, OBD_LIVE_MAX);
+    CHECK_EQ_INT(n, 27);
+    CHECK_EQ_INT(pids[3], 0x14);
+    CHECK_EQ_INT(pids[n - 1], 0x3B);
 }
 
 static void test_live_fast_interval(void)

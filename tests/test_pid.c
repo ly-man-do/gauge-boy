@@ -238,8 +238,33 @@ static void test_pid_odometer_gear(void)
     CHECK_EQ_INT(obd_pid_decode(0xA4, gear, 4, &v), OBD_PID_NO_REPLY);
 }
 
+static void test_pid_o2(void)
+{
+    /* Narrow band: A / 200 V; B (the sensor's trim, FF = unused) ignored. */
+    CHECK_NEAR(dec(0x15, 0xA0, 0xFF), 0.80f);
+    CHECK_NEAR(dec(0x14, 0x14, 0x80), 0.10f);
+    CHECK_EQ_STR(obd_pid_format(0x15, 0.80f, OBD_UNITS_US, text, sizeof text), "0.80 V");
+    CHECK_EQ_STR(obd_pid_info(0x19)->label, "O2 B2S2");
+    /* Wide band: (256A + B) * 2 / 65536; C and D (current) ignored. */
+    uint8_t wb[4] = { 0x80, 0x00, 0x80, 0x00 };
+    float v = 0.0f;
+    CHECK_EQ_INT(obd_pid_decode(0x34, wb, 4, &v), OBD_PID_OK);
+    CHECK_NEAR(v, 1.0f);
+    CHECK_EQ_STR(obd_pid_format(0x34, v, OBD_UNITS_METRIC, text, sizeof text), "1.000 lambda");
+    wb[0] = 0x73;                                         /* 0x7300: rich */
+    CHECK_EQ_INT(obd_pid_decode(0x24, wb, 4, &v), OBD_PID_OK);
+    CHECK_NEAR(v, 0.8984f);
+    CHECK_EQ_STR(obd_pid_info(0x38)->label, "O2 B2S1");
+    CHECK_EQ_INT(obd_pid_decode(0x34, wb, 3, &v), OBD_PID_SHORT);   /* cut short */
+    /* From a K-line reply (the Ridgeline). */
+    static const char *const lines[] = { "41 34 7F 00 7F F0", NULL };
+    CHECK_EQ_INT(from(lines, 3, false, 0x34, &v), OBD_PID_OK);
+    CHECK(v > 0.99f && v < 0.995f);
+}
+
 void suite_pid(void)
 {
+    RUN_TEST(test_pid_o2);
     RUN_TEST(test_pid_odometer_gear);
     RUN_TEST(test_pid_map_wide);
     RUN_TEST(test_pid_parse_multi);

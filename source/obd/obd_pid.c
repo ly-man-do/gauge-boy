@@ -17,6 +17,8 @@ typedef enum {
     F_MAP_WIDE,  /* PID 87: A = sensors present, (256B + C) / 32 or (256D + E) / 32 */
     F_GEAR,      /* PID A4: A bit 1 = supported, (256C + D) / 1000 = actual gear ratio */
     F_ODO,       /* PID A6: (A 2^24 + B 2^16 + C 2^8 + D) / 10 km */
+    F_O2_VOLTS,  /* PIDs 14-1B: A / 200 V (B is the sensor's trim, FF = not used) */
+    F_LAMBDA,    /* PIDs 24-2B, 34-3B: (256A + B) * 2 / 65536 (C, D: voltage or current) */
 } formula_t;
 
 typedef struct {
@@ -42,6 +44,35 @@ static const pid_entry_t table[] = {
     { { 0x0F, 1, "Intake air temperature", "Intake air", OBD_UNIT_CELSIUS, -40.0f, 215.0f, 10000u }, F_TEMP },
     { { 0x10, 2, "Mass air flow", "MAF", OBD_UNIT_GRAMS_S, 0.0f, 655.35f, 0u }, F_MAF },
     { { 0x11, 1, "Throttle position", "Throttle", OBD_UNIT_PERCENT, 0.0f, 100.0f, 0u }, F_PCT255 },
+    /* Oxygen sensors, numbered as PID 13 lays them out (banks 1 and 2,
+     * sensors 1-4; sensor 1 is before the catalytic converter). Narrow
+     * band (14-1B): a voltage switching between about 0.1 V (lean) and
+     * 0.9 V (rich). Wide band (24-2B by voltage, 34-3B by current): lambda,
+     * 1.000 the ideal mixture, below rich, above lean. */
+    { { 0x14, 2, "O2 sensor voltage, bank 1 sensor 1", "O2 B1S1", OBD_UNIT_VOLTS, 0.0f, 1.275f, 500u }, F_O2_VOLTS },
+    { { 0x15, 2, "O2 sensor voltage, bank 1 sensor 2", "O2 B1S2", OBD_UNIT_VOLTS, 0.0f, 1.275f, 500u }, F_O2_VOLTS },
+    { { 0x16, 2, "O2 sensor voltage, bank 1 sensor 3", "O2 B1S3", OBD_UNIT_VOLTS, 0.0f, 1.275f, 500u }, F_O2_VOLTS },
+    { { 0x17, 2, "O2 sensor voltage, bank 1 sensor 4", "O2 B1S4", OBD_UNIT_VOLTS, 0.0f, 1.275f, 500u }, F_O2_VOLTS },
+    { { 0x18, 2, "O2 sensor voltage, bank 2 sensor 1", "O2 B2S1", OBD_UNIT_VOLTS, 0.0f, 1.275f, 500u }, F_O2_VOLTS },
+    { { 0x19, 2, "O2 sensor voltage, bank 2 sensor 2", "O2 B2S2", OBD_UNIT_VOLTS, 0.0f, 1.275f, 500u }, F_O2_VOLTS },
+    { { 0x1A, 2, "O2 sensor voltage, bank 2 sensor 3", "O2 B2S3", OBD_UNIT_VOLTS, 0.0f, 1.275f, 500u }, F_O2_VOLTS },
+    { { 0x1B, 2, "O2 sensor voltage, bank 2 sensor 4", "O2 B2S4", OBD_UNIT_VOLTS, 0.0f, 1.275f, 500u }, F_O2_VOLTS },
+    { { 0x24, 4, "O2 sensor lambda (wide band, voltage), bank 1 sensor 1", "O2 B1S1", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x25, 4, "O2 sensor lambda (wide band, voltage), bank 1 sensor 2", "O2 B1S2", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x26, 4, "O2 sensor lambda (wide band, voltage), bank 1 sensor 3", "O2 B1S3", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x27, 4, "O2 sensor lambda (wide band, voltage), bank 1 sensor 4", "O2 B1S4", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x28, 4, "O2 sensor lambda (wide band, voltage), bank 2 sensor 1", "O2 B2S1", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x29, 4, "O2 sensor lambda (wide band, voltage), bank 2 sensor 2", "O2 B2S2", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x2A, 4, "O2 sensor lambda (wide band, voltage), bank 2 sensor 3", "O2 B2S3", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x2B, 4, "O2 sensor lambda (wide band, voltage), bank 2 sensor 4", "O2 B2S4", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x34, 4, "O2 sensor lambda (wide band, current), bank 1 sensor 1", "O2 B1S1", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x35, 4, "O2 sensor lambda (wide band, current), bank 1 sensor 2", "O2 B1S2", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x36, 4, "O2 sensor lambda (wide band, current), bank 1 sensor 3", "O2 B1S3", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x37, 4, "O2 sensor lambda (wide band, current), bank 1 sensor 4", "O2 B1S4", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x38, 4, "O2 sensor lambda (wide band, current), bank 2 sensor 1", "O2 B2S1", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x39, 4, "O2 sensor lambda (wide band, current), bank 2 sensor 2", "O2 B2S2", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x3A, 4, "O2 sensor lambda (wide band, current), bank 2 sensor 3", "O2 B2S3", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x3B, 4, "O2 sensor lambda (wide band, current), bank 2 sensor 4", "O2 B2S4", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
     { { 0x1F, 2, "Run time since engine start", "Run time", OBD_UNIT_SECONDS, 0.0f, 65535.0f, 5000u }, F_WORD },
     { { 0x2F, 1, "Fuel tank level", "Fuel", OBD_UNIT_PERCENT, 0.0f, 100.0f, 30000u }, F_PCT255 },
     { { 0x33, 1, "Barometric pressure", "Baro", OBD_UNIT_KPA, 0.0f, 255.0f, 60000u }, F_RAW },
@@ -116,6 +147,8 @@ obd_pid_result_t obd_pid_decode(uint8_t pid, const uint8_t *data, size_t len, fl
         }
         v = (float)(data[2] * 256u + data[3]) / 1000.0f;
         break;
+    case F_O2_VOLTS: v = a / 200.0f; break;
+    case F_LAMBDA:   v = word * 2.0f / 65536.0f; break;
     case F_ODO: {
         uint32_t raw = (uint32_t)data[0] << 24 | (uint32_t)data[1] << 16 | (uint32_t)data[2] << 8 |
                        data[3];
@@ -205,6 +238,7 @@ const char *obd_unit_label(obd_unit_t unit, obd_units_t units)
     case OBD_UNIT_SECONDS: return "s";
     case OBD_UNIT_KM:      return us ? "mi" : "km";
     case OBD_UNIT_RATIO:   return ":1";
+    case OBD_UNIT_LAMBDA:  return "lambda";
     default:               return "";
     }
 }
@@ -213,7 +247,7 @@ const char *obd_unit_label(obd_unit_t unit, obd_units_t units)
  * (none on zero). */
 static void number(char *out, size_t out_len, float v, int decimals, bool sign)
 {
-    float half = decimals == 0 ? 0.5f : decimals == 1 ? 0.05f : 0.005f;
+    float half = decimals == 0 ? 0.5f : decimals == 1 ? 0.05f : decimals == 2 ? 0.005f : 0.0005f;
     if (v > -half && v < half) {
         v = 0.0f;
     }
@@ -244,6 +278,7 @@ char *obd_pid_format(uint8_t pid, float value, obd_units_t units, char *out, siz
     case OBD_UNIT_GRAMS_S: decimals = 1; break;
     case OBD_UNIT_VOLTS:   decimals = 2; break;
     case OBD_UNIT_RATIO:   decimals = 2; break;
+    case OBD_UNIT_LAMBDA:  decimals = 3; break;
     case OBD_UNIT_PERCENT: decimals = is_trim(pid) ? 1 : 0; break;
     default:               decimals = 0; break;
     }

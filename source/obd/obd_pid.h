@@ -31,6 +31,7 @@ typedef enum {
     OBD_UNIT_SECONDS,
     OBD_UNIT_KM,         /* odometer */
     OBD_UNIT_RATIO,      /* transmission gear ratio */
+    OBD_UNIT_LAMBDA,     /* air-fuel equivalence ratio: 1.000 = stoichiometric */
 } obd_unit_t;
 
 typedef enum {

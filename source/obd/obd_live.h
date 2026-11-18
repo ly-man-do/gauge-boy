@@ -28,7 +28,7 @@
 #include "elm327/elm327.h"
 #include "obd_link.h"
 
-#define OBD_LIVE_MAX        24      /* PIDs at once (every PID obd_pid decodes) */
+#define OBD_LIVE_MAX        48      /* PIDs at once (every PID obd_pid decodes) */
 #define OBD_LIVE_MAX_MISSES 3       /* NO DATA in a row before a PID is dropped */
 #define OBD_LIVE_VOLTS_MS   5000u   /* ATRV this often */
 #define OBD_LIVE_TIMEOUT_MS 2000u   /* per request */

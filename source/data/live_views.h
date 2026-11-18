@@ -17,6 +17,7 @@ typedef enum {
     LIVE_VIEW_ENGINE = 0,
     LIVE_VIEW_IDLE,
     LIVE_VIEW_AIR_FUEL,
+    LIVE_VIEW_O2,          /* the oxygen sensors */
     LIVE_VIEW_WARMUP,
     LIVE_VIEW_DRIVE,
     LIVE_VIEW_ALL,

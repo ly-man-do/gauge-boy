@@ -135,7 +135,14 @@ SCENARIOS = {
          "010D": "41 0D 00",
          "010E": ["41 0E 94", "41 0E 96"],                             # timing 10-11 deg
          "010F": "41 0F 46",                                           # intake air 30 C
-         "0111": "41 11 26"},                                          # throttle 15 %
+         "0111": "41 11 26",                                           # throttle 15 %
+         # O2 sensors (0100/0120 list 15, 19, 34, 38): wide band A/F
+         # sensors before the converters (lambda by current), narrow band
+         # after them, steady and a little rich as they should be.
+         "0115": ["41 15 A0 FF", "41 15 A4 FF", "41 15 9C FF"],        # B1S2 0.78-0.82 V
+         "0119": ["41 19 96 FF", "41 19 9A FF"],                       # B2S2 0.75-0.77 V
+         "0134": ["41 34 80 00 80 00", "41 34 7F 00 7F F0", "41 34 81 00 80 10"],  # B1S1 ~1.000
+         "0138": ["41 38 80 40 80 04", "41 38 7F C0 7F FC"]},          # B2S1 ~1.000
         status="41 01 00 07 E5 00", stored=None, pending=None,
         vin="2HJYK16528H000123", volts="13.2V"),
     "tracker": scenario(
