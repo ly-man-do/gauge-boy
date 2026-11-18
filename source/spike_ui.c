@@ -33,6 +33,7 @@
 #include "data/trim_view.h"
 #include "data/wifi_guide.h"
 #include "data/textlog.h"
+#include "fun/achieve.h"
 #include "fun/eco.h"
 #include "fun/gmeter.h"
 #include "fun/rev_sync.h"
@@ -154,6 +155,9 @@
 #define BTN_GARAGE_NICK   (-149) /* UI: GARAGE: type a nickname (keyboard) */
 #define BTN_GARAGE_SCAN   117    /* worker: build the cards, count logged distance */
 #define BTN_GARAGE_SAVE   118    /* worker: save shared.garage_nick for shared.garage_nick_key */
+#define BTN_ACH_LOAD      119    /* worker: read achievements.csv */
+#define BTN_ACH_BASE      200    /* worker: unlock achievement (action - BTN_ACH_BASE) */
+#define BTN_TRACK_ACH     (-150) /* UI: TRACK -> ACHIEVEMENTS */
 
 /* Bottom-screen buttons in 8x8 console cells: 12-13x6 cells = 96-104x48 px.
  * The third row has the Wi-Fi slot buttons, the last one the log ones. */
@@ -300,7 +304,8 @@ typedef enum {
     SCREEN_GMETER,             /* TRACK > G-METER: the 3DS accelerometer */
     SCREEN_REVSYNC,            /* TRACK > REV SYNC: parked-only throttle blip game */
     SCREEN_ECO,                /* TRACK > ECO CHALLENGE: fuel economy and a smooth-driving score */
-    SCREEN_GARAGE              /* TRACK > GARAGE: a card per car */
+    SCREEN_GARAGE,             /* TRACK > GARAGE: a card per car */
+    SCREEN_ACHIEVE             /* TRACK > ACHIEVEMENTS */
 } screen_t;
 
 /* TRACK: one button per mode built so far, then BACK. */
@@ -312,6 +317,7 @@ static const button_t track_buttons[] = {
     { "ECO",         BTN_TRACK_ECO,     0,  16, 19, 5 },
     { "GARAGE",      BTN_TRACK_GARAGE,  20, 16, 19, 5 },
     { "BACK",        BTN_BACK,     0, 25, 8, 5 },
+    { "ACHIEVEMENTS", BTN_TRACK_ACH,   9, 25, 30, 5 },
 };
 #define TRACK_BUTTON_COUNT ((int)(sizeof track_buttons / sizeof track_buttons[0]))
 
@@ -339,6 +345,12 @@ static const button_t gm_buttons[] = {
     { "BACK",        BTN_BACK,     0,  25, 8, 5 },
 };
 #define GM_BUTTON_COUNT ((int)(sizeof gm_buttons / sizeof gm_buttons[0]))
+
+/* ACHIEVEMENTS: BACK. */
+static const button_t ach_buttons[] = {
+    { "BACK", BTN_BACK, 0, 25, 8, 5 },
+};
+#define ACH_BUTTON_COUNT ((int)(sizeof ach_buttons / sizeof ach_buttons[0]))
 
 /* GARAGE: < NICKNAME >, then BACK. */
 static const button_t garage_buttons[] = {
@@ -605,6 +617,9 @@ static struct {
     bool revsync_on;           /* REV SYNC: RPM and speed, no ATRV */
     bool eco_on;               /* ECO: speed, RPM, MAF / MAP, intake temperature, no ATRV */
     const char *hs_run;        /* UI: which high score BTN_RS_BEST handles ("revsync", "eco") */
+    char ach_text[1024];       /* achievements.csv (worker) */
+    int ach_new;               /* the latest unlock (achieve_id_t), -1 = none */
+    unsigned ach_version;      /* bumped on each unlock */
     garage_t garage;           /* GARAGE: the cards (worker) */
     char garage_bests[4096];   /* bests.csv's text, for the cards */
     char garage_current[32];   /* the connected car's key, "" if not known */
@@ -633,6 +648,8 @@ static struct {
 } shared;
 
 static gb_config_t *app_cfg; /* main's settings; wifi_slot changes on the worker */
+
+static void achieve_earn(spike_t *s, achieve_id_t id);   /* worker */
 
 static FILE *log_file;  /* written under shared.lock */
 static long session_start = -1; /* offset of this session in LOG_PATH */
@@ -944,6 +961,12 @@ static void diag_scan(spike_t *s)
     shared.scanning = false;
     shared.diag_version++;
     LightLock_Unlock(&shared.lock);
+    if (achieve_scan_ok(&d)) {
+        achieve_earn(s, ACH_FIRST_SCAN);
+    }
+    if (achieve_scan_clean(&d)) {
+        achieve_earn(s, ACH_CLEAN_BILL);
+    }
 }
 
 /* Find the car (worker, idle, once per adapter connection): protocol and
@@ -1055,6 +1078,7 @@ static void clear_codes(spike_t *s)
         }
     }
     if (res == OBD_CLEAR_DONE) {
+        achieve_earn(s, ACH_CODE_BREAKER);
         diag_scan(s);
     }
     LightLock_Lock(&shared.lock);
@@ -1298,6 +1322,46 @@ static size_t read_small_file(const char *path, char *buf, size_t len)
     return n;
 }
 
+/* ---------- achievements (worker) ---------- */
+
+#define ACH_PATH CONFIG_DIR "/" ACHIEVE_FILE
+
+static void achieve_load(void)
+{
+    static char text[1024];
+    read_small_file(ACH_PATH, text, sizeof text);
+    LightLock_Lock(&shared.lock);
+    memcpy(shared.ach_text, text, sizeof shared.ach_text);
+    LightLock_Unlock(&shared.lock);
+}
+
+/* Unlocks id if it's new: saves it, logs it and tells the UI. */
+static void achieve_earn(spike_t *s, achieve_id_t id)
+{
+    static char text[1024], out[1024];
+    read_small_file(ACH_PATH, text, sizeof text);
+    char date[24];
+    now_text(date, sizeof date);
+    date[10] = '\0';
+    bool is_new = false;
+    size_t n = achieve_unlock(text, id, date, &is_new, out, sizeof out);
+    if (!is_new) {
+        return;
+    }
+    FILE *f = n > 0 ? fopen(ACH_PATH, "wb") : NULL;
+    bool ok = f != NULL && fwrite(out, 1, n, f) == n;
+    if (f != NULL && fclose(f) != 0) {
+        ok = false;
+    }
+    spike_logf(s, "%sACHIEVEMENT: %s%s", ok ? "" : "! ", achieve_info(id)->name,
+               ok ? "" : " (not saved to achievements.csv)");
+    LightLock_Lock(&shared.lock);
+    memcpy(shared.ach_text, ok ? out : text, sizeof shared.ach_text);
+    shared.ach_new = (int)id;
+    shared.ach_version++;
+    LightLock_Unlock(&shared.lock);
+}
+
 /* At the start of LIVE: the car's saved engine-off MAP, unless PID 33 is
  * polled. */
 static void baro_seed(spike_t *s, obd_live_t *lv)
@@ -1453,6 +1517,7 @@ static void rec_stop(spike_t *s, const char *why)
     spike_logf(s, "%s REC stopped (%s): %s, %u rows, %u:%02u, %u KB%s", ok ? "=" : "!", why, file,
                (unsigned)rec_log.rows, (unsigned)(secs / 60), (unsigned)(secs % 60),
                (unsigned)((rec_log.bytes + 1023) / 1024), ok ? "" : " (! not all written)");
+    enqueue(BTN_GARAGE_SCAN);   /* the logged distance, for 100 Miles Logged */
 }
 
 static void rec_refuse(spike_t *s, const char *msg, const char *path)
@@ -1505,6 +1570,7 @@ static void rec_start(spike_t *s, const obd_live_t *lv, const obd_link_t *link)
     shared.live_ui_version++;
     LightLock_Unlock(&shared.lock);
     spike_logf(s, "REC: recording %d PIDs to %s", lv->count, path);
+    achieve_earn(s, ACH_ON_THE_RECORD);
 }
 
 /* After each LIVE step: start, sample, flush or stop as REC asks. */
@@ -1594,6 +1660,7 @@ static void ta_finished(spike_t *s)
             }
         }
     }
+    achieve_earn(s, ACH_STOPWATCH);
     spike_logf(s, "TRACK: %s %.2f s (estimate, speed read %.1f times a second)%s",
                ta_run_name(r->run, r->metric), (double)r->seconds, (double)r->hz,
                record ? (saved ? ", new best" : ", new best (! not saved)") : "");
@@ -1922,6 +1989,16 @@ static void garage_scan(spike_t *s)
     }
     spike_logf(s, "GARAGE: %d car%s, %d drive%s (%d read now)", g.count, g.count == 1 ? "" : "s",
                n, n == 1 ? "" : "s", read_now);
+    double km = 0.0;
+    for (int i = 0; i < g.count; i++) {
+        km += g.car[i].km;
+    }
+    if (km >= ACHIEVE_MILES_KM) {
+        achieve_earn(s, ACH_100_MILES);
+    }
+    if (g.count >= ACHIEVE_GARAGE_CARS) {
+        achieve_earn(s, ACH_FULL_GARAGE);
+    }
     LightLock_Lock(&shared.lock);
     shared.garage = g;
     shared.garage_scanning = false;
@@ -1991,6 +2068,9 @@ static void rs_best_io(spike_t *s)
             }
             memcpy(text, out, n + 1);
         }
+    }
+    if (score > 0 && strcmp(eco_run ? eco_rank(score) : rs_rank(score), "S") == 0) {
+        achieve_earn(s, eco_run ? ACH_HYPERMILER : ACH_REV_S);
     }
     if (score > 0) {
         spike_logf(s, "TRACK: %s %d points, rank %s%s", eco_run ? "Eco Challenge" : "Rev Sync",
@@ -2093,6 +2173,10 @@ static void worker_main(void *arg)
                 rs_best_io(spike);
             } else if (action == BTN_GARAGE_SCAN) {
                 garage_scan(spike);
+            } else if (action == BTN_ACH_LOAD) {
+                achieve_load();
+            } else if (action >= BTN_ACH_BASE && action < BTN_ACH_BASE + ACH_COUNT) {
+                achieve_earn(spike, (achieve_id_t)(action - BTN_ACH_BASE));
             } else if (action == BTN_GARAGE_SAVE) {
                 garage_save(spike);
             } else {
@@ -2547,6 +2631,17 @@ static void shift_stop(void)
     LightLock_Unlock(&shared.lock);
 }
 
+/* UI: ask the worker to unlock an achievement (once a session from here;
+ * the worker ignores ones already unlocked). */
+static void achieve_ask(achieve_id_t id)
+{
+    static bool asked[ACH_COUNT];
+    if (!asked[id]) {
+        asked[id] = true;
+        enqueue(BTN_ACH_BASE + (int)id);
+    }
+}
+
 /* G-METER: speed (for learning forward and the parked check), the
  * accelerometer on. */
 static gmeter_t gmeter;
@@ -2597,6 +2692,9 @@ static void gmeter_frame(uint64_t now, gm_vec_t *raw_out)
         gm_cal_add(&gmeter, raw);
     } else {
         gm_sample(&gmeter, raw, last != 0 && now > last ? (float)(now - last) : 16.7f);
+        if (gmeter.cal == GM_CAL_OK && gmeter.peak_total >= ACHIEVE_G) {
+            achieve_ask(ACH_PULLING_GS);
+        }
     }
     last = now;
     LightLock_Lock(&shared.lock);
@@ -2667,6 +2765,9 @@ static bool revsync_frame(uint64_t now)
         rs_rpm(&revsync, rt, rpm);
     }
     rs_tick(&revsync, now);
+    if (revsync.state == RS_JUDGE && revsync.grade[revsync.round] == RS_GRADE_PERFECT) {
+        achieve_ask(ACH_PERFECT_SYNC);
+    }
     return before != RS_DONE && revsync.state == RS_DONE;
 }
 
@@ -2796,8 +2897,9 @@ static void draw_track_top(int busy, bool connected)
         "GARAGE       a card per car: logged distance",
         "             and personal bests",
         "",
-        "Coming in version 0.4: achievements and",
-        "attract mode.",
+        "ACHIEVEMENTS stickers for milestones",
+        "",
+        "Coming in version 0.4: attract mode.",
         "",
         "For closed courses, track days and passengers",
         "only. Nothing here needs a touch while moving:",
@@ -2992,6 +3094,9 @@ static void draw_shift_top(int busy, bool connected, int shift_rpm, uint64_t now
     bool fresh = rp != NULL && rp->have && now - rp->at_ms < 2000;
     float rpm = fresh ? shift_rpm_now(&sl, now) : 0.0f;
     int lit = fresh ? shift_update(&sl, rpm) : 0;
+    if (sl.flashing) {
+        achieve_ask(ACH_REDLINE);
+    }
     bool on = !sl.flashing || shift_flash_on(now);
 
     char header[TOP_COLS + 1], line[TOP_COLS + 32];
@@ -3423,6 +3528,42 @@ static void draw_eco_top(int busy, bool connected, const gb_config_t *cfg, uint6
     }
     print_row(TOP_ROWS - 2, TOP_COLS, "Fuel figures are estimates.");
     print_row(TOP_ROWS - 1, TOP_COLS, "Display only: no touch needed while moving.");
+}
+
+/* ACHIEVEMENTS top screen: every sticker, unlocked or how to get it. */
+static void draw_achieve_top(int busy, bool connected, bool full)
+{
+    static char text[sizeof shared.ach_text];
+    LightLock_Lock(&shared.lock);
+    memcpy(text, shared.ach_text, sizeof text);
+    LightLock_Unlock(&shared.lock);
+    char header[TOP_COLS + 1], line[TOP_COLS + 64];
+    spike_format_header(header, sizeof header, connected, busy);
+    consoleSelect(&top_console);
+    printf(full ? "\x1b[0m\x1b[2J" : "\x1b[0m");
+    print_row(0, TOP_COLS, header);
+    print_row(1, TOP_COLS, "-------------------------------------------------");
+    snprintf(line, sizeof line, "ACHIEVEMENTS   %d of %d unlocked", achieve_count(text), ACH_COUNT);
+    print_row(2, TOP_COLS, line);
+    print_row(3, TOP_COLS, "");
+    int row = 4;
+    for (int i = 0; i < ACH_COUNT && row < TOP_ROWS - 1; i++) {
+        const achieve_info_t *a = achieve_info((achieve_id_t)i);
+        char date[16];
+        print_row(row, TOP_COLS, "");
+        print_row(row + 1, TOP_COLS, "");
+        if (achieve_unlocked(text, (achieve_id_t)i, date, sizeof date)) {
+            printf("\x1b[%d;1H\x1b[42;30m*\x1b[0m \x1b[32m%-28.28s\x1b[0m %s", row + 1, a->name,
+                   date);
+        } else {
+            printf("\x1b[%d;1H\x1b[2m-\x1b[0m %-28.28s locked", row + 1, a->name);
+        }
+        printf("\x1b[%d;3H\x1b[2m%.46s\x1b[0m", row + 2, a->how);
+        row += 2;
+    }
+    while (row < TOP_ROWS) {
+        print_row(row++, TOP_COLS, "");
+    }
 }
 
 /* GARAGE top screen: one car's card. */
@@ -4119,6 +4260,17 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         draw_list(track_buttons, TRACK_BUTTON_COUNT, now, busy, 0, false);
         print_row(22, BOTTOM_COLS, "The top screen says what each one does.");
         print_row(23, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        return;
+    }
+    if (ui->screen == SCREEN_ACHIEVE) {
+        print_row(2, BOTTOM_COLS, "ACHIEVEMENTS");
+        print_row(4, BOTTOM_COLS, "Stickers for milestones: scans, clean");
+        print_row(5, BOTTOM_COLS, "cars, recorded miles and track modes.");
+        print_row(7, BOTTOM_COLS, "They unlock by themselves and pop up");
+        print_row(8, BOTTOM_COLS, "here at the bottom; the list is on the");
+        print_row(9, BOTTOM_COLS, "top screen. Sticker art comes in v0.5.");
+        print_row(16, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
+        draw_list(ach_buttons, ACH_BUTTON_COUNT, now, busy, 0, false);
         return;
     }
     if (ui->screen == SCREEN_GARAGE) {
@@ -4956,6 +5108,7 @@ void spike_ui_run(void)
             case SCREEN_REVSYNC:   list = rs_buttons;        count = RS_BUTTON_COUNT;        break;
             case SCREEN_ECO:       list = eco_buttons;       count = ECO_BUTTON_COUNT;       break;
             case SCREEN_GARAGE:    list = garage_buttons;    count = GARAGE_BUTTON_COUNT;    break;
+            case SCREEN_ACHIEVE:   list = ach_buttons;       count = ACH_BUTTON_COUNT;       break;
             case SCREEN_TEST:  break;
             }
             int i = ui.screen == SCREEN_HOME && home_gfx ? -1 : button_at(list, count, tp.px, tp.py);
@@ -5180,6 +5333,13 @@ void spike_ui_run(void)
             case BTN_TRACK_SHIFT:
                 ui.screen = SCREEN_SHIFT;
                 shift_start();
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_TRACK_ACH:
+                ui.screen = SCREEN_ACHIEVE;
+                if (worker != NULL) {
+                    enqueue(BTN_ACH_LOAD);
+                }
                 bottom_full = top_dirty = true;
                 break;
             case BTN_TRACK_GARAGE:
@@ -5423,6 +5583,11 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
+                if (ui.screen == SCREEN_ACHIEVE) {
+                    ui.screen = SCREEN_TRACK;
+                    bottom_full = top_dirty = true;
+                    break;
+                }
                 if (ui.screen == SCREEN_GARAGE) {
                     ui.page = 0;
                     ui.screen = SCREEN_TRACK;
@@ -5622,6 +5787,42 @@ void spike_ui_run(void)
                            ui.screen == SCREEN_LIVE_MENU || ui.screen == SCREEN_TRIM;
         bool live_due = live_screen && live_version != drawn_live_version &&
                         now - live_drawn_at >= 100;
+        {
+            /* A new achievement: a pop-up notice on any screen, and the
+             * list redrawn if it shows. */
+            static unsigned ach_seen;
+            static char ach_msg[64];
+            LightLock_Lock(&shared.lock);
+            unsigned av = shared.ach_version;
+            int id = shared.ach_new;
+            LightLock_Unlock(&shared.lock);
+            if (av != ach_seen) {
+                /* Several at once (a clean first scan): say how many. */
+                static int shown;
+                bool still = ui.notice == ach_msg && now < notice_until;
+                shown = still ? shown + (int)(av - ach_seen) : (int)(av - ach_seen);
+                ach_seen = av;
+                const achieve_info_t *a = achieve_info((achieve_id_t)id);
+                if (shown > 1) {
+                    snprintf(ach_msg, sizeof ach_msg, "Unlocked %d achievements! (TRACK)", shown);
+                } else {
+                    snprintf(ach_msg, sizeof ach_msg, "Unlocked: %s!", a != NULL ? a->name : "?");
+                }
+                ui.notice = ach_msg;
+                notice_until = now + 5000;
+                bottom_dirty = true;
+                if (ui.screen == SCREEN_ACHIEVE) {
+                    top_dirty = true;
+                }
+            }
+            static bool ach_loaded;   /* the list arrives after BTN_ACH_LOAD */
+            if (ui.screen == SCREEN_ACHIEVE && !ach_loaded) {
+                LightLock_Lock(&shared.lock);
+                ach_loaded = shared.ach_text[0] != '\0';
+                LightLock_Unlock(&shared.lock);
+                top_dirty |= ach_loaded;
+            }
+        }
         if (ui.screen == SCREEN_GARAGE) {
             static unsigned garage_drawn = ~0u;
             LightLock_Lock(&shared.lock);
@@ -5672,6 +5873,8 @@ void spike_ui_run(void)
             if (ui.screen == SCREEN_TIME_ATTACK) {
                 draw_ta_top(busy, connected, cfg.metric, now);
                 live_drawn_at = now;
+            } else if (ui.screen == SCREEN_ACHIEVE) {
+                draw_achieve_top(busy, connected, top_dirty);
             } else if (ui.screen == SCREEN_GARAGE) {
                 draw_garage_top(busy, connected, ui.page, cfg.metric, top_dirty);
             } else if (ui.screen == SCREEN_ECO) {

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "fun/achieve.h"
 #include "fun/eco.h"
 #include "fun/gmeter.h"
 #include "fun/rev_sync.h"
@@ -552,8 +553,58 @@ static void test_eco_harsh_and_idle(void)
     CHECK_EQ_STR(eco_rank(64), "C");
 }
 
+static void test_achievements(void)
+{
+    static char a[1024], b[1024];
+    bool is_new = false;
+    CHECK(!achieve_unlocked("", ACH_FIRST_SCAN, NULL, 0));
+    size_t n = achieve_unlock("", ACH_FIRST_SCAN, "2026-11-18", &is_new, a, sizeof a);
+    CHECK(n > 0 && is_new);
+    CHECK_EQ_STR(a, "id,date\nfirst_scan,2026-11-18\n");
+    CHECK_EQ_INT(achieve_unlock(a, ACH_FIRST_SCAN, "2026-11-19", &is_new, b, sizeof b), 0);
+    CHECK(!is_new);                                       /* once only */
+    achieve_unlock(a, ACH_REDLINE, "2026-11-19", &is_new, b, sizeof b);
+    CHECK(is_new);
+    char date[16];
+    CHECK(achieve_unlocked(b, ACH_REDLINE, date, sizeof date));
+    CHECK_EQ_STR(date, "2026-11-19");
+    CHECK(!achieve_unlocked(b, ACH_REV_S, NULL, 0));
+    CHECK_EQ_INT(achieve_count(b), 2);
+    CHECK_EQ_INT(achieve_unlock(b, ACH_REV_S, "x", &is_new, a, 10), 0);   /* too small */
+    achieve_unlock("first_scan,2026-11-18", ACH_STOPWATCH, "d", &is_new, a, sizeof a);
+    CHECK_EQ_STR(a, "id,date\nfirst_scan,2026-11-18\nstopwatch,d\n");   /* header, line break added */
+    for (int i = 0; i < ACH_COUNT; i++) {
+        CHECK(achieve_info((achieve_id_t)i) != NULL && achieve_info((achieve_id_t)i)->name != NULL);
+    }
+    CHECK(achieve_info(ACH_COUNT) == NULL);
+
+    /* Scans. */
+    static obd_diag_t d;
+    memset(&d, 0, sizeof d);
+    CHECK(!achieve_scan_ok(&d));
+    d.result = OBD_LINK_OK;
+    d.stopped_at = OBD_DIAG_STEP_DONE;
+    d.have_readiness = true;
+    d.readiness.valid = true;
+    d.have_stored = d.have_pending = true;
+    d.readiness.monitor[0].name = "Misfire";
+    d.readiness.monitor[0].state = OBD_MONITOR_COMPLETE;
+    d.readiness.monitor[4].name = "Catalyst";
+    d.readiness.monitor[4].state = OBD_MONITOR_COMPLETE;
+    CHECK(achieve_scan_ok(&d) && achieve_scan_clean(&d));
+    d.readiness.monitor[4].state = OBD_MONITOR_INCOMPLETE;
+    CHECK(!achieve_scan_clean(&d));                       /* a monitor not ready */
+    d.readiness.monitor[4].state = OBD_MONITOR_COMPLETE;
+    d.pending.count = 1;
+    CHECK(!achieve_scan_clean(&d));                       /* a pending code */
+    d.pending.count = 0;
+    d.readiness.mil_on = true;
+    CHECK(!achieve_scan_clean(&d));
+}
+
 void suite_track(void)
 {
+    RUN_TEST(test_achievements);
     RUN_TEST(test_eco_fuel);
     RUN_TEST(test_eco_smooth_trip);
     RUN_TEST(test_eco_harsh_and_idle);

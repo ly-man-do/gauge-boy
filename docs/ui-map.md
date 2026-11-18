@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, TRACK > GARAGE (gauge-boy-356.9; M4 in progress)
+**As of:** 2026-11-18, TRACK > ACHIEVEMENTS, unlock pop-ups (gauge-boy-356.10; M4 in progress)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -26,7 +26,11 @@ Gauge Boy
         │   │   ├── [REV SYNC]       → REV SYNC
         │   │   ├── [ECO]            → ECO CHALLENGE
         │   │   ├── [GARAGE]         → GARAGE (reads the cars and counts drives)
+        │   │   ├── [ACHIEVEMENTS]   → ACHIEVEMENTS (next to BACK)
         │   │   └── [BACK]           → HOME                                       [B]
+        │   ├── ACHIEVEMENTS         (top: the 12 stickers, unlocked with a date, or locked
+        │   │   │                     with how to get them; "n of 12 unlocked")
+        │   │   └── [BACK]           → TRACK                                      [B]
         │   ├── GARAGE               (no polling; top: one car's card: a picture frame (photo
         │   │   │                     in M5), nickname, year make model, VIN or "(set in
         │   │   │                     SETUP)", logged distance and drives, personal bests;
@@ -165,6 +169,8 @@ Gauge Boy
             ├── [<] step n/5 [>]                                                  [L/R]
             └── [CHECK]              slot, IP/DNS, Wi-Fi, adapter → results on bottom
 ```
+
+Any screen: a new achievement shows "Unlocked: <name>!" (or "Unlocked n achievements!") in the bottom screen's notice line for 5 s.
 
 ## Notes
 
