@@ -2046,7 +2046,8 @@ static void miles_change(spike_t *s, bool add)
                    : mileage_delete_last(text, key, &removed, out, sizeof out);
     bool ok = removed && (n > 0 || !add) && write_text(MILEAGE_PATH, out, n > 0 ? n : 0);
     if (!add && removed && n == 0) {
-        ok = write_text(MILEAGE_PATH, "car,date,start_km,end_km,fuel_l\n", 31);
+        static const char header[] = "car,date,start_km,end_km,fuel_l,price_l\n";
+        ok = write_text(MILEAGE_PATH, header, sizeof header - 1);
     }
     spike_logf(s, "%sMILEAGE: %s%s", ok ? "" : "! ", add ? "entry added" : "newest entry deleted",
                ok ? "" : " (not saved to mileage.csv)");
@@ -4031,13 +4032,20 @@ static void draw_miles_top(int busy, bool connected, int index, bool metric, boo
         print_row(6, TOP_COLS, "fill-up to the next).");
         return;
     }
+    const char *cur = metric ? "" : "$";
     if (ok) {
         snprintf(line, sizeof line, "Average  %.1f %s over %s", avg, metric ? "L/100 km" : "mpg",
                  dist_text(list.km, metric, a, sizeof a));
         printf("\x1b[%d;1H\x1b[32m%-*.*s\x1b[0m", 4 + 1, TOP_COLS, TOP_COLS, line);
     }
-    snprintf(line, sizeof line, "%-6s %-17s %-9s %-7s %s", "Date", metric ? "Odometer km" : "Odometer mi",
-             metric ? "km" : "miles", metric ? "litres" : "gallons", metric ? "L/100" : "mpg");
+    if (list.cost > 0.0 && list.cost_km > 0.0) {
+        double per = list.cost / (metric ? list.cost_km : list.cost_km / MILEAGE_KM_MI);
+        snprintf(line, sizeof line, "Spent    %s%.2f, %s%.2f a %s", cur, list.cost, cur, per,
+                 metric ? "km" : "mile");
+        print_row(5, TOP_COLS, line);
+    }
+    snprintf(line, sizeof line, "%-5s %-8s %-7s %-6s %-6s %s", "Date", metric ? "Odo km" : "Odo mi",
+             metric ? "km" : "miles", metric ? "litre" : "gal", metric ? "L/100" : "mpg", "cost");
     print_row(6, TOP_COLS, line);
     int row = 7;
     for (int i = list.n - 1; i >= 0 && row < TOP_ROWS - 1; i--, row++) {
@@ -4048,24 +4056,33 @@ static void draw_miles_top(int busy, bool connected, int index, bool metric, boo
         double d = metric ? km : km / MILEAGE_KM_MI;
         obd_format_grouped((long long)((metric ? e->end_km : e->end_km / MILEAGE_KM_MI) + 0.5), b,
                            sizeof b);
-        snprintf(line, sizeof line, "%-6.5s %-17s %-9.1f %-7.2f %.1f", e->date + 5, b, d, f,
-                 has ? econ : 0.0);
+        char cost[16] = "-";
+        if (e->price_l > 0.0) {
+            snprintf(cost, sizeof cost, "%s%.2f", cur, mileage_cost(e));
+        }
+        snprintf(line, sizeof line, "%-5.5s %-8s %-7.1f %-6.2f %-6.1f %s", e->date + 5, b, d, f,
+                 has ? econ : 0.0, cost);
         print_row(row, TOP_COLS, line);
     }
 }
 
-/* A number typed on the 3DS number pad (UI thread). initial may be "". */
-static bool edit_number(const char *hint, const char *initial, double *out)
+/* A number typed on the 3DS number pad (UI thread). initial may be "".
+ * optional: an empty answer is accepted as 0. */
+static bool edit_number(const char *hint, const char *initial, bool optional, double *out)
 {
     SwkbdState kb;
     swkbdInit(&kb, SWKBD_TYPE_NUMPAD, 2, 12);
     swkbdSetNumpadKeys(&kb, '.', 0);
     swkbdSetHintText(&kb, hint);
     swkbdSetInitialText(&kb, initial);
-    swkbdSetValidation(&kb, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+    swkbdSetValidation(&kb, optional ? SWKBD_ANYTHING : SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
     char text[16];
     if (swkbdInputText(&kb, text, sizeof text) != SWKBD_BUTTON_CONFIRM) {
         return false;
+    }
+    if (optional && strspn(text, " ") == strlen(text)) {
+        *out = 0.0;
+        return true;
     }
     return mileage_parse(text, out);
 }
@@ -4097,7 +4114,7 @@ static const char *miles_new_entry(int index, bool metric)
     }
     double start, end, fuel;
     if (!edit_number(metric ? "Odometer at the start (km)" : "Odometer at the start (miles)", init,
-                     &start)) {
+                     false, &start)) {
         return NULL;
     }
     init[0] = '\0';
@@ -4105,10 +4122,20 @@ static const char *miles_new_entry(int index, bool metric)
         snprintf(init, sizeof init, "%.1f", now_km / k);
     }
     if (!edit_number(metric ? "Odometer at the end (km)" : "Odometer at the end (miles)", init,
-                     &end)) {
+                     false, &end)) {
         return NULL;
     }
-    if (!edit_number(metric ? "Fuel used (litres)" : "Fuel used (gallons)", "", &fuel)) {
+    if (!edit_number(metric ? "Fuel used (litres)" : "Fuel used (gallons)", "", false, &fuel)) {
+        return NULL;
+    }
+    /* The price: per gallon or litre, as last time (empty: leave it out). */
+    double price = 0.0;
+    init[0] = '\0';
+    if (list.n > 0 && list.e[list.n - 1].price_l > 0.0) {
+        snprintf(init, sizeof init, "%.3f", list.e[list.n - 1].price_l * g);
+    }
+    if (!edit_number(metric ? "Price per litre (empty: skip)" : "Price per gallon (empty: skip)",
+                     init, true, &price)) {
         return NULL;
     }
     const char *bad = mileage_check(start * k, end * k, fuel * g);
@@ -4125,6 +4152,7 @@ static const char *miles_new_entry(int index, bool metric)
     e.start_km = start * k;
     e.end_km = end * k;
     e.fuel_l = fuel * g;
+    e.price_l = price / g;
     LightLock_Lock(&shared.lock);
     snprintf(shared.miles_key, sizeof shared.miles_key, "%s", c.key);
     shared.miles_new = e;
@@ -4713,10 +4741,12 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
     if (ui->screen == SCREEN_MILEAGE) {
         print_row(2, BOTTOM_COLS, "MILEAGE LOG");
         print_row(4, BOTTOM_COLS, "NEW ENTRY asks for the odometer at the");
-        print_row(5, BOTTOM_COLS, "start and the end, and the fuel used,");
-        print_row(6, BOTTOM_COLS, "then works out the economy.");
-        print_row(8, BOTTOM_COLS, "The start is filled in from the last");
-        print_row(9, BOTTOM_COLS, "entry, the end from the odometer.");
+        print_row(5, BOTTOM_COLS, "start and the end, the fuel used and");
+        print_row(6, BOTTOM_COLS, cfg->metric ? "its price per litre (optional), then"
+                                              : "its price per gallon (optional), then");
+        print_row(7, BOTTOM_COLS, "works out the economy and the cost.");
+        print_row(9, BOTTOM_COLS, "The start is filled in from the last");
+        print_row(10, BOTTOM_COLS, "entry, the end from the odometer.");
         print_row(16, BOTTOM_COLS, ui->notice != NULL ? ui->notice : "");
         bool armed = now < ui->miles_del_armed;
         for (int i = 0; i < MILES_BUTTON_COUNT; i++) {

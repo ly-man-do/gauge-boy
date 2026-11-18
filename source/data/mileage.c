@@ -5,23 +5,27 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define HEADER "car,date,start_km,end_km,fuel_l\n"
+#define HEADER "car,date,start_km,end_km,fuel_l,price_l\n"
 #define LINE_MAX_LEN 160
 
-/* Splits "car,date,start,end,fuel" (in place). False for the header or a
- * bad line. */
+/* Splits "car,date,start,end,fuel[,price]" (in place). False for the
+ * header or a bad line. */
 static bool split(char *line, char **car, mileage_entry_t *e)
 {
-    char *part[5];
+    char *part[6];
     int n = 0;
     char *p = line;
     part[n++] = p;
-    while (n < 5 && (p = strchr(p, ',')) != NULL) {
+    while (n < 6 && (p = strchr(p, ',')) != NULL) {
         *p++ = '\0';
         part[n++] = p;
     }
-    if (n != 5 || strcmp(part[0], "car") == 0 || part[0][0] == '\0') {
+    if (n < 5 || strcmp(part[0], "car") == 0 || part[0][0] == '\0') {
         return false;
+    }
+    e->price_l = n == 6 ? strtod(part[5], NULL) : 0.0;
+    if (e->price_l < 0.0) {
+        e->price_l = 0.0;
     }
     char *end;
     e->start_km = strtod(part[2], &end);
@@ -93,8 +97,13 @@ int mileage_read(const char *text, const char *car, mileage_list_t *out)
     read_ctx_t r = { car, out };
     each_line(text, read_line, &r);
     for (int i = 0; i < out->n; i++) {
-        out->km += out->e[i].end_km - out->e[i].start_km;
+        double km = out->e[i].end_km - out->e[i].start_km;
+        out->km += km;
         out->fuel_l += out->e[i].fuel_l;
+        if (out->e[i].price_l > 0.0) {
+            out->cost += mileage_cost(&out->e[i]);
+            out->cost_km += km;
+        }
     }
     return out->n;
 }
@@ -131,8 +140,8 @@ size_t mileage_add(const char *text, const char *car, const mileage_entry_t *e, 
         return 0;
     }
     char line[LINE_MAX_LEN];
-    snprintf(line, sizeof line, "%.63s,%.15s,%.1f,%.1f,%.2f\n", car, e->date, e->start_km,
-             e->end_km, e->fuel_l);
+    snprintf(line, sizeof line, "%.63s,%.15s,%.1f,%.1f,%.3f,%.4f\n", car, e->date, e->start_km,
+             e->end_km, e->fuel_l, e->price_l > 0.0 ? e->price_l : 0.0);
     if (!put(out, len, &used, line)) {
         return 0;
     }
@@ -221,6 +230,11 @@ bool mileage_parse(const char *text, double *v)
     }
     *v = strtod(clean, NULL);
     return true;
+}
+
+double mileage_cost(const mileage_entry_t *e)
+{
+    return e->price_l > 0.0 ? e->fuel_l * e->price_l : 0.0;
 }
 
 const char *mileage_check(double start_km, double end_km, double fuel_l)

@@ -46,9 +46,11 @@ Gauge Boy
         │   │   │   ├── [RESET TRIP] a new trip from the odometer now; refused while moving
         │   │   │   └── [BACK]       → GARAGE (stops polling)                     [B]
         │   │   └── MILEAGE LOG      (the card's car: average economy, then the newest
-        │   │       │                 entries: date, end odometer, distance, fuel, mpg / L/100)
-        │   │       ├── [NEW ENTRY]  number pad x3: start odometer (from the last entry),
-        │   │       │                 end odometer (from the odometer), fuel; refused while moving
+        │   │       │                 entries: date, end odometer, distance, fuel, mpg / L/100,
+        │   │       │                 cost; "Spent" total and cost a mile / km)
+        │   │       ├── [NEW ENTRY]  number pad x4: start odometer (from the last entry),
+        │   │       │                 end odometer (from the odometer), fuel, price per gallon
+        │   │       │                 (US) or litre (metric), optional; refused while moving
         │   │       ├── [DELETE LAST] tap twice ("TAP AGAIN") to delete the newest entry
         │   │       └── [BACK]       → GARAGE                                     [B]
         │   ├── ECO CHALLENGE        (polls speed, RPM, MAF or MAP, intake temp; top: trip

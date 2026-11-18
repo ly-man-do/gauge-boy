@@ -97,19 +97,30 @@ static void test_garage_distance(void)
 static void test_mileage_log(void)
 {
     static char a[2048], b[2048];
-    mileage_entry_t e = { "2026-11-18", 77140.2, 77502.6, 30.28 };
+    /* $3.459 a gallon is 0.9138 a litre. */
+    mileage_entry_t e = { "2026-11-18", 77140.2, 77502.6, 30.28, 3.459 / MILEAGE_L_GAL };
     size_t n = mileage_add("", "Geo/Tracker/1996", &e, a, sizeof a);
     CHECK(n > 0);
-    CHECK_EQ_STR(a, "car,date,start_km,end_km,fuel_l\nGeo/Tracker/1996,2026-11-18,77140.2,77502.6,30.28\n");
-    mileage_entry_t e2 = { "2026-11-20", 77502.6, 77900.0, 33.10 };
+    CHECK_EQ_STR(a, "car,date,start_km,end_km,fuel_l,price_l\n"
+                    "Geo/Tracker/1996,2026-11-18,77140.2,77502.6,30.280,0.9138\n");
+    mileage_entry_t e2 = { "2026-11-20", 77502.6, 77900.0, 33.10, 0.0 };   /* no price */
     mileage_add(a, "Geo/Tracker/1996", &e2, b, sizeof b);
-    mileage_entry_t other = { "2026-11-19", 1000.0, 1400.0, 40.0 };
+    mileage_entry_t other = { "2026-11-19", 1000.0, 1400.0, 40.0, 0.0 };
     mileage_add(b, "2HJYK16528H000123", &other, a, sizeof a);
 
     static mileage_list_t list;
     CHECK_EQ_INT(mileage_read(a, "Geo/Tracker/1996", &list), 2);
     CHECK(fabs(list.km - 759.8) < 0.01 && fabs(list.fuel_l - 63.38) < 0.001);
     CHECK_EQ_STR(list.e[1].date, "2026-11-20");
+    CHECK(fabs(list.cost - 27.67) < 0.01);                /* 8.0 gal at $3.459; the second has none */
+    CHECK(fabs(list.cost_km - 362.4) < 0.01);
+    CHECK(fabs(mileage_cost(&list.e[0]) - 27.67) < 0.01 && mileage_cost(&list.e[1]) == 0.0);
+
+    /* A line from before the price column reads with no price. */
+    CHECK_EQ_INT(mileage_read("car,date,start_km,end_km,fuel_l\nX,2026-01-01,10,110,9.5\n", "X",
+                              &list), 1);
+    CHECK(list.e[0].price_l == 0.0 && list.cost == 0.0 && fabs(list.fuel_l - 9.5) < 1e-9);
+    CHECK_EQ_INT(mileage_read(a, "Geo/Tracker/1996", &list), 2);
     double mpg = 0, l100 = 0;
     CHECK(mileage_mpg(list.e[0].end_km - list.e[0].start_km, list.e[0].fuel_l, &mpg));
     CHECK(fabs(mpg - 28.15) < 0.02);                      /* 225.2 mi on 8.0 gal */
