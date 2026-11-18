@@ -81,7 +81,9 @@ int live_view_lines(const obd_live_t *lv, int protocol, float rate, obd_units_t 
         if (obd_live_vacuum(lv, &vac) && vac < -1.0f) {
             row(&v, "Boost", obd_boost_format(-vac, units, value, sizeof value), "");
         } else if (obd_live_vacuum(lv, &vac)) {
-            row(&v, "Vacuum", obd_vacuum_format(vac, units, value, sizeof value), "");
+            bool saved = lv->engine_off_map_saved && obd_live_get(lv, 0x33) == NULL;
+            row(&v, "Vacuum", obd_vacuum_format(vac, units, value, sizeof value),
+                saved ? "saved baro" : "");
         } else {
             row(&v, "Vacuum", "-", "needs engine-off MAP");
         }

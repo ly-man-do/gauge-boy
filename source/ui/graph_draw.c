@@ -140,7 +140,7 @@ void graph_draw(const graph_view_t *v)
         float y1 = (float)(PLOT_Y + graph_y(g->min[c], lo, hi, PLOT_H));
         rect(x, y0, 1, y1 - y0 + 1, COL_LINE);
         float mid = (y0 + y1) / 2;
-        if (prev_x >= 0 && c - prev_x > 1) {
+        if (prev_x >= 0) {   /* join every step, next door or across a gap */
             C2D_DrawLine((float)(PLOT_X + prev_x), prev_y, COL_LINE, x, mid, COL_LINE, 1.5f,
                          next_z());
         }

@@ -17,6 +17,7 @@ void suite_live(void);
 void suite_trim(void);
 void suite_drive_log(void);
 void suite_history(void);
+void suite_baro_store(void);
 
 int main(void)
 {
@@ -36,5 +37,6 @@ int main(void)
     suite_trim();
     suite_drive_log();
     suite_history();
+    suite_baro_store();
     return gb_test_summary();
 }

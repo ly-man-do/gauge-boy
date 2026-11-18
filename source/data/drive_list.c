@@ -211,11 +211,11 @@ void drive_info_row(const drive_info_t *d, char *out, size_t len, int cols)
     char dur[24];
     duration_text(d->duration_s, dur, sizeof dur);
     const char *car = !d->ok ? "(not a drive log)" : d->car[0] ? d->car : "Car not known";
-    int car_w = cols - 11 - 2 - (int)strlen(dur) - 2;
+    int car_w = cols - 11 - 1 - (int)strlen(dur) - 1;
     if (car_w < 4) {
         car_w = 4;
     }
-    snprintf(out, len, "%-11s  %-*.*s  %s", when, car_w, car_w, car, dur);
+    snprintf(out, len, "%-11s %-*.*s %s", when, car_w, car_w, car, dur);
 }
 
 static void add(char lines[][DRIVE_INFO_COLS + 1], int max, int *n, const char *key,

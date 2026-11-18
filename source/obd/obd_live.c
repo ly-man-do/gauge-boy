@@ -76,6 +76,16 @@ static obd_live_pid_t *find(obd_live_t *lv, uint8_t pid)
     return NULL;
 }
 
+void obd_live_seed_baro(obd_live_t *lv, float kpa)
+{
+    if (lv->have_engine_off_map || kpa < 50.0f || kpa > 110.0f) {
+        return;
+    }
+    lv->engine_off_map_kpa = kpa;
+    lv->have_engine_off_map = true;
+    lv->engine_off_map_saved = true;
+}
+
 void obd_live_set_period(obd_live_t *lv, uint8_t pid, uint32_t period_ms)
 {
     obd_live_pid_t *p = find(lv, pid);
@@ -130,6 +140,7 @@ static void note_engine_off_map(obd_live_t *lv, uint8_t pid, float value)
         if (value < 1.0f && lv->have_pending_map) {
             lv->engine_off_map_kpa = lv->pending_map_kpa;
             lv->have_engine_off_map = true;
+            lv->engine_off_map_saved = false;   /* a fresh reading */
         }
         lv->have_pending_map = false;
     }

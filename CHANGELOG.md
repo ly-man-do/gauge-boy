@@ -10,9 +10,15 @@ All notable changes to Gauge Boy are recorded here. The format follows [Keep a C
 
 ### Added
 
+- **Vacuum on cars without a baro PID** (such as the Ridgeline and the Tracker): whenever Gauge Boy reads MAP with the engine off, it saves that reading for the car (by VIN, or by the make, model and year set in SETUP) in `sdmc:/3ds/gauge-boy/baro.csv`. The next LIVE session starts with it, so vacuum shows from the start and the drive log's Vacuum column is filled; LIVE marks it "saved baro" and the drive log header says when it was read. A new engine-off reading replaces it (read one again after driving somewhere much higher or lower).
 - **GRAPH** on the LOG screen: plots one value of a recorded drive against time on the top screen, with axes, times and the shown part's min / max / average. Each pixel column keeps its lowest and highest value, so short spikes stay visible on long drives. **<** **>** pick another value, **ZOOM -** / **ZOOM +** show more or less of the drive, **<<** **>>** move earlier or later, **ALL** shows the whole drive. The file is read in the background, so the screen never waits on the SD card. A plain look for now; the toy style comes in M4.
 - **LOG screen**: the LOG card on HOME now lists the drives recorded with REC (newest first, up to 100): date and time, car and length, three per page. Tap one to see its details on the top screen (date, car, VIN, protocol, length, size, units and the values recorded); **DELETE** removes it from the SD card after a confirmation. Files in `drives/` that aren't GaugeBoy drive logs are listed as such.
 - **REC on the LIVE screen**: records the view's values to a CSV file on the SD card (`sdmc:/3ds/gaugeboy/drives/drive-YYYYMMDD-HHMMSS.csv`), 5 rows a second: time, each PID with its unit, battery voltage, and vacuum (negative under boost) when MAP is polled, under a header with the GaugeBoy version, date, car, VIN, protocol and units. The button turns red with the elapsed time, and the top screen shows `REC m:ss` and the file name. Start and stop it parked; it keeps recording while driving with no touch needed. REC again, STOP or BACK stops it; switching views starts a new file (the columns change); a lost connection pauses it in the same file; a full card or a 50 MB file stops it with a log line. Tapping REC while stopped starts polling too.
+
+### Fixed
+
+- LOG > GRAPH left gaps wherever a value changed between neighbouring pixel columns; every step is joined now.
+- LOG's list cut long car names short ("2008 Honda Ridgeli"); the row fits a 20-character car name now.
 
 ## [0.2.0] - 2026-11-16
 

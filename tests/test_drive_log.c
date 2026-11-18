@@ -50,7 +50,7 @@ static void live_values(bool all)
 
 static const drive_log_meta_t meta = {
     "0.2.0+test", "2026-11-16 17:12:30", "2023 Subaru Ascent", "4S4WMAHD0P3000001",
-    "ISO 15765-4 CAN (11 bit, 500 kbaud)",
+    "ISO 15765-4 CAN (11 bit, 500 kbaud)", NULL,
 };
 
 static bool has(const capture_t *c, const char *text)
@@ -202,7 +202,12 @@ static void test_drive_list_from_a_log(void)
 
     char row[40];
     drive_info_row(&d, row, sizeof row, 37);
-    CHECK_EQ_STR(row, "11-16 17:12  2023 Subaru Ascent  4:32");
+    CHECK_EQ_STR(row, "11-16 17:12 2023 Subaru Ascent   4:32");
+    static drive_info_t r;
+    r = d;
+    snprintf(r.car, sizeof r.car, "2008 Honda Ridgeline");
+    drive_info_row(&r, row, sizeof row, 37);
+    CHECK_EQ_STR(row, "11-16 17:12 2008 Honda Ridgeline 4:32");   /* fits whole */
     CHECK((int)strlen(row) <= 40);
     static char lines[DRIVE_INFO_LINES][DRIVE_INFO_COLS + 1];
     int n = drive_info_lines(&d, lines, DRIVE_INFO_LINES);

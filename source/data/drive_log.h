@@ -45,6 +45,7 @@ typedef struct {
     const char *car;        /* "2023 Subaru Ascent", or "" */
     const char *vin;        /* or "" */
     const char *protocol;   /* elm_protocol_name() */
+    const char *baro;       /* where vacuum's baro comes from, or NULL */
 } drive_log_meta_t;
 
 typedef struct {

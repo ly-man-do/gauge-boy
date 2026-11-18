@@ -20,6 +20,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "data/baro_store.h"
 #include "data/code_history.h"
 #include "data/config.h"
 #include "data/diag_view.h"
@@ -1132,6 +1133,79 @@ static void log_delete(spike_t *s)
 /* Recent values of the polled PIDs (worker): for live graphs and fun modes. */
 static history_t live_history;
 
+/* Vacuum on cars without a baro PID: the engine-off MAP saved per car. */
+#define BARO_PATH CONFIG_DIR "/" BARO_STORE_FILE
+static char baro_key[32];        /* this LIVE run's car, "" if not known */
+static char baro_from[48];       /* "saved 2026-11-17", for the drive log */
+static bool baro_written;        /* this run's fresh reading is saved */
+
+static size_t read_small_file(const char *path, char *buf, size_t len)
+{
+    buf[0] = '\0';
+    FILE *f = fopen(path, "rb");
+    if (f == NULL) {
+        return 0;
+    }
+    size_t n = fread(buf, 1, len - 1, f);
+    buf[n] = '\0';
+    fclose(f);
+    return n;
+}
+
+/* At the start of LIVE: the car's saved engine-off MAP, unless PID 33 is
+ * polled. */
+static void baro_seed(spike_t *s, obd_live_t *lv)
+{
+    static char text[2048];
+    if (s->transport->connects != identified_connects) {
+        identify_car(s);   /* the car's VIN is the key: just 0902 on this link */
+    }
+    LightLock_Lock(&shared.lock);
+    baro_store_key(&shared.diag, app_cfg->car_make, app_cfg->car_model, app_cfg->car_year,
+                   baro_key, sizeof baro_key);
+    LightLock_Unlock(&shared.lock);
+    baro_from[0] = '\0';
+    baro_written = false;
+    bool polls_map = obd_live_get(lv, OBD_PID_MAP) != NULL ||
+                     obd_live_get(lv, OBD_PID_MAP_WIDE) != NULL;
+    if (baro_key[0] == '\0' || !polls_map || obd_live_get(lv, 0x33) != NULL) {
+        return;
+    }
+    read_small_file(BARO_PATH, text, sizeof text);
+    float kpa;
+    char date[16];
+    if (baro_store_get(text, baro_key, &kpa, date, sizeof date)) {
+        obd_live_seed_baro(lv, kpa);
+        snprintf(baro_from, sizeof baro_from, "engine-off MAP saved %s", date);
+        spike_logf(s, "LIVE: vacuum uses this car's engine-off MAP from %s (%.1f kPa) until a "
+                      "new one is read", date, (double)kpa);
+    }
+}
+
+/* After each LIVE step: save a fresh engine-off MAP for this car. */
+static void baro_save(spike_t *s, const obd_live_t *lv)
+{
+    static char text[2048], out[2048];
+    if (baro_written || baro_key[0] == '\0' || !lv->have_engine_off_map ||
+        lv->engine_off_map_saved) {
+        return;
+    }
+    baro_written = true;
+    char date[24];
+    now_text(date, sizeof date);
+    date[10] = '\0';   /* YYYY-MM-DD */
+    read_small_file(BARO_PATH, text, sizeof text);
+    size_t n = baro_store_set(text, baro_key, lv->engine_off_map_kpa, date, out, sizeof out);
+    FILE *f = n > 0 ? fopen(BARO_PATH, "wb") : NULL;
+    bool ok = f != NULL && fwrite(out, 1, n, f) == n;
+    if (f != NULL && fclose(f) != 0) {
+        ok = false;
+    }
+    snprintf(baro_from, sizeof baro_from, "engine-off MAP read %s", date);
+    spike_logf(s, "%sLIVE: engine-off MAP %.1f kPa %s for this car's vacuum", ok ? "" : "! ",
+               (double)lv->engine_off_map_kpa, ok ? "saved" : "not saved");
+}
+
 /* GRAPH (worker): one value of a drive file, squeezed into the plot's
  * pixel columns for the requested window. Read in chunks, line by line. */
 static void graph_load(spike_t *s)
@@ -1267,7 +1341,8 @@ static void rec_start(spike_t *s, const obd_live_t *lv, const obd_link_t *link)
     snprintf(vin, sizeof vin, "%s", shared.diag.have_vin ? shared.diag.vin : "");
     obd_units_t units = app_cfg->metric ? OBD_UNITS_METRIC : OBD_UNITS_US;
     LightLock_Unlock(&shared.lock);
-    drive_log_meta_t meta = { GB_VERSION_TEXT, when, car, vin, elm_protocol_name(link->protocol) };
+    drive_log_meta_t meta = { GB_VERSION_TEXT, when, car, vin, elm_protocol_name(link->protocol),
+                              obd_live_get(lv, 0x33) != NULL ? "PID 33" : baro_from };
     uint64_t t = tp_now_ms();
     if (!drive_log_open(&rec_log, drive_log_stdio_write, rec_fp, &meta, lv, units, 0, t)) {
         fclose(rec_fp);
@@ -1403,6 +1478,7 @@ static void live_poll(spike_t *s)
             polled[i] = lv.pid[i].pid;
         }
         history_reset(&live_history, polled, lv.count);
+        baro_seed(s, &lv);
         char list[3 * OBD_LIVE_MAX + 1] = "";
         for (int i = 0; i < count; i++) {
             snprintf(list + strlen(list), sizeof list - strlen(list), " %02X",
@@ -1440,6 +1516,7 @@ static void live_poll(spike_t *s)
     }
     live_publish(&lv, true, link.protocol, tp_now_ms(), "", false);
     history_from_live(&live_history, &lv);
+    baro_save(s, &lv);
     rec_step(s, &lv, &link);
 }
 

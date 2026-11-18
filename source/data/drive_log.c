@@ -126,6 +126,9 @@ bool drive_log_open(drive_log_t *dl, drive_log_write_fn write, void *ctx,
     meta_line(dl, "car", meta->car);
     meta_line(dl, "vin", meta->vin);
     meta_line(dl, "protocol", meta->protocol);
+    if (meta->baro != NULL && meta->baro[0] != '\0') {
+        meta_line(dl, "baro", meta->baro);
+    }
     meta_line(dl, "units", units == OBD_UNITS_US ? "US" : "metric");
     putf(dl, "# rate_hz,%g\n", 1000.0 / (double)dl->period_ms);
 

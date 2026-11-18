@@ -70,6 +70,7 @@ typedef struct {
 
     bool have_engine_off_map;
     float engine_off_map_kpa;   /* MAP with RPM 0: baro when PID 33 is missing */
+    bool engine_off_map_saved;  /* ... from an earlier session (obd_live_seed_baro) */
     bool have_pending_map;      /* MAP read after an RPM 0, kept if the next RPM is 0 too */
     float pending_map_kpa;
 
@@ -130,6 +131,11 @@ obd_live_step_t obd_live_step(obd_live_t *lv, elm_t *elm, obd_link_trace_fn trac
  * was set, so DIAG hears every ECU again. Returns the adapter's status
  * (ELM_OK if there was nothing to do). */
 elm_status_t obd_live_restore_header(obd_live_t *lv, elm_t *elm);
+
+/* Starts with an engine-off MAP saved from an earlier session (kPa), for
+ * vacuum on cars without PID 33; a fresh engine-off reading replaces it.
+ * Ignored if one was already read this session. */
+void obd_live_seed_baro(obd_live_t *lv, float kpa);
 
 /* Change a PID's desired refresh time (0 = as often as possible). */
 void obd_live_set_period(obd_live_t *lv, uint8_t pid, uint32_t period_ms);
