@@ -51,6 +51,8 @@ typedef struct {
     char adapter[24];      /* "ELM327 v2.3" */
     char car[40];          /* "2023 Subaru Ascent", or the protocol */
     char plan_ip[16];      /* what the guide says to use: the 3DS's IP (= DNS) */
+    bool slot_any;         /* Wi-Fi slot is Any: the 3DS may be on another network */
+    char network[33];      /* the network it's on, if the 3DS says ("" if not) */
 } wifi_check_t;
 
 #define WIFI_CHECK_COLS 39

@@ -39,6 +39,7 @@ All notable changes to Gauge Boy are recorded here. The format follows [Keep a C
 
 ### Fixed
 
+- **CHECK & CONNECT joins the adapter's Wi-Fi first**, as the old CONNECT did: it moves the 3DS off another network (such as home Wi-Fi) onto the chosen slot. Without it the 3DS stayed on home Wi-Fi and couldn't reach the adapter. With the slot on Any, a failure now names the network the 3DS is on. A stale connection is reconnected once before CHECK gives up.
 - LOG > GRAPH left gaps wherever a value changed between neighbouring pixel columns; every step is joined now.
 - LOG's list cut long car names short ("2008 Honda Ridgeli"); the row fits a 20-character car name now.
 

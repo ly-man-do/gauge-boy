@@ -1159,18 +1159,23 @@ static void guide_check(spike_t *s)
     LightLock_Unlock(&shared.lock);
     spike_logf(s, "CHECK & CONNECT");
 
-    /* Wi-Fi: on it, or join the saved slot now. */
+    /* Wi-Fi: join the chosen slot, as CONNECT always did: it moves the 3DS
+     * off another network (home Wi-Fi) onto the adapter's, and does nothing
+     * if it's already there (gauge-boy-9fy). */
     char info[160], msg[160];
-    net_describe(info, sizeof info);
-    if (strstr(info, "Wi-Fi on") == NULL) {
-        msg[0] = '\0';
-        net_bring_up(msg, sizeof msg);
-        if (msg[0] != '\0') {
-            spike_logf(s, "%s", msg);
-        }
-        net_describe(info, sizeof info);
+    msg[0] = '\0';
+    bool joined = net_bring_up(msg, sizeof msg);
+    if (msg[0] != '\0') {
+        spike_logf(s, "%s%s", joined ? "" : "! ", msg);
     }
+    net_describe(info, sizeof info);
     spike_logf(s, "Wi-Fi: %s", info);
+    c.slot_any = slot == 0;
+    const char *q1 = strchr(info, '"');
+    const char *q2 = q1 != NULL ? strchr(q1 + 1, '"') : NULL;
+    if (q2 != NULL) {
+        snprintf(c.network, sizeof c.network, "%.*s", (int)(q2 - q1 - 1), q1 + 1);
+    }
     bool on = strstr(info, "Wi-Fi on") != NULL;
     /* The slot to look at: the one chosen, else the one the 3DS is on. */
     const char *sp = strstr(info, "(slot ");
@@ -1189,7 +1194,10 @@ static void guide_check(spike_t *s)
         c.failed = WIFI_STEP_WIFI;
     }
 
-    /* The adapter: a fresh attempt now, not after the reconnect wait. */
+    /* The adapter: a fresh attempt now, not after the reconnect wait. An
+     * old connection may have gone stale (the 3DS slept, the adapter lost
+     * power): if it doesn't answer, connect again once and ask again. */
+    bool was_connected = tcp_transport_connected(s->transport);
     if (c.failed == WIFI_STEP_DONE) {
         wifi_progress(WIFI_STEP_ADAPTER);
         tcp_transport_t *t = s->transport;
@@ -1207,7 +1215,17 @@ static void guide_check(spike_t *s)
     if (c.failed == WIFI_STEP_DONE) {
         wifi_progress(WIFI_STEP_ANSWER);
         static elm_response_t r;
-        if (elm_command(s->elm, "ATI", ELM_TIMEOUT_DEFAULT_MS, &r) == ELM_OK && r.line_count > 0) {
+        bool answered = elm_command(s->elm, "ATI", ELM_TIMEOUT_DEFAULT_MS, &r) == ELM_OK &&
+                        r.line_count > 0;
+        if (!answered && was_connected) {
+            spike_logf(s, "The old connection didn't answer; connecting again");
+            tcp_transport_close(s->transport);
+            s->transport->next_attempt_ms = 0;
+            answered = tcp_transport_ensure_connected(s->transport, TP_CONNECT_TIMEOUT_MS) == TP_OK &&
+                       elm_command(s->elm, "ATI", ELM_TIMEOUT_DEFAULT_MS, &r) == ELM_OK &&
+                       r.line_count > 0;
+        }
+        if (answered) {
             snprintf(c.adapter, sizeof c.adapter, "%.23s", r.lines[r.line_count - 1]);
         } else {
             c.failed = WIFI_STEP_ANSWER;

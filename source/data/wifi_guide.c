@@ -161,10 +161,18 @@ int wifi_check_lines(const wifi_check_t *c, char lines[][WIFI_CHECK_COLS + 1], i
             say(&o, "Nothing is listening there: is the");
             say(&o, "adapter on, and the port right?");
             return o.n;   /* the network itself works: not the slot */
-        } else {
-            say(&o, "Is the address right, and the");
-            say(&o, "adapter plugged in with the key on?");
         }
+        if (c->slot_any) {
+            /* Slot Any: the 3DS stays on whatever network it found. */
+            if (c->network[0] != '\0') {
+                say(&o, "The 3DS is on \"%.20s\".", c->network);
+            }
+            say(&o, "Not the adapter's? Set Wi-Fi slot to");
+            say(&o, "its slot so CHECK switches to it.");
+            return o.n;
+        }
+        say(&o, "Is the address right, and the");
+        say(&o, "adapter plugged in with the key on?");
         break;
     case WIFI_STEP_ANSWER:
         say(&o, "Failed at: the adapter answering");

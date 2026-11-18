@@ -495,6 +495,15 @@ static void test_wifi_check_text(void)
     c.tcp = WIFI_TCP_REFUSED;                       /* reached the network: no slot hint */
     n = wifi_check_lines(&c, l, 8);
     CHECK_EQ_STR(l[n - 1], "adapter on, and the port right?");
+    /* Slot Any and the adapter unreachable: maybe the wrong network. */
+    c.tcp = WIFI_TCP_TIMEOUT;
+    c.slot_any = true;
+    snprintf(c.network, sizeof c.network, "HomeNet");
+    n = wifi_check_lines(&c, l, 8);
+    CHECK_EQ_STR(l[2], "The 3DS is on \"HomeNet\".");
+    CHECK_EQ_STR(l[n - 1], "its slot so CHECK switches to it.");
+    CHECK(n <= 6);                                  /* fits the 6 lines on screen */
+    c.slot_any = false;
     c.failed = WIFI_STEP_WIFI;
     wifi_check_lines(&c, l, 8);
     CHECK_EQ_STR(l[0], "Failed at: Wi-Fi");
