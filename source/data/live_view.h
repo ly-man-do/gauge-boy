@@ -19,11 +19,13 @@
 /*
  * Top-screen lines: a title with the protocol and requests per second,
  * then one line per polled PID (label, value, refresh rate), the adapter's
- * battery voltage and, when MAP is polled, manifold vacuum. lv may be NULL
- * (not polling yet). Returns the line count.
+ * battery voltage and, when MAP is polled, manifold vacuum. With speed
+ * polled, the fuel rate (estimated from MAF or MAP when the car has no fuel
+ * rate PID; engine_l is the engine size from SETUP, 0 = unknown) and the
+ * instant economy. lv may be NULL (not polling yet). Returns the line count.
  */
-int live_view_lines(const obd_live_t *lv, int protocol, float rate, obd_units_t units, int cols,
-                    char lines[][LIVE_VIEW_COLS + 1], int max);
+int live_view_lines(const obd_live_t *lv, int protocol, float rate, obd_units_t units,
+                    float engine_l, int cols, char lines[][LIVE_VIEW_COLS + 1], int max);
 
 /* PIDs the car supports that LIVE can show, in obd_pid table order (for
  * the toggles). Returns the count. */

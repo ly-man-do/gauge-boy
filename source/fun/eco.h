@@ -31,7 +31,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define ECO_AFR             14.7f    /* petrol, stoichiometric */
+#define ECO_AFR             14.7f    /* petrol, stoichiometric (as obd_pid.h) */
 #define ECO_FUEL_G_PER_L    745.0f
 #define ECO_VE              0.85f
 #define ECO_IAT_DEFAULT_C   25.0f

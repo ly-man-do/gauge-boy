@@ -6,6 +6,7 @@
  *
  *   obd_link_open   adapter reset, protocol search, supported PIDs
  *   0101            check engine light, code count, readiness monitors
+ *   0130 0131 014E  since the codes were cleared; 0121 014D with the CEL on
  *   03 / 07 / 0A    stored, pending and permanent codes
  *   0902            VIN -> maker, model year, make for manufacturer codes
  *
@@ -59,6 +60,12 @@ typedef struct {
     bool model_chosen;              /* model came from SETUP (no VIN model) */
     bool year_chosen;               /* model_year came from SETUP (no VIN) */
     bool vin_only;                  /* found after a connect (link and VIN), not scanned */
+
+    /* Since the codes were last cleared (PIDs 30, 31, 4E) and with the CEL
+     * on (21, 4D), each where the car reports it (have_...). Distances in
+     * km, times in minutes. */
+    bool have_clear_warmups, have_clear_km, have_clear_min, have_mil_km, have_mil_min;
+    int clear_warmups, clear_km, clear_min, mil_km, mil_min;
 
     bool have_modules;              /* the modules that answered were read (headers on) */
     int module_count;

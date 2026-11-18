@@ -640,7 +640,7 @@ static bool has_line(int n, const char *text)
 
 static void test_live_view_lines(void)
 {
-    int n = live_view_lines(NULL, 0, 0.0f, OBD_UNITS_US, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
+    int n = live_view_lines(NULL, 0, 0.0f, OBD_UNITS_US, 0.0f, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
     CHECK_EQ_STR(lines[0], "Not polling");
     CHECK(has_line(n, "No readings yet."));
 
@@ -658,7 +658,7 @@ static void test_live_view_lines(void)
         obd_live_step(&lv, &elm, NULL, NULL);
     }
     lv.pid[2].dropped = true;   /* as after 3 NO DATA */
-    n = live_view_lines(&lv, 3, 1.9f, OBD_UNITS_US, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
+    n = live_view_lines(&lv, 3, 1.9f, OBD_UNITS_US, 0.0f, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
     CHECK_EQ_STR(lines[0], "ISO 9141-2 (5 baud init), 1.9 requests/s");
     CHECK(has_line(n, "RPM         710 rpm          every 2 s"));
     CHECK(has_line(n, "MAP         8.9 inHg"));
@@ -671,7 +671,7 @@ static void test_live_view_lines(void)
     }
 
     obd_live_init(&lv, &link, want, 0);
-    n = live_view_lines(&lv, 3, 0.0f, OBD_UNITS_US, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
+    n = live_view_lines(&lv, 3, 0.0f, OBD_UNITS_US, 0.0f, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
     CHECK(has_line(n, "No PIDs chosen: tap some below."));
 }
 
@@ -693,8 +693,39 @@ static void test_live_boost_from_pid_87(void)
     float vac = 0.0f;
     CHECK(obd_live_vacuum(&lv, &vac));
     CHECK_NEAR(vac, -25.0f);                                  /* 25 kPa of boost */
-    int n = live_view_lines(&lv, 6, 20.0f, OBD_UNITS_US, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
+    int n = live_view_lines(&lv, 6, 20.0f, OBD_UNITS_US, 0.0f, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
     CHECK(has_line(n, "Boost       3.6 psi"));
+}
+
+static void test_live_fuel_rows(void)
+{
+    /* The Tracker in Drive: MAF, so the estimate needs no engine size. */
+    static const uint8_t car[] = { 0x0C, 0x0D, 0x10, 0 };
+    setup(car);
+    static const uint8_t want[] = { 0x0C, 0x0D, 0x10 };
+    obd_live_init(&lv, &link, want, 3);
+    lv.pid[0].have = lv.pid[1].have = lv.pid[2].have = true;
+    lv.pid[0].value = 2000.0f;
+    lv.pid[1].value = 96.5606f;
+    lv.pid[2].value = 23.0f;                              /* g/s -> 7.57 L/h = 2.00 gal/h */
+    int n = live_view_lines(&lv, 3, 5.0f, OBD_UNITS_US, 0.0f, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
+    CHECK(has_line(n, "Fuel est.   2.00 gal/h       from MAF"));
+    CHECK(has_line(n, "Economy     30.0 mpg         instant"));
+    lv.pid[1].value = 0.0f;
+    n = live_view_lines(&lv, 3, 5.0f, OBD_UNITS_US, 0.0f, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
+    CHECK(has_line(n, "Economy     -                stopped"));
+
+    /* MAP without an engine size: say what's missing. */
+    lv.pid[2].pid = 0x0B;
+    n = live_view_lines(&lv, 3, 5.0f, OBD_UNITS_US, 0.0f, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
+    CHECK(has_line(n, "Fuel est.   -                SETUP: engine size"));
+    CHECK(!has_line(n, "Economy     -                stopped"));
+    /* No speed polled (Idle & vacuum): no fuel rows at all. */
+    lv.pid[1].pid = 0x05;
+    n = live_view_lines(&lv, 3, 5.0f, OBD_UNITS_US, 3.5f, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
+    for (int i = 0; i < n; i++) {
+        CHECK(strncmp(lines[i], "Fuel", 4) != 0 && strncmp(lines[i], "Economy", 7) != 0);
+    }
 }
 
 static void test_live_choices_and_toggle(void)
@@ -703,9 +734,9 @@ static void test_live_choices_and_toggle(void)
     setup(car);
     uint8_t out[CONFIG_MAX_TEST];
     int n = live_choices(&link, out, CONFIG_MAX_TEST);
-    CHECK_EQ_INT(n, 3);                          /* 01 and 03 aren't live data */
-    CHECK_EQ_INT(out[0], 0x05);                  /* table order */
-    CHECK_EQ_INT(out[2], 0x0D);
+    CHECK_EQ_INT(n, 4);                          /* 01 isn't live data (03 is: fuel loop) */
+    CHECK_EQ_INT(out[0], 0x03);                  /* table order */
+    CHECK_EQ_INT(out[3], 0x0D);
     CHECK_EQ_INT(live_choices(&link, out, 2), 2);
 
     uint8_t pids[3] = { 0x0C, 0x0D };
@@ -783,6 +814,7 @@ void suite_live(void)
     RUN_TEST(test_live_views);
     RUN_TEST(test_live_fast_interval);
     RUN_TEST(test_live_view_lines);
+    RUN_TEST(test_live_fuel_rows);
     RUN_TEST(test_live_choices_and_toggle);
     RUN_TEST(test_live_init_keeps_supported_known_pids);
     RUN_TEST(test_live_round_robin_and_volts);

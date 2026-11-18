@@ -34,6 +34,7 @@ static void script_ridgeline(void)
     fake_io_reply(&f, "ATDPN", "A3\r\r>", 40, 0);
     fake_io_reply(&f, "0120", "41 20 80 00 00 00\r\r>", 60, 0);
     fake_io_reply(&f, "0101", "41 01 82 07 65 04\r\r>", 60, 0);
+    fake_io_reply(&f, "0121", "41 21 00 0C\r\r>", 60, 0);   /* 12 km with the CEL on */
     fake_io_reply(&f, "03", "43 01 71 14 56 00 00\r\r>", 80, 0);
     fake_io_reply(&f, "020200", "NO DATA\r\r>", 80, 0);
     fake_io_reply(&f, "07", "NO DATA\r\r>", 80, 0);
@@ -126,8 +127,27 @@ static void test_scan_ridgeline(void)
     /* With a model from vPIC, it shows instead of the maker. */
     diag.model_make = "Honda";
     diag.model = "Ridgeline";
-    int n = diag_facts(&diag, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    int n = diag_facts(&diag, OBD_UNITS_US, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
     CHECK_VIEW(n, "Car       2008 Honda Ridgeline");
+    /* PID 21 (12 km with the CEL on); no 30 / 31 / 4D / 4E on this car. */
+    CHECK(diag.have_mil_km && diag.mil_km == 12 && !diag.have_mil_min && !diag.have_clear_km);
+    CHECK_VIEW(n, "CEL       ON (2 stored codes) for 7 mi");
+    CHECK(!view_has(n, "Cleared"));
+    n = diag_facts(&diag, OBD_UNITS_METRIC, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "for 12 km");
+    /* Since codes were cleared (the Ascent reports 30, 31 and 4E). */
+    diag.have_clear_warmups = diag.have_clear_km = diag.have_clear_min = true;
+    diag.clear_warmups = 3;
+    diag.clear_km = 1609;
+    diag.clear_min = 125;
+    n = diag_facts(&diag, OBD_UNITS_US, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Cleared   3 warm-ups, 1,000 mi, 2 h 05 min ago");
+    diag.clear_warmups = 1;
+    diag.clear_min = 4320;
+    diag.have_clear_km = false;
+    n = diag_facts(&diag, OBD_UNITS_US, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    CHECK_VIEW(n, "Cleared   1 warm-up, 3 days ago");
+    diag.have_clear_warmups = diag.have_clear_min = false;
     n = diag_view_lines(&diag, DIAG_TAB_STORED, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
     CHECK_VIEW(n, "2008 Honda Ridgeline  VIN 2HJYK16618H000123");
     diag.model_make = diag.model = NULL;
@@ -152,7 +172,7 @@ static void test_chosen_make(void)
     CHECK_EQ_STR(diag.maker, "Geo");
     CHECK_EQ_INT(diag_items(&diag, DIAG_TAB_STORED, items, DIAG_ITEMS_MAX), 1);
     CHECK(strstr(items[0].detail, "Early Fuel Evaporation Heater") != NULL);
-    int n = diag_facts(&diag, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    int n = diag_facts(&diag, OBD_UNITS_US, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
     CHECK_VIEW(n, "Car       Geo (set in SETUP)");
     CHECK_VIEW(n, "VIN       not read");
     n = diag_view_lines(&diag, DIAG_TAB_STORED, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
@@ -166,13 +186,13 @@ static void test_chosen_make(void)
     obd_diag_apply_make(&diag, "Geo");
     obd_diag_apply_make(&diag, "No Such Make");
     CHECK(diag.maker == NULL && !diag.make_chosen);
-    n = diag_facts(&diag, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    n = diag_facts(&diag, OBD_UNITS_US, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
     CHECK_VIEW(n, "Car       VIN not read");
 
     /* model and year typed in SETUP, for a car with no VIN */
     obd_diag_apply_make(&diag, "Geo");
     obd_diag_apply_vehicle(&diag, "Tracker", 1996);
-    n = diag_facts(&diag, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    n = diag_facts(&diag, OBD_UNITS_US, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
     CHECK_VIEW(n, "Car       1996 Geo Tracker (set in SETUP)");
     n = diag_view_lines(&diag, DIAG_TAB_STORED, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
     CHECK_VIEW(n, "1996 Geo Tracker (set in SETUP)  VIN not read");
@@ -191,7 +211,7 @@ static void test_chosen_make(void)
     /* the VIN's year wins; a typed model is used when the VIN gives none */
     obd_diag_apply_vehicle(&diag, "Pilot", 2001);
     CHECK_EQ_INT(diag.model_year, 2008);
-    n = diag_facts(&diag, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    n = diag_facts(&diag, OBD_UNITS_US, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
     CHECK_VIEW(n, "Car       2008 Honda Pilot (SETUP)");
     obd_diag_apply_vehicle(&diag, NULL, 0);
     CHECK(diag.model == NULL);
@@ -300,7 +320,7 @@ static void test_paged_pieces(void)
     CHECK_EQ_STR(obd_diag_module_name(7, 0x18DAF110, mod, sizeof mod), "Engine");
     CHECK_EQ_STR(obd_diag_module_name(6, 0x7EA, mod, sizeof mod), "Module 7EA");
     static char facts[DIAG_VIEW_MAX][DIAG_VIEW_COLS + 1];
-    int nf = diag_facts(&diag, DIAG_VIEW_COLS, facts, DIAG_VIEW_MAX);
+    int nf = diag_facts(&diag, OBD_UNITS_US, DIAG_VIEW_COLS, facts, DIAG_VIEW_MAX);
     bool listed = false;
     for (int i = 0; i < nf; i++) {
         listed = listed || strstr(facts[i], "Engine, Transmission") != NULL;
@@ -324,7 +344,7 @@ static void test_paged_pieces(void)
         CHECK((int)strlen(items[i].row) <= DIAG_ROW_COLS);
     }
 
-    n = diag_facts(&diag, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    n = diag_facts(&diag, OBD_UNITS_US, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
     CHECK_VIEW(n, "Car       2008 Honda");
     CHECK_VIEW(n, "VIN       2HJYK16618H000123");
     CHECK_VIEW(n, "CEL       ON (2 stored codes)");
@@ -334,7 +354,7 @@ static void test_paged_pieces(void)
     static obd_diag_t empty;
     memset(&empty, 0, sizeof empty);
     CHECK_EQ_STR(diag_empty_text(&empty, DIAG_TAB_STORED), "Not scanned yet: tap SCAN.");
-    n = diag_facts(&empty, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    n = diag_facts(&empty, OBD_UNITS_US, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
     CHECK_VIEW(n, "Not scanned yet");
 
     n = diag_wrap("P1456 (stored, from Engine): Evaporative Emission Control System Leak Detected Fuel Tank System",
@@ -535,7 +555,7 @@ static void test_read_vin_only(void)
     CHECK_EQ_STR(d.model, "Ascent");
     CHECK(d.make >= 0);
     d.vin_only = true;
-    int n = diag_facts(&d, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    int n = diag_facts(&d, OBD_UNITS_US, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
     CHECK_VIEW(n, "Car       2023 Subaru Ascent");
     CHECK_VIEW(n, "Codes     not read yet: DIAG > SCAN");
     for (int i = 0; i < n; i++) {
@@ -598,7 +618,7 @@ static void test_freeze_frame(void)
     static diag_item_t its[4];
     CHECK_EQ_INT(diag_items(&dd, DIAG_TAB_STORED, its, 4), 1);
     CHECK(strstr(its[0].detail, "Freeze frame when it set: Load 25 %") != NULL);
-    int nf = diag_facts(&dd, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
+    int nf = diag_facts(&dd, OBD_UNITS_US, DIAG_VIEW_COLS, lines, DIAG_VIEW_MAX);
     CHECK_VIEW(nf, "Freeze    P0171 (tap it on STORED)");
 
     /* No freeze frame: NO DATA, or code 0000. */

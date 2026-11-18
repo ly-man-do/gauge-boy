@@ -438,6 +438,64 @@ bool obd_live_vacuum(const obd_live_t *lv, float *vacuum_kpa)
     return true;
 }
 
+static bool polled(const obd_live_t *lv, uint8_t pid)
+{
+    const obd_live_pid_t *p = obd_live_get(lv, pid);
+    return p != NULL && !p->dropped;
+}
+
+obd_fuel_src_t obd_live_fuel_source(const obd_live_t *lv, float engine_l)
+{
+    if (polled(lv, OBD_PID_FUEL_RATE) || polled(lv, OBD_PID_FUEL_MASS)) {
+        return OBD_FUEL_CAR;
+    }
+    if (polled(lv, OBD_PID_MAF)) {
+        return OBD_FUEL_MAF;
+    }
+    if (engine_l > 0.0f && polled(lv, OBD_PID_RPM) &&
+        (polled(lv, OBD_PID_MAP) || polled(lv, OBD_PID_MAP_WIDE))) {
+        return OBD_FUEL_MAP;
+    }
+    return OBD_FUEL_NONE;
+}
+
+bool obd_live_fuel_lph(const obd_live_t *lv, float engine_l, float *lph)
+{
+    float v = 0.0f, rpm = 0.0f, map = 0.0f, iat = OBD_IAT_DEFAULT_C;
+    switch (obd_live_fuel_source(lv, engine_l)) {
+    case OBD_FUEL_CAR:
+        if (!obd_live_value(lv, OBD_PID_FUEL_RATE, &v) &&
+            !obd_live_value(lv, OBD_PID_FUEL_MASS, &v)) {
+            return false;
+        }
+        break;
+    case OBD_FUEL_MAF:
+        if (!obd_live_value(lv, OBD_PID_MAF, &v)) {
+            return false;
+        }
+        v = obd_fuel_from_air(v);
+        break;
+    case OBD_FUEL_MAP:
+        if (!obd_live_value(lv, OBD_PID_RPM, &rpm) ||
+            (!obd_live_value(lv, OBD_PID_MAP, &map) &&
+             !obd_live_value(lv, OBD_PID_MAP_WIDE, &map))) {
+            return false;
+        }
+        (void)obd_live_value(lv, OBD_PID_IAT, &iat);
+        if (!obd_air_speed_density(map, rpm, iat, engine_l, &v)) {
+            return false;
+        }
+        v = obd_fuel_from_air(v);
+        break;
+    default:
+        return false;
+    }
+    if (lph != NULL) {
+        *lph = v;
+    }
+    return true;
+}
+
 float obd_live_rate(const obd_live_t *lv, uint64_t now_ms)
 {
     if (lv->requests == 0 || now_ms <= lv->started_ms) {

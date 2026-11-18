@@ -142,7 +142,10 @@ SCENARIOS = {
          "0115": ["41 15 A0 FF", "41 15 A4 FF", "41 15 9C FF"],        # B1S2 0.78-0.82 V
          "0119": ["41 19 96 FF", "41 19 9A FF"],                       # B2S2 0.75-0.77 V
          "0134": ["41 34 80 00 80 00", "41 34 7F 00 7F F0", "41 34 81 00 80 10"],  # B1S1 ~1.000
-         "0138": ["41 38 80 40 80 04", "41 38 7F C0 7F FC"]},          # B2S1 ~1.000
+         "0138": ["41 38 80 40 80 04", "41 38 7F C0 7F FC"],           # B2S1 ~1.000
+         "0103": "41 03 02 00",                                        # closed loop
+         "0121": "41 21 00 00",                                        # no km with the CEL on
+         "0145": "41 45 0A"},                                          # relative throttle 4 %
         status="41 01 00 07 E5 00", stored=None, pending=None,
         vin="2HJYK16528H000123", volts="13.2V"),
     "tracker": scenario(
@@ -210,6 +213,14 @@ def ascent():
         "0133": "41 33 64",                                           # baro 100 kPa
         # PID 87, sensor A only: 35 kPa at idle, 140 kPa (5.8 psi boost).
         "0187": ["41 87 01 04 60 00 00", "41 87 01 04 60 00 00", "41 87 01 11 80 00 00"],
+        # Made-up values for PIDs the real one lists (gauge-boy-8ry, 8k9, 936).
+        "0103": "41 03 02 00",                                        # closed loop
+        "0130": "41 30 0C", "0131": "41 31 06 4A", "014E": "41 4E 0B B8",  # 12, 1610 km, 50 h
+        "0144": ["41 44 80 00", "41 44 7E 00"],                       # commanded lambda
+        "013C": "41 3C 11 94",                                        # cat 410 C
+        "0162": ["41 62 8C", "41 62 96"],                             # torque 15-25 %
+        "0163": "41 63 01 5E",                                        # ref torque 350 Nm
+        "019D": ["41 9D 00 2D 00 2D", "41 9D 00 37 00 37"],           # 0.9-1.1 g/s fuel
     }
     for req, reply in pids.items():
         replies = [can(r) for r in reply] if isinstance(reply, list) else can(reply)

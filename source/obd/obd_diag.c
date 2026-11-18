@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "dtc.h"
+#include "obd_pid.h"
 #include "obd_reply.h"
 
 typedef struct {
@@ -163,6 +164,32 @@ obd_link_result_t obd_diag_scan(elm_t *elm, bool reset, int current_year, obd_di
         }
         if (st == ELM_OK && obd_assemble(&r, protocol, false, &reply) == OBD_OK) {
             out->have_readiness = obd_decode_readiness(&reply, &out->readiness);
+        }
+    }
+
+    /* Since codes were cleared, and with the CEL on (where supported). */
+    {
+        static const uint8_t pids[] = { 0x30, 0x31, 0x4E, 0x21, 0x4D };
+        int *dest[] = { &out->clear_warmups, &out->clear_km, &out->clear_min, &out->mil_km,
+                        &out->mil_min };
+        bool *have[] = { &out->have_clear_warmups, &out->have_clear_km, &out->have_clear_min,
+                         &out->have_mil_km, &out->have_mil_min };
+        for (size_t i = 0; i < sizeof pids; i++) {
+            if (!obd_link_pid_supported(&out->link, pids[i])) {
+                continue;
+            }
+            char cmd[8];
+            snprintf(cmd, sizeof cmd, "01%02X", pids[i]);
+            st = command(&sc, cmd, &r);
+            if (lost(st)) {
+                goto lost_link;
+            }
+            float v = 0.0f;
+            if (st == ELM_OK && obd_assemble(&r, protocol, false, &reply) == OBD_OK &&
+                obd_pid_from_reply(&reply, pids[i], &v) == OBD_PID_OK) {
+                *dest[i] = (int)(v + 0.5f);
+                *have[i] = true;
+            }
         }
     }
 

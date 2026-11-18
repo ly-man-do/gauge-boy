@@ -30,8 +30,8 @@ static void row(view_t *v, const char *label, const char *value, const char *rat
     add(v, line);
 }
 
-int live_view_lines(const obd_live_t *lv, int protocol, float rate, obd_units_t units, int cols,
-                    char lines[][LIVE_VIEW_COLS + 1], int max)
+int live_view_lines(const obd_live_t *lv, int protocol, float rate, obd_units_t units,
+                    float engine_l, int cols, char lines[][LIVE_VIEW_COLS + 1], int max)
 {
     view_t v = { lines, max, 0, cols > LIVE_VIEW_COLS ? LIVE_VIEW_COLS : cols };
     char line[96], value[32], hz[24];
@@ -86,6 +86,29 @@ int live_view_lines(const obd_live_t *lv, int protocol, float rate, obd_units_t 
                 saved ? "saved baro" : "");
         } else {
             row(&v, "Vacuum", "-", "needs engine-off MAP");
+        }
+    }
+    const obd_live_pid_t *speed = obd_live_get(lv, OBD_PID_SPEED);
+    if (speed != NULL && !speed->dropped) {
+        obd_fuel_src_t src = obd_live_fuel_source(lv, engine_l);
+        float lph = 0.0f;
+        bool have = obd_live_fuel_lph(lv, engine_l, &lph);
+        if (src == OBD_FUEL_MAF || src == OBD_FUEL_MAP) {   /* the car's own has its row */
+            row(&v, "Fuel est.", have ? obd_fuel_rate_format(lph, units, value, sizeof value) : "-",
+                src == OBD_FUEL_MAF ? "from MAF" : "from MAP");
+        } else if (src == OBD_FUEL_NONE) {
+            bool map = obd_live_get(lv, OBD_PID_MAP) != NULL ||
+                       obd_live_get(lv, OBD_PID_MAP_WIDE) != NULL;
+            row(&v, "Fuel est.", "-", map && engine_l <= 0.0f ? "SETUP: engine size"
+                                                               : "needs MAF or MAP");
+        }
+        if (src != OBD_FUEL_NONE) {
+            if (have && speed->have) {
+                obd_economy_format(lph, speed->value, units, value, sizeof value);
+            } else {
+                snprintf(value, sizeof value, "-");
+            }
+            row(&v, "Economy", value, speed->have && speed->value < 5.0f ? "stopped" : "instant");
         }
     }
     return v.count;

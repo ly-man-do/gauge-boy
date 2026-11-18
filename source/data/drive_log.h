@@ -22,7 +22,10 @@
  * A value not read yet is an empty cell. Vacuum is negative under boost.
  * When both trims of a bank are polled, a Total B1 / B2 column (short +
  * long term) follows the PIDs.
- * Battery is the adapter's ATRV; Vacuum appears when MAP is polled.
+ * Battery is the adapter's ATRV; Vacuum appears when MAP is polled. With
+ * speed polled and a fuel rate source (the car's PID, MAF, or MAP with the
+ * engine size), Fuel rate and Economy columns end the row (Fuel rate is
+ * marked "est." when it is estimated).
  */
 
 #include <stdbool.h>
@@ -48,6 +51,7 @@ typedef struct {
     const char *vin;        /* or "" */
     const char *protocol;   /* elm_protocol_name() */
     const char *baro;       /* where vacuum's baro comes from, or NULL */
+    float engine_l;         /* engine size from SETUP (fuel estimate by MAP), 0 = unknown */
 } drive_log_meta_t;
 
 typedef struct {
@@ -59,6 +63,9 @@ typedef struct {
     int count;
     bool vacuum;                 /* a Vacuum column (MAP polled) */
     bool total_b1, total_b2;     /* Total B1 / B2 columns (both trims of a bank polled) */
+    bool fuel;                   /* Fuel rate (est.) and Economy columns */
+    obd_fuel_src_t fuel_src;
+    float engine_l;
     uint64_t start_ms;
     uint64_t next_ms;
     uint32_t rows;

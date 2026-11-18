@@ -1,5 +1,6 @@
 #include "obd_pid.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -18,7 +19,13 @@ typedef enum {
     F_GEAR,      /* PID A4: A bit 1 = supported, (256C + D) / 1000 = actual gear ratio */
     F_ODO,       /* PID A6: (A 2^24 + B 2^16 + C 2^8 + D) / 10 km */
     F_O2_VOLTS,  /* PIDs 14-1B: A / 200 V (B is the sensor's trim, FF = not used) */
-    F_LAMBDA,    /* PIDs 24-2B, 34-3B: (256A + B) * 2 / 65536 (C, D: voltage or current) */
+    F_LAMBDA,    /* PIDs 24-2B, 34-3B, 44: (256A + B) * 2 / 65536 (C, D: voltage or current) */
+    F_CAT,       /* PIDs 3C-3F: (256A + B) / 10 - 40 C */
+    F_ABS_LOAD,  /* PID 43: (256A + B) * 100 / 255 % */
+    F_EVAP_ABS,  /* PID 53: (256A + B) / 200 kPa */
+    F_FUEL_LPH,  /* PID 5E: (256A + B) / 20 L/h */
+    F_TORQUE,    /* PIDs 61, 62, 8E: A - 125 % */
+    F_FUEL_GS,   /* PID 9D: (256A + B) / 50 g/s of fuel (C, D: the vehicle's), as L/h */
 } formula_t;
 
 typedef struct {
@@ -31,6 +38,7 @@ typedef struct {
  * long-term trims, fuel level, pressure outside) every 5-60 s, so on a slow
  * bus like ISO 9141-2 RPM and speed stay live (gauge-boy-3n6.10). */
 static const pid_entry_t table[] = {
+    { { 0x03, 2, "Fuel system status (open or closed loop)", "Fuel loop", OBD_UNIT_STATUS, 0.0f, 16.0f, 2000u }, F_RAW },
     { { 0x04, 1, "Calculated engine load", "Load", OBD_UNIT_PERCENT, 0.0f, 100.0f, 500u }, F_PCT255 },
     { { 0x05, 1, "Coolant temperature", "Coolant", OBD_UNIT_CELSIUS, -40.0f, 215.0f, 15000u }, F_TEMP },
     { { 0x06, 1, "Short-term fuel trim, bank 1", "STFT B1", OBD_UNIT_PERCENT, -100.0f, 99.2f, 500u }, F_TRIM },
@@ -74,12 +82,39 @@ static const pid_entry_t table[] = {
     { { 0x3A, 4, "O2 sensor lambda (wide band, current), bank 2 sensor 3", "O2 B2S3", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
     { { 0x3B, 4, "O2 sensor lambda (wide band, current), bank 2 sensor 4", "O2 B2S4", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
     { { 0x1F, 2, "Run time since engine start", "Run time", OBD_UNIT_SECONDS, 0.0f, 65535.0f, 5000u }, F_WORD },
+    { { 0x21, 2, "Distance traveled with the CEL on", "CEL dist", OBD_UNIT_KM, 0.0f, 65535.0f, 60000u }, F_WORD },
+    { { 0x2C, 1, "Commanded EGR", "EGR cmd", OBD_UNIT_PERCENT, 0.0f, 100.0f, 500u }, F_PCT255 },
+    { { 0x2D, 1, "EGR error", "EGR error", OBD_UNIT_PERCENT, -100.0f, 99.2f, 500u }, F_TRIM },
+    { { 0x2E, 1, "Commanded evaporative purge", "Evap purge", OBD_UNIT_PERCENT, 0.0f, 100.0f, 1000u }, F_PCT255 },
     { { 0x2F, 1, "Fuel tank level", "Fuel", OBD_UNIT_PERCENT, 0.0f, 100.0f, 30000u }, F_PCT255 },
+    { { 0x30, 1, "Warm-ups since codes were cleared", "Warm-ups", OBD_UNIT_COUNT, 0.0f, 255.0f, 60000u }, F_RAW },
+    { { 0x31, 2, "Distance since codes were cleared", "Clear dist", OBD_UNIT_KM, 0.0f, 65535.0f, 60000u }, F_WORD },
     { { 0x33, 1, "Barometric pressure", "Baro", OBD_UNIT_KPA, 0.0f, 255.0f, 60000u }, F_RAW },
+    { { 0x3C, 2, "Catalyst temperature, bank 1 sensor 1", "Cat B1S1", OBD_UNIT_CELSIUS, -40.0f, 6513.5f, 2000u }, F_CAT },
+    { { 0x3D, 2, "Catalyst temperature, bank 2 sensor 1", "Cat B2S1", OBD_UNIT_CELSIUS, -40.0f, 6513.5f, 2000u }, F_CAT },
+    { { 0x3E, 2, "Catalyst temperature, bank 1 sensor 2", "Cat B1S2", OBD_UNIT_CELSIUS, -40.0f, 6513.5f, 2000u }, F_CAT },
+    { { 0x3F, 2, "Catalyst temperature, bank 2 sensor 2", "Cat B2S2", OBD_UNIT_CELSIUS, -40.0f, 6513.5f, 2000u }, F_CAT },
     { { 0x42, 2, "Control module voltage", "Module", OBD_UNIT_VOLTS, 0.0f, 65.535f, 5000u }, F_MILLI },
+    { { 0x43, 2, "Absolute load", "Abs load", OBD_UNIT_PERCENT, 0.0f, 25700.0f, 500u }, F_ABS_LOAD },
+    { { 0x44, 2, "Commanded air-fuel ratio (lambda)", "Cmd lambda", OBD_UNIT_LAMBDA, 0.0f, 2.0f, 500u }, F_LAMBDA },
+    { { 0x45, 1, "Relative throttle position", "Rel thrott", OBD_UNIT_PERCENT, 0.0f, 100.0f, 500u }, F_PCT255 },
     { { 0x46, 1, "Ambient air temperature", "Ambient", OBD_UNIT_CELSIUS, -40.0f, 215.0f, 60000u }, F_TEMP },
+    { { 0x47, 1, "Absolute throttle position B", "Throttle B", OBD_UNIT_PERCENT, 0.0f, 100.0f, 500u }, F_PCT255 },
+    { { 0x49, 1, "Accelerator pedal position D", "Pedal D", OBD_UNIT_PERCENT, 0.0f, 100.0f, 0u }, F_PCT255 },
+    { { 0x4A, 1, "Accelerator pedal position E", "Pedal E", OBD_UNIT_PERCENT, 0.0f, 100.0f, 500u }, F_PCT255 },
+    { { 0x4C, 1, "Commanded throttle actuator", "Thr cmd", OBD_UNIT_PERCENT, 0.0f, 100.0f, 0u }, F_PCT255 },
+    { { 0x4D, 2, "Time run with the CEL on", "CEL time", OBD_UNIT_MINUTES, 0.0f, 65535.0f, 60000u }, F_WORD },
+    { { 0x4E, 2, "Time since codes were cleared", "Clear time", OBD_UNIT_MINUTES, 0.0f, 65535.0f, 60000u }, F_WORD },
+    { { 0x53, 2, "Evaporative system vapor pressure (absolute)", "Evap press", OBD_UNIT_KPA, 0.0f, 327.675f, 2000u }, F_EVAP_ABS },
+    { { 0x5A, 1, "Relative accelerator pedal position", "Rel pedal", OBD_UNIT_PERCENT, 0.0f, 100.0f, 0u }, F_PCT255 },
     { { 0x5C, 1, "Engine oil temperature", "Oil", OBD_UNIT_CELSIUS, -40.0f, 210.0f, 15000u }, F_TEMP },
+    { { 0x5E, 2, "Engine fuel rate", "Fuel rate", OBD_UNIT_LPH, 0.0f, 3276.75f, 500u }, F_FUEL_LPH },
+    { { 0x61, 1, "Driver's demand engine torque", "Torque dem", OBD_UNIT_PERCENT, -125.0f, 130.0f, 500u }, F_TORQUE },
+    { { 0x62, 1, "Actual engine torque", "Torque", OBD_UNIT_PERCENT, -125.0f, 130.0f, 500u }, F_TORQUE },
+    { { 0x63, 2, "Engine reference torque", "Ref torque", OBD_UNIT_NM, 0.0f, 65535.0f, 60000u }, F_WORD },
     { { 0x87, 5, "Intake manifold pressure (wide range)", "MAP", OBD_UNIT_KPA, 0.0f, 2048.0f, 0u }, F_MAP_WIDE },
+    { { 0x8E, 1, "Engine friction torque", "Friction", OBD_UNIT_PERCENT, -125.0f, 130.0f, 2000u }, F_TORQUE },
+    { { 0x9D, 4, "Engine fuel rate (by mass)", "Fuel rate", OBD_UNIT_LPH, 0.0f, 6334.0f, 500u }, F_FUEL_GS },
     { { 0xA4, 4, "Transmission gear ratio", "Gear ratio", OBD_UNIT_RATIO, 0.0f, 65.535f, 500u }, F_GEAR },
     { { 0xA6, 4, "Odometer", "Odometer", OBD_UNIT_KM, 0.0f, 429496729.5f, 60000u }, F_ODO },
 };
@@ -149,6 +184,12 @@ obd_pid_result_t obd_pid_decode(uint8_t pid, const uint8_t *data, size_t len, fl
         break;
     case F_O2_VOLTS: v = a / 200.0f; break;
     case F_LAMBDA:   v = word * 2.0f / 65536.0f; break;
+    case F_CAT:      v = word / 10.0f - 40.0f; break;
+    case F_ABS_LOAD: v = word * 100.0f / 255.0f; break;
+    case F_EVAP_ABS: v = word / 200.0f; break;
+    case F_FUEL_LPH: v = word / 20.0f; break;
+    case F_TORQUE:   v = a - 125.0f; break;
+    case F_FUEL_GS:  v = word / 50.0f * 3600.0f / OBD_FUEL_G_PER_L; break;
     case F_ODO: {
         uint32_t raw = (uint32_t)data[0] << 24 | (uint32_t)data[1] << 16 | (uint32_t)data[2] << 8 |
                        data[3];
@@ -219,6 +260,8 @@ float obd_unit_convert(obd_unit_t unit, float metric, obd_units_t units)
     case OBD_UNIT_CELSIUS: return metric * 9.0f / 5.0f + 32.0f; /* F */
     case OBD_UNIT_KPA:     return metric * 0.2953f;             /* inHg */
     case OBD_UNIT_KM:      return metric * 0.621371f;           /* miles */
+    case OBD_UNIT_LPH:     return metric / OBD_L_PER_GAL;       /* gal/h */
+    case OBD_UNIT_NM:      return metric * 0.737562f;           /* lb-ft */
     default:               return metric;
     }
 }
@@ -239,6 +282,9 @@ const char *obd_unit_label(obd_unit_t unit, obd_units_t units)
     case OBD_UNIT_KM:      return us ? "mi" : "km";
     case OBD_UNIT_RATIO:   return ":1";
     case OBD_UNIT_LAMBDA:  return "lambda";
+    case OBD_UNIT_LPH:     return us ? "gal/h" : "L/h";
+    case OBD_UNIT_NM:      return us ? "lb-ft" : "Nm";
+    case OBD_UNIT_MINUTES: return "h:mm";
     default:               return "";
     }
 }
@@ -279,6 +325,7 @@ char *obd_pid_format(uint8_t pid, float value, obd_units_t units, char *out, siz
     case OBD_UNIT_VOLTS:   decimals = 2; break;
     case OBD_UNIT_RATIO:   decimals = 2; break;
     case OBD_UNIT_LAMBDA:  decimals = 3; break;
+    case OBD_UNIT_LPH:     decimals = units == OBD_UNITS_US ? 2 : 1; break;
     case OBD_UNIT_PERCENT: decimals = is_trim(pid) ? 1 : 0; break;
     default:               decimals = 0; break;
     }
@@ -287,14 +334,37 @@ char *obd_pid_format(uint8_t pid, float value, obd_units_t units, char *out, siz
         snprintf(out, out_len, "%u:%02u", s / 60u, s % 60u);
         return out;
     }
+    if (info->unit == OBD_UNIT_STATUS) {
+        snprintf(out, out_len, "%s", obd_fuel_status_text((int)value));
+        return out;
+    }
+    if (info->unit == OBD_UNIT_MINUTES) {   /* 125 -> "2:05 h:mm" */
+        unsigned m = v > 0.0f ? (unsigned)(v + 0.5f) : 0u;
+        snprintf(out, out_len, "%u:%02u h:mm", m / 60u, m % 60u);
+        return out;
+    }
     if (info->unit == OBD_UNIT_KM) {   /* odometer: 29,958 mi */
         obd_format_grouped((long long)(v + 0.5f), num, sizeof num);
         snprintf(out, out_len, "%s %s", num, obd_unit_label(info->unit, units));
         return out;
     }
     number(num, sizeof num, v, decimals, is_trim(pid));
-    snprintf(out, out_len, "%s %s", num, obd_unit_label(info->unit, units));
+    const char *label = obd_unit_label(info->unit, units);
+    snprintf(out, out_len, "%s%s%s", num, label[0] != '\0' ? " " : "", label);
     return out;
+}
+
+const char *obd_fuel_status_text(int status)
+{
+    switch (status) {
+    case 0x01: return "Open loop (cold)";
+    case 0x02: return "Closed loop";
+    case 0x04: return "Open loop (load)";
+    case 0x08: return "Open loop (fault)";
+    case 0x10: return "Closed (fault)";
+    case 0x00: return "None";
+    default:   return "?";
+    }
 }
 
 /* ---------- derived values ---------- */
@@ -351,4 +421,54 @@ char *obd_format_grouped(long long n, char *out, size_t len)
     }
     out[o] = '\0';
     return out;
+}
+
+float obd_fuel_from_air(float air_gs)
+{
+    return air_gs / OBD_AFR * 3600.0f / OBD_FUEL_G_PER_L;
+}
+
+bool obd_air_speed_density(float map_kpa, float rpm, float iat_c, float engine_l, float *air_gs)
+{
+    if (engine_l <= 0.0f) {
+        return false;
+    }
+    float t_k = iat_c + 273.15f;
+    float swept_m3_s = engine_l / 1000.0f * rpm / 120.0f;
+    float g = map_kpa * 1000.0f * swept_m3_s * OBD_VE / (287.05f * t_k) * 1000.0f;
+    if (g < 0.0f || isnan(g) || t_k <= 0.0f) {
+        return false;
+    }
+    *air_gs = g;
+    return true;
+}
+
+char *obd_fuel_rate_format(float lph, obd_units_t units, char *out, size_t out_len)
+{
+    if (units == OBD_UNITS_US) {
+        snprintf(out, out_len, "%.2f gal/h", (double)(lph / OBD_L_PER_GAL));
+    } else {
+        snprintf(out, out_len, "%.1f L/h", (double)lph);
+    }
+    return out;
+}
+
+bool obd_economy_format(float lph, float kmh, obd_units_t units, char *out, size_t out_len)
+{
+    if (kmh < 5.0f || lph < 0.0f) {
+        snprintf(out, out_len, "-");
+        return false;
+    }
+    if (lph < 0.01f) {   /* coasting with the fuel cut */
+        snprintf(out, out_len, units == OBD_UNITS_US ? "99.9+ mpg" : "0.0 L/100km");
+        return true;
+    }
+    float l100 = lph / kmh * 100.0f;
+    if (units == OBD_UNITS_US) {
+        float mpg = 235.215f / l100;
+        snprintf(out, out_len, mpg >= 99.95f ? "99.9+ mpg" : "%.1f mpg", (double)mpg);
+    } else {
+        snprintf(out, out_len, "%.1f L/100km", (double)l100);
+    }
+    return true;
 }

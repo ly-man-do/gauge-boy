@@ -3,6 +3,8 @@
 #include <math.h>
 #include <string.h>
 
+#include "obd/obd_pid.h"
+
 void eco_reset(eco_t *eco)
 {
     memset(eco, 0, sizeof *eco);
@@ -13,19 +15,16 @@ bool eco_fuel_lph(const eco_input_t *in, float engine_l, float *lph)
     float air_gs;
     if (in->have_maf) {
         air_gs = in->maf_gs;
-    } else if (in->have_map && in->have_rpm && engine_l > 0.0f) {
-        float t_k = (in->have_iat ? in->iat_c : ECO_IAT_DEFAULT_C) + 273.15f;
-        /* Air per second: pressure x volume swept per second x VE / (R T);
-         * a four-stroke fills its displacement every two turns. */
-        float swept_m3_s = engine_l / 1000.0f * in->rpm / 120.0f;
-        air_gs = in->map_kpa * 1000.0f * swept_m3_s * ECO_VE / (287.05f * t_k) * 1000.0f;
-    } else {
+    } else if (!in->have_map || !in->have_rpm ||
+               !obd_air_speed_density(in->map_kpa, in->rpm,
+                                      in->have_iat ? in->iat_c : ECO_IAT_DEFAULT_C, engine_l,
+                                      &air_gs)) {
         return false;
     }
     if (air_gs < 0.0f || isnan(air_gs)) {
         return false;
     }
-    *lph = air_gs / ECO_AFR * 3600.0f / ECO_FUEL_G_PER_L;
+    *lph = obd_fuel_from_air(air_gs);
     return true;
 }
 

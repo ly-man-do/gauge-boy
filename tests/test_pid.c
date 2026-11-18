@@ -262,8 +262,66 @@ static void test_pid_o2(void)
     CHECK(v > 0.99f && v < 0.995f);
 }
 
+static void test_pid_more(void)
+{
+    /* 03 fuel system status: text. */
+    CHECK_NEAR(dec(0x03, 0x02, 0x00), 2.0f);
+    CHECK_EQ_STR(obd_pid_format(0x03, 2.0f, OBD_UNITS_US, text, sizeof text), "Closed loop");
+    CHECK_EQ_STR(obd_pid_format(0x03, 1.0f, OBD_UNITS_US, text, sizeof text), "Open loop (cold)");
+    CHECK_EQ_STR(obd_pid_format(0x03, 4.0f, OBD_UNITS_US, text, sizeof text), "Open loop (load)");
+    CHECK_EQ_STR(obd_fuel_status_text(3), "?");
+    /* Catalyst temperature: 0x1194 = 4500 -> 410 C. */
+    CHECK_NEAR(dec(0x3C, 0x11, 0x94), 410.0f);
+    CHECK_EQ_STR(obd_pid_format(0x3C, 410.0f, OBD_UNITS_US, text, sizeof text), "770 F");
+    CHECK_NEAR(dec(0x43, 0x00, 0xFF), 100.0f);            /* absolute load */
+    CHECK_NEAR(dec(0x44, 0x80, 0x00), 1.0f);              /* commanded lambda */
+    CHECK_NEAR(dec(0x53, 0x4E, 0x20), 100.0f);            /* evap 20000 / 200 kPa */
+    CHECK_NEAR(dec(0x62, 0xAF, 0), 50.0f);                /* torque A - 125 % */
+    CHECK_NEAR(dec(0x8E, 0x7D, 0), 0.0f);
+    CHECK_NEAR(dec(0x63, 0x01, 0x90), 400.0f);            /* reference torque, Nm */
+    CHECK_EQ_STR(obd_pid_format(0x63, 400.0f, OBD_UNITS_US, text, sizeof text), "295 lb-ft");
+    CHECK_EQ_STR(obd_pid_format(0x63, 400.0f, OBD_UNITS_METRIC, text, sizeof text), "400 Nm");
+    /* Fuel rate: 5E (256A + B) / 20 L/h; 9D (256A + B) / 50 g/s. */
+    CHECK_NEAR(dec(0x5E, 0x00, 0x64), 5.0f);
+    CHECK_EQ_STR(obd_pid_format(0x5E, 3.78541f, OBD_UNITS_US, text, sizeof text), "1.00 gal/h");
+    CHECK_EQ_STR(obd_pid_format(0x5E, 5.0f, OBD_UNITS_METRIC, text, sizeof text), "5.0 L/h");
+    uint8_t mass[4] = { 0x00, 0x32, 0x00, 0x32 };          /* 1 g/s = 4.83 L/h */
+    float v = 0.0f;
+    CHECK_EQ_INT(obd_pid_decode(0x9D, mass, 4, &v), OBD_PID_OK);
+    CHECK(v > 4.83f && v < 4.84f);
+    /* Counters since the codes were cleared. */
+    CHECK_EQ_STR(obd_pid_format(0x4E, 125.0f, OBD_UNITS_US, text, sizeof text), "2:05 h:mm");
+    CHECK_EQ_STR(obd_pid_format(0x30, 7.0f, OBD_UNITS_US, text, sizeof text), "7");
+    CHECK_EQ_STR(obd_pid_format(0x31, 1609.0f, OBD_UNITS_US, text, sizeof text), "1,000 mi");
+}
+
+static void test_fuel_estimate(void)
+{
+    /* MAF 10 g/s: 10 / 14.7 g fuel a second = 3.29 L/h. */
+    CHECK(obd_fuel_from_air(10.0f) > 3.28f && obd_fuel_from_air(10.0f) < 3.30f);
+    /* Speed-density: 3.5 L at 2000 rpm, 50 kPa, 25 C. */
+    float air = 0.0f;
+    CHECK(obd_air_speed_density(50.0f, 2000.0f, 25.0f, 3.5f, &air));
+    CHECK(air > 28.9f && air < 29.1f);
+    CHECK(!obd_air_speed_density(50.0f, 2000.0f, 25.0f, 0.0f, &air));   /* no engine size */
+    char out[24];
+    CHECK_EQ_STR(obd_fuel_rate_format(7.57082f, OBD_UNITS_US, out, sizeof out), "2.00 gal/h");
+    CHECK_EQ_STR(obd_fuel_rate_format(7.57082f, OBD_UNITS_METRIC, out, sizeof out), "7.6 L/h");
+    /* 7.57 L/h at 96.56 km/h (60 mph) = 7.84 L/100 km = 30.0 mpg. */
+    CHECK(obd_economy_format(7.57082f, 96.5606f, OBD_UNITS_US, out, sizeof out));
+    CHECK_EQ_STR(out, "30.0 mpg");
+    CHECK(obd_economy_format(7.57082f, 96.5606f, OBD_UNITS_METRIC, out, sizeof out));
+    CHECK_EQ_STR(out, "7.8 L/100km");
+    CHECK(!obd_economy_format(1.0f, 2.0f, OBD_UNITS_US, out, sizeof out));   /* stopped */
+    CHECK_EQ_STR(out, "-");
+    CHECK(obd_economy_format(0.0f, 50.0f, OBD_UNITS_US, out, sizeof out));    /* fuel cut */
+    CHECK_EQ_STR(out, "99.9+ mpg");
+}
+
 void suite_pid(void)
 {
+    RUN_TEST(test_pid_more);
+    RUN_TEST(test_fuel_estimate);
     RUN_TEST(test_pid_o2);
     RUN_TEST(test_pid_odometer_gear);
     RUN_TEST(test_pid_map_wide);

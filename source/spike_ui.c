@@ -1691,7 +1691,8 @@ static void rec_start(spike_t *s, const obd_live_t *lv, const obd_link_t *link)
     obd_units_t units = app_cfg->metric ? OBD_UNITS_METRIC : OBD_UNITS_US;
     LightLock_Unlock(&shared.lock);
     drive_log_meta_t meta = { GB_VERSION_TEXT, when, car, vin, elm_protocol_name(link->protocol),
-                              obd_live_get(lv, 0x33) != NULL ? "PID 33" : baro_from };
+                              obd_live_get(lv, 0x33) != NULL ? "PID 33" : baro_from,
+                              (float)app_cfg->engine_dl / 10.0f };
     uint64_t t = tp_now_ms();
     if (!drive_log_open(&rec_log, drive_log_stdio_write, rec_fp, &meta, lv, units, 0, t)) {
         fclose(rec_fp);
@@ -2578,7 +2579,8 @@ static void draw_diag_top(bool home, diag_tab_t tab, int selected, int busy, boo
     LightLock_Lock(&shared.lock);
     bool scanning = shared.scanning;
     obd_diag_step_t step = shared.scan_step;
-    int nf = diag_facts(&shared.diag, TOP_COLS, top_lines, 10);
+    int nf = diag_facts(&shared.diag, app_cfg->metric ? OBD_UNITS_METRIC : OBD_UNITS_US, TOP_COLS,
+                        top_lines, 10);
     int n = diag_items(&shared.diag, tab, items, DIAG_ITEMS_MAX);
     snprintf(empty, sizeof empty, "%s", diag_empty_text(&shared.diag, tab));
     LightLock_Unlock(&shared.lock);
@@ -4426,8 +4428,8 @@ static void draw_live_top(int view, int busy, bool connected)
     LightLock_Unlock(&shared.lock);
 
     int n = live_view_lines(have ? &lv : NULL, have ? protocol : 0, rate,
-                            app_cfg->metric ? OBD_UNITS_METRIC : OBD_UNITS_US, TOP_COLS,
-                            lines, LIVE_VIEW_MAX);
+                            app_cfg->metric ? OBD_UNITS_METRIC : OBD_UNITS_US,
+                            (float)app_cfg->engine_dl / 10.0f, TOP_COLS, lines, LIVE_VIEW_MAX);
     spike_format_header(header, sizeof header, connected, busy);
     snprintf(title, sizeof title, "%s  %s", live_view_name(view), lines[0]);
     /* Under the title: what the view is for, or the refresh warning. */

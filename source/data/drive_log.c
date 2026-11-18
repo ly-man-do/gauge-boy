@@ -87,7 +87,13 @@ static int decimals(obd_unit_t unit)
     case OBD_UNIT_RPM:
     case OBD_UNIT_SECONDS: return 0;
     case OBD_UNIT_GRAMS_S:
-    case OBD_UNIT_VOLTS:   return 2;
+    case OBD_UNIT_VOLTS:
+    case OBD_UNIT_LPH:     return 2;
+    case OBD_UNIT_LAMBDA:  return 3;
+    case OBD_UNIT_STATUS:
+    case OBD_UNIT_COUNT:
+    case OBD_UNIT_MINUTES:
+    case OBD_UNIT_NM:      return 0;
     default:               return 1;
     }
 }
@@ -140,6 +146,9 @@ bool drive_log_open(drive_log_t *dl, drive_log_write_fn write, void *ctx,
         }
     }
 
+    dl->engine_l = meta->engine_l;
+    dl->fuel_src = obd_live_fuel_source(lv, dl->engine_l);
+    dl->fuel = dl->fuel_src != OBD_FUEL_NONE && has_pid(dl, OBD_PID_SPEED);
     dl->total_b1 = has_pid(dl, OBD_PID_STFT_B1) && has_pid(dl, OBD_PID_LTFT_B1);
     dl->total_b2 = has_pid(dl, OBD_PID_STFT_B2) && has_pid(dl, OBD_PID_LTFT_B2);
 
@@ -172,6 +181,11 @@ bool drive_log_open(drive_log_t *dl, drive_log_write_fn write, void *ctx,
     putf(dl, ",Battery (V)");
     if (dl->vacuum) {
         putf(dl, ",Vacuum (%s)", obd_unit_label(OBD_UNIT_KPA, units));
+    }
+    if (dl->fuel) {
+        putf(dl, ",%s (%s),Economy (%s)",
+             dl->fuel_src == OBD_FUEL_CAR ? "Fuel rate" : "Fuel rate est.",
+             obd_unit_label(OBD_UNIT_LPH, units), units == OBD_UNITS_US ? "mpg" : "L/100km");
     }
     put(dl, "\n");
     return drive_log_flush(dl);
@@ -211,6 +225,19 @@ bool drive_log_sample(drive_log_t *dl, const obd_live_t *lv, uint64_t now_ms)
         float vac = 0.0f;
         if (obd_live_vacuum(lv, &vac)) {
             put_value(dl, obd_unit_convert(OBD_UNIT_KPA, vac, dl->units), 1);
+        }
+    }
+    if (dl->fuel) {
+        float lph = 0.0f, kmh = 0.0f;
+        bool have = obd_live_fuel_lph(lv, dl->engine_l, &lph);
+        put(dl, ",");
+        if (have) {
+            put_value(dl, obd_unit_convert(OBD_UNIT_LPH, lph, dl->units), 3);
+        }
+        put(dl, ",");
+        if (have && obd_live_value(lv, OBD_PID_SPEED, &kmh) && kmh >= 5.0f && lph > 0.0f) {
+            float l100 = lph / kmh * 100.0f;
+            put_value(dl, dl->units == OBD_UNITS_US ? 235.215f / l100 : l100, 1);
         }
     }
     put(dl, "\n");

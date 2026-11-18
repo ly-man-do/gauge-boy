@@ -50,7 +50,7 @@ static void live_values(bool all)
 
 static const drive_log_meta_t meta = {
     "0.2.0+test", "2026-11-16 17:12:30", "2023 Subaru Ascent", "4S4WMAHD0P3000001",
-    "ISO 15765-4 CAN (11 bit, 500 kbaud)", NULL,
+    "ISO 15765-4 CAN (11 bit, 500 kbaud)", NULL, 0.0f,
 };
 
 static bool has(const capture_t *c, const char *text)
@@ -180,6 +180,46 @@ static void test_drive_log_total_trims(void)
     t.pid[1].pid = 0x07;
     CHECK(drive_log_open(&dl, capture_write, &c, &meta, &t, OBD_UNITS_US, 0, 0));
     CHECK(has(&c, "time_s,STFT B1 (%),LTFT B1 (%),Total B1 (%),Battery (V)\n"));
+}
+
+static void test_drive_log_fuel(void)
+{
+    static capture_t c;
+    memset(&c, 0, sizeof c);
+    static drive_log_t dl;
+    static obd_live_t t;
+    memset(&t, 0, sizeof t);
+    /* The Ridgeline in Drive: RPM, speed, MAP, intake air (no MAF). */
+    static const uint8_t pids[] = { 0x0C, 0x0D, 0x0B, 0x0F };
+    static const float vals[] = { 2000.0f, 96.5606f, 50.0f, 25.0f };
+    for (int i = 0; i < 4; i++) {
+        t.pid[i].pid = pids[i];
+        t.pid[i].have = true;
+        t.pid[i].value = vals[i];
+    }
+    t.count = 4;
+    drive_log_meta_t m = meta;
+    CHECK(drive_log_open(&dl, capture_write, &c, &m, &t, OBD_UNITS_US, 0, 0));
+    CHECK(!has(&c, "Fuel rate"));                         /* no engine size: no estimate */
+    memset(&c, 0, sizeof c);
+    m.engine_l = 3.5f;
+    CHECK(drive_log_open(&dl, capture_write, &c, &m, &t, OBD_UNITS_US, 0, 0));
+    CHECK(has(&c, ",Vacuum (inHg),Fuel rate est. (gal/h),Economy (mpg)\n"));
+    drive_log_sample(&dl, &t, 0);
+    drive_log_flush(&dl);
+    /* 29.0 g/s of air -> 9.52 L/h = 2.516 gal/h; at 60 mph, 23.9 mpg. */
+    CHECK(has(&c, ",2.516,23.9\n"));
+    /* Stopped: the rate, no economy. */
+    t.pid[1].value = 0.0f;
+    drive_log_sample(&dl, &t, 1000);
+    drive_log_flush(&dl);
+    CHECK(has(&c, ",2.516,\n"));
+    /* The car's own fuel rate (5E): not marked est. */
+    memset(&c, 0, sizeof c);
+    t.pid[2].pid = 0x5E;
+    t.pid[2].value = 5.0f;
+    CHECK(drive_log_open(&dl, capture_write, &c, &m, &t, OBD_UNITS_METRIC, 0, 0));
+    CHECK(has(&c, ",Fuel rate (L/h),Economy (L/100km)\n"));
 }
 
 static void test_drive_log_file_name(void)
@@ -320,6 +360,7 @@ void suite_drive_log(void)
     RUN_TEST(test_drive_log_metric_boost_and_no_map);
     RUN_TEST(test_drive_log_buffering_and_errors);
     RUN_TEST(test_drive_log_total_trims);
+    RUN_TEST(test_drive_log_fuel);
     RUN_TEST(test_drive_log_file_name);
     RUN_TEST(test_drive_list_from_a_log);
     RUN_TEST(test_drive_list_odd_files);

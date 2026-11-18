@@ -354,7 +354,28 @@ static void fact(view_t *v, const char *label, const char *value)
     add_line(v, line);
 }
 
-int diag_facts(const obd_diag_t *d, int cols, char lines[][DIAG_VIEW_COLS + 1], int max)
+/* "45 min", "2 h 05 min", "3 days". */
+static void duration_text(int minutes, char *out, size_t len)
+{
+    if (minutes < 60) {
+        snprintf(out, len, "%d min", minutes);
+    } else if (minutes < 48 * 60) {
+        snprintf(out, len, "%d h %02d min", minutes / 60, minutes % 60);
+    } else {
+        snprintf(out, len, "%d days", minutes / (24 * 60));
+    }
+}
+
+static void distance_text(int km, obd_units_t units, char *out, size_t len)
+{
+    char num[24];
+    float v = obd_unit_convert(OBD_UNIT_KM, (float)km, units);
+    obd_format_grouped((long long)(v + 0.5f), num, sizeof num);
+    snprintf(out, len, "%s %s", num, obd_unit_label(OBD_UNIT_KM, units));
+}
+
+int diag_facts(const obd_diag_t *d, obd_units_t units, int cols, char lines[][DIAG_VIEW_COLS + 1],
+               int max)
 {
     view_t v = { lines, max, 0, cols > DIAG_VIEW_COLS ? DIAG_VIEW_COLS : cols };
     char buf[96];
@@ -379,6 +400,16 @@ int diag_facts(const obd_diag_t *d, int cols, char lines[][DIAG_VIEW_COLS + 1], 
     if (d->have_readiness) {
         snprintf(buf, sizeof buf, "%s (%d stored code%s)", d->readiness.mil_on ? "ON" : "off",
                  d->readiness.dtc_count, d->readiness.dtc_count == 1 ? "" : "s");
+        if (d->readiness.mil_on && (d->have_mil_km || d->have_mil_min)) {   /* for how long */
+            char part[32];
+            size_t n = strlen(buf);
+            if (d->have_mil_km) {
+                distance_text(d->mil_km, units, part, sizeof part);
+            } else {
+                duration_text(d->mil_min, part, sizeof part);
+            }
+            snprintf(buf + n, sizeof buf - n, " for %s", part);
+        }
         fact(&v, "CEL", buf);
         snprintf(buf, sizeof buf, "%d ready, %d not ready",
                  obd_readiness_ready_count(&d->readiness),
@@ -397,6 +428,26 @@ int diag_facts(const obd_diag_t *d, int cols, char lines[][DIAG_VIEW_COLS + 1], 
         snprintf(buf + n, sizeof buf - n, ", %d permanent", d->permanent.count);
     }
     fact(&v, "Codes", buf);
+    if (d->have_clear_warmups || d->have_clear_km || d->have_clear_min) {
+        /* Codes cleared: how long ago. A recent clear hides problems. */
+        buf[0] = '\0';
+        char part[32];
+        if (d->have_clear_warmups) {
+            snprintf(part, sizeof part, "%d warm-up%s", d->clear_warmups,
+                     d->clear_warmups == 1 ? "" : "s");
+            snprintf(buf + strlen(buf), sizeof buf - strlen(buf), "%s", part);
+        }
+        if (d->have_clear_km) {
+            distance_text(d->clear_km, units, part, sizeof part);
+            snprintf(buf + strlen(buf), sizeof buf - strlen(buf), "%s%s", buf[0] ? ", " : "", part);
+        }
+        if (d->have_clear_min) {
+            duration_text(d->clear_min, part, sizeof part);
+            snprintf(buf + strlen(buf), sizeof buf - strlen(buf), "%s%s", buf[0] ? ", " : "", part);
+        }
+        snprintf(buf + strlen(buf), sizeof buf - strlen(buf), " ago");
+        fact(&v, "Cleared", buf);
+    }
     if (d->freeze.have) {
         snprintf(buf, sizeof buf, "%s (tap it on STORED)", d->freeze.code);
         fact(&v, "Freeze", buf);

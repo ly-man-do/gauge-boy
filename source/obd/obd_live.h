@@ -28,7 +28,7 @@
 #include "elm327/elm327.h"
 #include "obd_link.h"
 
-#define OBD_LIVE_MAX        48      /* PIDs at once (every PID obd_pid decodes) */
+#define OBD_LIVE_MAX        80      /* PIDs at once (every PID obd_pid decodes) */
 #define OBD_LIVE_MAX_MISSES 3       /* NO DATA in a row before a PID is dropped */
 #define OBD_LIVE_VOLTS_MS   5000u   /* ATRV this often */
 #define OBD_LIVE_TIMEOUT_MS 2000u   /* per request */
@@ -152,6 +152,21 @@ bool obd_live_value(const obd_live_t *lv, uint8_t pid, float *value);
  * latest MAP (PID 0B, or 87 on cars without it). Negative = boost. False
  * until both are known. */
 bool obd_live_vacuum(const obd_live_t *lv, float *vacuum_kpa);
+
+/* Where the fuel rate comes from, by what is polled: the car's own fuel
+ * rate (PID 5E or 9D), else MAF (10), else speed-density (MAP 0B / 87 and
+ * RPM, with the engine size; intake air 0F if polled). */
+typedef enum {
+    OBD_FUEL_NONE = 0,
+    OBD_FUEL_CAR,
+    OBD_FUEL_MAF,
+    OBD_FUEL_MAP,
+} obd_fuel_src_t;
+
+obd_fuel_src_t obd_live_fuel_source(const obd_live_t *lv, float engine_l);
+
+/* The latest fuel rate, L/h (false until the values are read). */
+bool obd_live_fuel_lph(const obd_live_t *lv, float engine_l, float *lph);
 
 /* Requests per second since obd_live_init (all PIDs together). */
 float obd_live_rate(const obd_live_t *lv, uint64_t now_ms);

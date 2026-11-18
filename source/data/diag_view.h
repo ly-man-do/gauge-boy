@@ -9,6 +9,7 @@
  */
 
 #include "obd/obd_diag.h"
+#include "obd/obd_pid.h"
 
 #define DIAG_VIEW_COLS 49   /* top-screen text width */
 #define DIAG_VIEW_MAX  160  /* lines kept (the panel scrolls) */
@@ -56,7 +57,8 @@ bool diag_has_trim_codes(const obd_diag_t *d);
 
 /* Fact rows for the top screen: label column then value, e.g.
  * "Car       2008 Honda", "CEL       ON (2 stored codes)". */
-int diag_facts(const obd_diag_t *d, int cols, char lines[][DIAG_VIEW_COLS + 1], int max);
+int diag_facts(const obd_diag_t *d, obd_units_t units, int cols, char lines[][DIAG_VIEW_COLS + 1],
+               int max);
 
 /* Wraps text into lines of at most cols characters (word boundaries,
  * continuation lines indented by indent). Returns lines written. */

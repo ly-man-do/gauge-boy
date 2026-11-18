@@ -28,11 +28,14 @@ static const view_pid_t engine[] = {
  * vacuum and boost figures exact. Unsupported PIDs are skipped. */
 static const view_pid_t idle[] = {
     { 0x0C, D }, { 0x0B, D }, { 0x87, D }, { 0x06, D }, { 0x08, D }, { 0x0E, D }, { 0x33, D },
+    { 0x03, D },
 };
-/* Air & fuel: lean / rich, air flow (MAF or MAP, whichever the car has). */
+/* Air & fuel: lean / rich, air flow (MAF or MAP, whichever the car has).
+ * Open or closed loop (03): the trims only steer in closed loop. */
 static const view_pid_t air_fuel[] = {
     { 0x10, D }, { 0x0B, D }, { 0x87, D }, { 0x0F, D }, { 0x11, D },
     { 0x06, D }, { 0x08, D }, { 0x07, 2000 }, { 0x09, 2000 }, { 0x33, D },
+    { 0x03, D }, { 0x44, D },
 };
 /* O2 sensors: is each one switching (narrow band) or near 1.000 (wide
  * band)? Whichever kind and sensors the car has; RPM and the short-term
@@ -48,9 +51,14 @@ static const view_pid_t warmup[] = {
     { 0x05, 1000 }, { 0x0F, 2000 }, { 0x5C, 2000 }, { 0x46, D }, { 0x1F, 1000 }, { 0x0C, D },
 };
 /* Drive: load under acceleration; load and timing as fast as RPM. The
- * gear ratio and odometer where the car reports them (newer CAN cars). */
+ * gear ratio, torque and odometer where the car reports them (newer CAN
+ * cars). Fuel rate and economy: the car's fuel rate PID, else MAF, else MAP
+ * with intake air (the estimate), once a second: enough for a fuel figure
+ * without slowing RPM and speed on slow buses. */
 static const view_pid_t drive[] = {
-    { 0x0C, D }, { 0x0D, D }, { 0x11, D }, { 0x04, 0 }, { 0x0E, 0 }, { 0xA4, D }, { 0xA6, D },
+    { 0x0C, D }, { 0x0D, D }, { 0x11, D }, { 0x04, 0 }, { 0x0E, 0 }, { 0x62, D }, { 0xA4, D },
+    { 0xA6, D }, { 0x5E, 1000 }, { 0x9D, 1000 }, { 0x10, 1000 }, { 0x0B, 1000 }, { 0x87, 1000 },
+    { 0x0F, 10000 },
 };
 
 #define N(a) ((int)(sizeof a / sizeof a[0]))
@@ -62,7 +70,7 @@ static const view_def_t views[LIVE_VIEW_COUNT] = {
                              N(air_fuel) },
     [LIVE_VIEW_O2]       = { "O2 sensors", "o2", "Is each oxygen sensor working?", o2, N(o2) },
     [LIVE_VIEW_WARMUP]   = { "Warm-up", "warmup", "Thermostat, cold start", warmup, N(warmup) },
-    [LIVE_VIEW_DRIVE]    = { "Drive", "drive", "Load under acceleration", drive, N(drive) },
+    [LIVE_VIEW_DRIVE]    = { "Drive", "drive", "Load, fuel rate, economy", drive, N(drive) },
     [LIVE_VIEW_ALL]      = { "All", "all", "Every PID the car supports", NULL, 0 },
     [LIVE_VIEW_CUSTOM]   = { "Custom", "custom", "Your own pick (EDIT)", NULL, 0 },
     [LIVE_VIEW_TRANS]    = { "Transmission", "trans", "The transmission module (CAN cars)", NULL, 0 },
