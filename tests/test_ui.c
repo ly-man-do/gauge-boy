@@ -7,6 +7,7 @@
 #include "ui/diag_ui.h"
 #include "ui/live_ui.h"
 #include "ui/log_ui.h"
+#include "ui/setup_ui.h"
 #include "ui/track_ui.h"
 #include "ui/trim_ui.h"
 
@@ -635,8 +636,47 @@ static void test_log_ui(void)
     CHECK_EQ_STR(size, "1.8 MB");
 }
 
+static void test_setup_ui(void)
+{
+    for (int k = 0; k < SET_KIND_COUNT; k++) {
+        int ids[24], n = 0;
+        for (int h = SET_HIT_BACK; h < SET_HIT_BUTTON; h++) {
+            if (setup_rect((setup_kind_t)k, h).w > 0) {
+                ids[n++] = h;
+            }
+        }
+        for (int i = 0; i < setup_button_count((setup_kind_t)k); i++) {
+            ids[n++] = SET_HIT_BUTTON + i;
+        }
+        CHECK(n >= 1);
+        for (int a = 0; a < n; a++) {
+            setup_rect_t r = setup_rect((setup_kind_t)k, ids[a]);
+            CHECK(r.x >= 0 && r.y >= 0 && r.x + r.w <= 320 && r.y + r.h <= 240);
+            CHECK(r.w >= 40 && r.h >= 38);
+            CHECK_EQ_INT(setup_hit((setup_kind_t)k, r.x + r.w / 2, r.y + r.h / 2), ids[a]);
+            if (ids[a] >= SET_HIT_BUTTON) {
+                CHECK(r.y + r.h <= 202);   /* clear of the tabs */
+            }
+            for (int b = a + 1; b < n; b++) {
+                setup_rect_t q = setup_rect((setup_kind_t)k, ids[b]);
+                CHECK(!(r.x < q.x + q.w && q.x < r.x + r.w && r.y < q.y + q.h && q.y < r.y + r.h));
+            }
+        }
+    }
+    /* Vehicle: the steppers sit on the Year and Engine rows, right of their values. */
+    setup_rect_t year = setup_row(SET_VEHICLE, 2);
+    setup_rect_t minus = setup_rect(SET_VEHICLE, SET_HIT_BUTTON + SET_VEH_YEAR_DOWN);
+    CHECK(minus.y <= year.y && minus.y + minus.h >= year.y + year.h);
+    CHECK_EQ_INT(setup_hit(SET_VEHICLE, 100, year.y + 10), SET_HIT_NONE);   /* the label */
+    CHECK_EQ_INT(setup_hit(SET_VEHICLE, 100, setup_row(SET_VEHICLE, 0).y + 10),
+                 SET_HIT_BUTTON + SET_VEH_MAKE);
+    CHECK_EQ_INT(setup_hit(SET_OTHER, 200, 70), SET_HIT_METRIC);
+    CHECK_EQ_STR(setup_menu_label(3), "Tests");
+}
+
 void suite_ui(void)
 {
+    RUN_TEST(test_setup_ui);
     RUN_TEST(test_log_ui);
     RUN_TEST(test_track_layout);
     RUN_TEST(test_trim_bars);

@@ -53,6 +53,7 @@
 #include "ui/diag_draw.h"
 #include "ui/live_draw.h"
 #include "ui/log_draw.h"
+#include "ui/setup_draw.h"
 #include "ui/track_draw.h"
 #include "ui/trim_draw.h"
 #include "obd/dtc.h"
@@ -2765,6 +2766,9 @@ typedef struct {
     int log_held;              /* ... the control held (log_hit_t) */
     bool log_held_in;
     int log_scroll;            /* ... the list scrolled by, px */
+    int setup_held;            /* SETUP (graphics): the control held (setup_hit_t) */
+    bool setup_held_in;
+    int make_scroll;           /* ... the make picker scrolled by, px */
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
@@ -4435,6 +4439,273 @@ static void trim_row(int row, const char *label, bool have, float pct)
  * engine state and the hints. */
 static void status_now(kit_status_t *s, bool connected);
 
+/* The SETUP page shown (graphics), or -1 for other screens. */
+static int setup_kind_of(const ui_state_t *ui)
+{
+    if (!home_gfx) {
+        return -1;
+    }
+    switch (ui->screen) {
+    case SCREEN_SETUP:         return SET_MENU;
+    case SCREEN_SETUP_WIFI:    return SET_WIFI;
+    case SCREEN_GUIDE:         return SET_GUIDE;
+    case SCREEN_SETUP_VEHICLE: return SET_VEHICLE;
+    case SCREEN_MAKE:          return SET_MAKE;
+    case SCREEN_SETUP_OTHER:   return SET_OTHER;
+    case SCREEN_ABOUT:         return SET_ABOUT;
+    case SCREEN_TEST:          return SET_TESTS;
+    default:                   return -1;
+    }
+}
+
+static void bar_value(int action, const gb_config_t *cfg, char *out, size_t len);
+
+static void set_fact(diag_fact_t *f, int *n, const char *tag, const char *value, const char *detail,
+                     diag_ink_t ink)
+{
+    diag_fact_t *x = &f[(*n)++];
+    memset(x, 0, sizeof *x);
+    snprintf(x->tag, sizeof x->tag, "%.15s", tag);
+    snprintf(x->value, sizeof x->value, "%.39s", value);
+    snprintf(x->detail, sizeof x->detail, "%.63s", detail);
+    x->ink = ink;
+}
+
+/* SETUP's top screens (graphics). */
+static void draw_setup_gfx_top(const ui_state_t *ui, const gb_config_t *cfg, bool connected,
+                               int scroll)
+{
+    kit_status_t st;
+    status_now(&st, connected);
+    diag_fact_t f[DIAG_FACTS_MAX];
+    int n = 0;
+    char a[64], b[64];
+    switch (setup_kind_of(ui)) {
+    case SET_MENU: {
+        snprintf(b, sizeof b, "%s:%u", cfg->adapter_host, (unsigned)cfg->adapter_port);
+        set_fact(f, &n, "Adapter", connected ? "Connected" : "Not connected", b,
+                 connected ? DIAG_INK_GREEN : DIAG_INK_AMBER);
+        bar_value(BTN_WIFI_SLOT, cfg, a, sizeof a);
+        set_fact(f, &n, "Wi-Fi slot", a, "", DIAG_INK_WHITE);
+        LightLock_Lock(&shared.lock);
+        diag_car_text(&shared.diag, a, sizeof a);
+        bool vin = shared.diag.have_vin;
+        LightLock_Unlock(&shared.lock);
+        set_fact(f, &n, "Car", a[0] ? a : "Not known", a[0] && vin ? "from the VIN" : "", DIAG_INK_WHITE);
+        bar_value(BTN_ENGINE_BAR, cfg, a, sizeof a);
+        set_fact(f, &n, "Engine", a, "for Eco's fuel estimate", DIAG_INK_WHITE);
+        set_fact(f, &n, "Units", cfg->metric ? "Metric" : "US",
+                 cfg->metric ? "km/h, C, L/100 km" : "mph, F, mpg", DIAG_INK_WHITE);
+        set_fact(f, &n, "Version", GB_VERSION_TEXT, "", DIAG_INK_WHITE);
+        diag_draw_facts_top(icons_setup_idx, "SETUP", f, n, "", "", &st);
+        return;
+    }
+    case SET_WIFI: {
+        static char check[GUIDE_CHECK_LINES][40];
+        LightLock_Lock(&shared.lock);
+        memcpy(check, shared.guide_check, sizeof check);
+        bool checking = shared.guide_checking, ok = shared.guide_ok;
+        wifi_step_t step = (wifi_step_t)shared.guide_step;
+        LightLock_Unlock(&shared.lock);
+        const char *lines[GUIDE_CHECK_LINES];
+        int nl = 0;
+        for (int i = 0; i < GUIDE_CHECK_LINES && check[i][0] != '\0'; i++) {
+            lines[nl++] = check[i];
+        }
+        setup_draw_wifi_top(lines, nl, ok, checking ? wifi_step_progress(step) : "", &st);
+        return;
+    }
+    case SET_GUIDE: {
+        static char lines[16][DIAG_VIEW_COLS + 1];
+        int nl = wifi_guide_lines(ui->page, cfg->adapter_host, DIAG_VIEW_COLS, lines, 16);
+        const char *ptr[16];
+        for (int i = 0; i < nl; i++) {
+            ptr[i] = lines[i];
+        }
+        char heading[80];
+        snprintf(heading, sizeof heading, "Step %d of %d: %s", ui->page + 1, WIFI_GUIDE_STEPS,
+                 wifi_guide_title(ui->page));
+        setup_draw_guide_top(heading, ptr, nl, &st);
+        return;
+    }
+    case SET_VEHICLE: {
+        static const struct { const char *tag; int action; } rows[] = {
+            { "Make", BTN_MAKE_SCREEN }, { "Model", BTN_MODEL_EDIT }, { "Year", BTN_NONE },
+            { "Engine", BTN_ENGINE_BAR },
+        };
+        for (unsigned i = 0; i < sizeof rows / sizeof rows[0]; i++) {
+            bar_value(rows[i].action, cfg, a, sizeof a);
+            set_fact(f, &n, rows[i].tag, a, rows[i].action == BTN_ENGINE_BAR ? "for Eco's fuel estimate" : "",
+                     DIAG_INK_WHITE);
+        }
+        LightLock_Lock(&shared.lock);
+        snprintf(a, sizeof a, "%s", shared.diag.have_vin ? shared.diag.vin : "Not read");
+        LightLock_Unlock(&shared.lock);
+        set_fact(f, &n, "VIN", a, "", DIAG_INK_WHITE);
+        diag_draw_facts_top(icons_setup_idx, "VEHICLE", f, n,
+                            "Values read from the VIN win over the ones set here.", "", &st);
+        return;
+    }
+    case SET_MAKE:
+        bar_value(BTN_MAKE_SCREEN, cfg, a, sizeof a);
+        set_fact(f, &n, "Now", a, "", DIAG_INK_WHITE);
+        diag_draw_facts_top(icons_setup_idx, "CAR MAKE", f, n,
+                            "The make picks the manufacturer code descriptions in DIAG, for cars "
+                            "that don't report a VIN.", "", &st);
+        return;
+    case SET_OTHER:
+        set_fact(f, &n, "Units", cfg->metric ? "Metric" : "US",
+                 cfg->metric ? "km/h, C, L/100 km, km" : "mph, F, mpg, miles", DIAG_INK_WHITE);
+        set_fact(f, &n, "Version", GB_VERSION_TEXT, "Gauge Boy: OBD-II Deluxe", DIAG_INK_WHITE);
+        diag_draw_facts_top(icons_setup_idx, "OTHER", f, n, "", "", &st);
+        return;
+    case SET_ABOUT:
+        track_draw_text_top(icons_setup_idx, "ABOUT",
+                            "Gauge Boy: OBD-II Deluxe, version " GB_VERSION_TEXT "\n\n"
+                            "Reads a car's OBD-II data (check engine light, trouble codes, live data, "
+                            "fuel trims) through a Wi-Fi ELM327 adapter.\n\n"
+                            "Unofficial homebrew. Not made, endorsed or supported by Nintendo.\n\n"
+                            "github.com/ly-man-do/gauge-boy", &st);
+        return;
+    case SET_TESTS: {
+        enum { SHOWN = 13 };
+        static char visible[SHOWN][TEXTLOG_COLS + 1];
+        LightLock_Lock(&shared.lock);
+        int count = textlog_count(&shared.log);
+        int first = count - SHOWN - scroll;
+        if (first < 0) {
+            first = 0;
+        }
+        int shown = count < SHOWN ? count : SHOWN;
+        for (int i = 0; i < shown; i++) {
+            snprintf(visible[i], sizeof visible[i], "%s", textlog_line(&shared.log, first + i));
+        }
+        LightLock_Unlock(&shared.lock);
+        const char *ptr[SHOWN];
+        for (int i = 0; i < shown; i++) {
+            ptr[i] = visible[i];
+        }
+        setup_draw_log_top(ptr, shown, scroll > 0, &st);
+        return;
+    }
+    default:
+        return;
+    }
+}
+
+/* SETUP's bottom screens (graphics). */
+static void draw_setup_gfx_bottom(const ui_state_t *ui, const gb_config_t *cfg, uint64_t now,
+                                  int busy)
+{
+    setup_kind_t kind = (setup_kind_t)setup_kind_of(ui);
+    if (kind == SET_MAKE) {
+        static const char *names[64];
+        int n = make_choice_count();
+        for (int i = 0; i < n && i < 64; i++) {
+            names[i] = i == 0 ? "Auto" : make_choice_name(i);
+        }
+        LightLock_Lock(&shared.lock);
+        int chosen = make_choice_of(cfg->car_make);
+        LightLock_Unlock(&shared.lock);
+        int held = ui->live_touching && !ui->live_dragged ? ui->live_row_held : -1;
+        setup_draw_make(names, n < 64 ? n : 64, diag_list_clamp(ui->make_scroll, n), chosen, held,
+                        ui->live_touching && ui->live_grip,
+                        ui->setup_held_in && ui->setup_held == SET_HIT_BACK);
+        return;
+    }
+    setup_bottom_t b;
+    memset(&b, 0, sizeof b);
+    b.busy = -1;
+    b.pressed = ui->setup_held_in ? ui->setup_held : SET_HIT_NONE;
+    b.notice = ui->notice;
+    static char values[8][48];
+    switch (kind) {
+    case SET_MENU:
+        for (int i = 0; i < 4; i++) {
+            b.labels[i] = setup_menu_label(i);
+        }
+        break;
+    case SET_WIFI:
+        b.labels[0] = "Check & Connect";
+        b.labels[1] = "Wi-Fi slot";
+        b.labels[2] = "Connection Guide";
+        bar_value(BTN_GUIDE_CHECK, cfg, values[0], sizeof values[0]);
+        bar_value(BTN_WIFI_SLOT, cfg, values[1], sizeof values[1]);
+        values[2][0] = '\0';
+        for (int i = 0; i < 3; i++) {
+            b.values[i] = values[i];
+        }
+        b.chevron[2] = true;
+        break;
+    case SET_VEHICLE: {
+        static const struct { const char *label; int action; bool chev; } rows[5] = {
+            { "Make", BTN_MAKE_SCREEN, true }, { "Model", BTN_MODEL_EDIT, true },
+            { "Year", BTN_NONE, false }, { "Engine", BTN_ENGINE_BAR, false },
+            { "VIN", BTN_DIAG_SCAN, true },
+        };
+        for (int i = 0; i < 5; i++) {
+            b.labels[i] = rows[i].label;
+            bar_value(rows[i].action, cfg, values[i], sizeof values[i]);
+            b.values[i] = values[i];
+            b.chevron[i] = rows[i].chev;
+        }
+        break;
+    }
+    case SET_OTHER:
+        b.labels[0] = "About Gauge Boy";
+        b.metric = cfg->metric;
+        break;
+    case SET_GUIDE: {
+        static char step[24], result[48];
+        snprintf(step, sizeof step, "Step %d of %d", ui->page + 1, WIFI_GUIDE_STEPS);
+        b.step = step;
+        b.step_title = wifi_guide_title(ui->page);
+        b.labels[0] = "Check & Connect";
+        LightLock_Lock(&shared.lock);
+        bool checking = shared.guide_checking, ok = shared.guide_ok;
+        wifi_step_t ws = (wifi_step_t)shared.guide_step;
+        snprintf(result, sizeof result, "%.47s", shared.guide_check[0]);
+        LightLock_Unlock(&shared.lock);
+        if (checking) {
+            snprintf(result, sizeof result, "%.47s", wifi_step_progress(ws));
+            b.result_color = KIT_AMBER;
+        } else if (result[0] == '\0') {
+            snprintf(result, sizeof result, "Tap Check & Connect after step 5.");
+            b.result_color = KIT_INK3;
+        } else {
+            b.result_color = ok ? KIT_GREEN : KIT_AMBER;
+        }
+        b.result = result;
+        if (flashing(BTN_PAGE_PREV, now)) {
+            b.pressed = SET_HIT_PREV;
+        } else if (flashing(BTN_PAGE_NEXT, now)) {
+            b.pressed = SET_HIT_NEXT;
+        }
+        break;
+    }
+    case SET_ABOUT:
+        b.text = "Trouble code text: Wal33D/dtc-database (MIT).\n\n"
+                 "VIN models: NHTSA vPIC (US government, public domain).\n\n"
+                 "Fonts and the rest: CREDITS.md.\n\n"
+                 "Not for use by the driver while driving.";
+        break;
+    case SET_TESTS: {
+        static const char *const labels[8] = { "ATZ", "ATSP0 + 0100", "ATDPN", "ATRV", "0902 VIN",
+                                                "Speed Test", "Live Test", "Save Log" };
+        for (int i = 0; i < 8; i++) {
+            b.labels[i] = labels[i];
+            if (buttons[i].action >= 0 && buttons[i].action == busy) {
+                b.busy = i;
+            }
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    setup_draw_bottom(kind, &b);
+}
+
 /* The LOG screen shown (graphics), or -1 for other screens. */
 static int log_kind_of(const ui_state_t *ui)
 {
@@ -5834,6 +6105,10 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         cleared_after_confirm = false;
         return;
     }
+    if (setup_kind_of(ui) >= 0) {
+        draw_setup_gfx_bottom(ui, cfg, now, busy);
+        return;
+    }
     int lk = log_kind_of(ui);
     if (lk >= 0) {
         int pressed = ui->log_held_in ? ui->log_held : LOG_HIT_NONE;
@@ -6837,7 +7112,7 @@ void spike_ui_run(void)
                       false, false, TA_RUN_LAUNCH, SCREEN_HOME, 0, 0, -1, 0, false, false, 0, 0,
                       -1, false, 0, LIVE_HIT_NONE, false, 0, DIAG_HIT_NONE, false, 0, false,
                       false, TRIM_HIT_NONE, false, false, false, TRK_HIT_NONE, false, 0,
-                      false, false, LOG_HIT_NONE, false, 0 };
+                      false, false, LOG_HIT_NONE, false, 0, SET_HIT_NONE, false, 0 };
     gm_vec_t gm_raw = { 0, 0, 0 };   /* G-METER: the latest sensor reading */
     live_menu_count();
     uint64_t notice_until = 0;
@@ -7049,7 +7324,8 @@ void spike_ui_run(void)
             bool gfx_touch = home_gfx && (ui.screen == SCREEN_HOME || ui.screen == SCREEN_LIVE_MENU ||
                                           ui.screen == SCREEN_LIVE || ui.screen == SCREEN_DIAG ||
                                           ui.screen == SCREEN_DIAG_PAGE || ui.screen == SCREEN_TRIM ||
-                                          track_kind_of(&ui) >= 0 || log_kind_of(&ui) >= 0);
+                                          track_kind_of(&ui) >= 0 || log_kind_of(&ui) >= 0 ||
+                                          setup_kind_of(&ui) >= 0);
             int i = gfx_touch ? -1 : button_at(list, count, tp.px, tp.py);
             int item = ui.screen == SCREEN_HOME && home_gfx ? home_hit(tp.px, tp.py) : -1;
             diag_hit_t dhit = !gfx_touch                     ? DIAG_HIT_NONE
@@ -7059,7 +7335,31 @@ void spike_ui_run(void)
                                                             : DIAG_HIT_NONE;
             int tkind = gfx_touch ? track_kind_of(&ui) : -1;
             int lkind = gfx_touch ? log_kind_of(&ui) : -1;
-            if (lkind >= 0) {
+            int skind = gfx_touch ? setup_kind_of(&ui) : -1;
+            if (skind >= 0) {
+                /* SETUP: controls pressed while held, act on lifting; the make picker
+                 * scrolls and a tap on a make saves it. */
+                int h = setup_hit((setup_kind_t)skind, tp.px, tp.py);
+                if (h == SET_HIT_NONE && skind == SET_MAKE) {
+                    int n = make_choice_count();
+                    ui.live_touching = true;
+                    if (diag_list_bar_hit(tp.px, tp.py) && diag_list_max_scroll(n) > 0) {
+                        ui.live_grip = ui.live_dragged = true;
+                        ui.live_row_held = -1;
+                        ui.live_grip_grab = diag_list_grip_grab(tp.py, ui.make_scroll, n);
+                        ui.make_scroll = diag_list_scroll_for_grip(tp.py - ui.live_grip_grab, n);
+                    } else {
+                        ui.live_grip = ui.live_dragged = false;
+                        ui.live_touch_y0 = tp.py;
+                        ui.live_scroll0 = ui.make_scroll;
+                        ui.live_row_held = diag_list_hit(tp.px, tp.py, ui.make_scroll, n);
+                    }
+                } else {
+                    ui.setup_held = h;
+                    ui.setup_held_in = h != SET_HIT_NONE;
+                }
+                bottom_dirty = true;
+            } else if (lkind >= 0) {
                 /* LOG: controls pressed while held, act on lifting; the list scrolls and a
                  * tap on a drive opens its page. */
                 int h = log_hit((log_kind_t)lkind, tp.px, tp.py);
@@ -7228,6 +7528,95 @@ void spike_ui_run(void)
                 }
                 ui.live_held = LIVE_HIT_NONE;
                 ui.live_held_in = false;
+                bottom_dirty = true;
+            }
+        }
+
+        /* SETUP's controls (graphics): the same. */
+        if (ui.setup_held != SET_HIT_NONE) {
+            int skind = setup_kind_of(&ui);
+            if (skind < 0 || confirming) {
+                ui.setup_held = SET_HIT_NONE;
+                ui.setup_held_in = false;
+            } else if (hidKeysHeld() & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                bool in = setup_hit((setup_kind_t)skind, tp.px, tp.py) == ui.setup_held;
+                if (in != ui.setup_held_in) {
+                    ui.setup_held_in = in;
+                    bottom_dirty = true;
+                }
+            } else {
+                int h = ui.setup_held, b = h - SET_HIT_BUTTON;
+                if (ui.setup_held_in && !tapped) {
+                    if (h == SET_HIT_BACK) {
+                        action = BTN_BACK;
+                    } else if (h == SET_HIT_PREV || h == SET_HIT_NEXT) {
+                        action = h == SET_HIT_PREV ? BTN_PAGE_PREV : BTN_PAGE_NEXT;
+                    } else if (h == SET_HIT_US || h == SET_HIT_METRIC) {
+                        if (cfg.metric != (h == SET_HIT_METRIC)) {
+                            action = BTN_UNITS;
+                        }
+                    } else if (b >= 0) {
+                        static const int menu[4] = { BTN_SETUP_WIFI, BTN_SETUP_VEHICLE,
+                                                     BTN_SETUP_OTHER, BTN_SETUP_TESTS };
+                        static const int wifi[3] = { BTN_GUIDE_CHECK, BTN_WIFI_SLOT, BTN_GUIDE };
+                        static const int veh[SET_VEH_COUNT] = {
+                            BTN_MAKE_SCREEN, BTN_MODEL_EDIT, BTN_YEAR_PREV, BTN_YEAR_NEXT,
+                            BTN_ENGINE_PREV, BTN_ENGINE_NEXT, BTN_DIAG_SCAN,
+                        };
+                        switch (skind) {
+                        case SET_MENU:    action = menu[b]; break;
+                        case SET_WIFI:    action = wifi[b]; break;
+                        case SET_GUIDE:   action = BTN_GUIDE_CHECK; break;
+                        case SET_VEHICLE: action = veh[b]; break;
+                        case SET_OTHER:   action = BTN_ABOUT; break;
+                        case SET_TESTS:   action = buttons[b].action; break;
+                        default: break;
+                        }
+                    }
+                    tapped = lifted = action != 0;
+                    top_dirty = true;   /* a setting may have changed */
+                }
+                ui.setup_held = SET_HIT_NONE;
+                ui.setup_held_in = false;
+                bottom_dirty = true;
+            }
+        }
+
+        /* The make picker (graphics): drag or the grip scrolls it; a tap saves the make. */
+        if (ui.live_touching && ui.screen == SCREEN_MAKE) {
+            int n = make_choice_count();
+            if (confirming) {
+                ui.live_touching = ui.live_grip = false;
+            } else if (hidKeysHeld() & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                int dy = tp.py - ui.live_touch_y0;
+                if (!ui.live_grip && !ui.live_dragged && (dy > 6 || dy < -6)) {
+                    ui.live_dragged = true;
+                    bottom_dirty = true;
+                }
+                int sc = ui.live_grip ? diag_list_scroll_for_grip(tp.py - ui.live_grip_grab, n)
+                       : ui.live_dragged ? diag_list_clamp(ui.live_scroll0 - dy, n) : ui.make_scroll;
+                if (sc != ui.make_scroll) {
+                    ui.make_scroll = sc;
+                    bottom_dirty = true;
+                }
+            } else {
+                ui.live_touching = ui.live_grip = false;
+                int k = ui.live_row_held;
+                if (!ui.live_dragged && k >= 0 && k < n) {
+                    LightLock_Lock(&shared.lock);
+                    snprintf(cfg.car_make, sizeof cfg.car_make, "%s", k == 0 ? "" : make_choice_name(k));
+                    LightLock_Unlock(&shared.lock);
+                    if (worker != NULL) {
+                        enqueue(BTN_SET_MAKE);
+                    }
+                    ui.screen = SCREEN_SETUP_VEHICLE;
+                    bottom_full = top_dirty = true;
+                }
+                ui.live_row_held = -1;
                 bottom_dirty = true;
             }
         }
@@ -7543,7 +7932,7 @@ void spike_ui_run(void)
 
         /* LIVE's view list (graphics): drag to scroll, lift to pick. */
         if (ui.live_touching && ui.screen != SCREEN_DIAG_PAGE && ui.screen != SCREEN_ACHIEVE &&
-            ui.screen != SCREEN_LOG) {
+            ui.screen != SCREEN_LOG && ui.screen != SCREEN_MAKE) {
             if (ui.screen != SCREEN_LIVE_MENU || confirming) {
                 ui.live_touching = ui.live_grip = false;
             } else if ((hidKeysHeld() & KEY_TOUCH) && ui.live_grip) {
@@ -8240,6 +8629,8 @@ void spike_ui_run(void)
             case BTN_MAKE_SCREEN:
                 LightLock_Lock(&shared.lock);
                 ui.page = make_choice_of(cfg.car_make) / MAKE_PAGE_SLOTS;
+                ui.make_scroll = diag_list_clamp(diag_list_row(make_choice_of(cfg.car_make), 0).y - 80,
+                                                 make_choice_count());
                 LightLock_Unlock(&shared.lock);
                 ui.screen = SCREEN_MAKE;
                 bottom_full = top_dirty = true;
@@ -8601,14 +8992,18 @@ void spike_ui_run(void)
             bool diag_gfx = home_gfx && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_DIAG_PAGE);
             bool trim_gfx = home_gfx && ui.screen == SCREEN_TRIM;
             bool gfx_top_now = (ui.screen == SCREEN_HOME && home_gfx) || live_gfx || diag_gfx || trim_gfx ||
-                               track_kind_of(&ui) >= 0 || (home_gfx && ui.screen == SCREEN_LOG);
+                               track_kind_of(&ui) >= 0 || (home_gfx && ui.screen == SCREEN_LOG) ||
+                               setup_kind_of(&ui) >= 0;
             if (gfx_top_shown && !gfx_top_now && ui.screen != SCREEN_GRAPH) {
                 consoleSelect(&top_console);
                 printf("\x1b[0m\x1b[2J");
             }
             gfx_top_shown = gfx_top_now || (graph_gfx && ui.screen == SCREEN_GRAPH);
             bool track_gfx = track_kind_of(&ui) >= 0;
-            if (track_gfx) {
+            if (setup_kind_of(&ui) >= 0) {
+                draw_setup_gfx_top(&ui, &cfg, connected, scroll);
+                bottom_dirty = true;   /* values on the rows follow the settings */
+            } else if (track_gfx) {
                 draw_track_gfx_top(&ui, connected, &cfg, now);
                 live_drawn_at = now;
                 static uint64_t track_bottom_at;

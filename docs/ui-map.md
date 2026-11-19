@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-19, GRAPH's top screen in the night theme (gauge-boy-82l.23)
+**As of:** 2026-11-19, SETUP redesign (gauge-boy-82l.24)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -193,44 +193,45 @@ Gauge Boy
         │   ├── [Y Info]             how to record a drive (REC on LIVE), what LOG does  [Y]
         │   └── [B Back]             → HOME                                       [B]
         │
-        ├── SETUP                    (top: session log on every SETUP page but About)  [L/R scroll log]
-        │   ├── [TESTS]              → SETUP > TESTS
-        │   │   ├── [ATZ] [ATSP0+0100] [ATDPN]
-        │   │   ├── [ATRV] [0902 VIN] [SPEED TEST]
-        │   │   ├── [LIVE TEST]      every supported PID once, then 10 s of the Engine view
-        │   │   ├── [SAVE LOG]       → logs/gauge-boy-log-<date>.txt
-        │   │   └── [BACK → SETUP] [OLDER ^] [NEWER v]   (scroll the log)  [B, Up/Down, L/R]
-        │   ├── [WI-FI]              → SETUP > WI-FI
-        │   │   ├── [CHECK & CONNECT  Connected/Not connected/checking...]  Wi-Fi (joins the
+        ├── SETUP                    (top: the settings at a glance: adapter, Wi-Fi slot, car,
+        │   │                        engine, units, version)
+        │   ├── [Wi-Fi]              → SETUP > WI-FI (rows: label, value, > when it opens)
+        │   │   ├── (top: Check & Connect's progress, then "Connected." with the adapter and
+        │   │   │    car, or "Failed at: <step>" and what to fix; before a check, a hint)
+        │   │   ├── [Check & Connect  Connected/Not connected/checking...]  Wi-Fi (joins the
         │   │   │                    slot if needed), reaching the adapter, the adapter
-        │   │   │                    answering, the car; below: "Connected." with the adapter
-        │   │   │                    and car, or "Failed at: <step>" and what to fix (and the
-        │   │   │                    slot's IP / DNS when they differ from the guide)
-        │   │   ├── [Wi-Fi slot                  Any/1/2/3]   cycles the slot, saved
-        │   │   ├── [CONNECTION GUIDE >]          → Wi-Fi guide (the setup steps)
-        │   │   └── [BACK]           → SETUP                                      [B]
-        │   ├── [VEHICLE]            → SETUP > VEHICLE  (VIN values win, marked "(VIN)")
-        │   │   ├── [Make         Auto/<make>]   → Car make picker
-        │   │   │   ├── [Auto] [Acura] [Audi] …   12 per page, 3 pages; tap saves → VEHICLE
-        │   │   │   ├── [BACK]       → SETUP > VEHICLE                            [B]
-        │   │   │   └── [<] page n/3 [>]                                          [L/R]
-        │   │   ├── [Model        Auto/<model>]  → 3DS keyboard; empty = Auto; saved
-        │   │   ├── [Year  Auto/<year>] [<] [>]  steps Auto, 1996 ... next year; saved
-        │   │   ├── [Engine  Unknown/<n.n> L] [<] [>]  0.6-8.0 L by 0.1 (from Unknown: 2.0); saved;
+        │   │   │                    answering, the car
+        │   │   ├── [Wi-Fi slot  Any/1/2/3]  cycles the slot, saved
+        │   │   ├── [Connection Guide >]     → Wi-Fi guide
+        │   │   └── [B Back]         → SETUP                                      [B]
+        │   ├── [Vehicle]            → SETUP > VEHICLE (VIN values win, marked "(VIN)"; top: make,
+        │   │   │                    model, year, engine, VIN)
+        │   │   ├── [Make  Auto/<make> >]    → Car make picker (a scrolling list, the chosen one
+        │   │   │                    red; a tap saves it → VEHICLE; top: the make now) [B back]
+        │   │   ├── [Model  Auto/<model> >]  → 3DS keyboard; empty = Auto; saved
+        │   │   ├── [Year  Auto/<year>] [-] [+]   steps Auto, 1996 ... next year; saved
+        │   │   ├── [Engine  Unknown/<n.n> L] [-] [+]  0.6-8.0 L by 0.1 (from Unknown: 2.0); saved;
         │   │   │                    for ECO's fuel estimate on cars without a MAF
-        │   │   ├── [VIN  <VIN>/tap to read]  (next to BACK) runs a DIAG scan
-        │   │   └── [BACK]           → SETUP                                      [B]
-        │   ├── [OTHER]              → SETUP > OTHER
-        │   │   ├── [Units        US/Metric]     toggles, saved (LIVE and the log use it)
-        │   │   ├── [About Gauge Boy >]           → About (top: version, license, sources)
-        │   │   │   └── [BACK]       → SETUP > OTHER                              [B]
-        │   │   └── [BACK]           → SETUP                                      [B]
-        │   └── [BACK]               → HOME                                       [B]
+        │   │   ├── [VIN  <VIN>/tap to read >]  runs a DIAG scan
+        │   │   └── [B Back]         → SETUP                                      [B]
+        │   ├── [Other]              → SETUP > OTHER (top: units, version)
+        │   │   ├── [US | Metric]    the units toggle, saved (LIVE and the log use it)
+        │   │   ├── [About Gauge Boy >]  → About (top: name, version, what it does, unofficial,
+        │   │   │   │                the repo; bottom: sources, CREDITS.md, the safety line)
+        │   │   │   └── [B Back]     → SETUP > OTHER                              [B]
+        │   │   └── [B Back]         → SETUP                                      [B]
+        │   ├── [Tests]              → SETUP > TESTS (top: the session log)   [L/R, Up/Down scroll]
+        │   │   ├── [ATZ] [ATSP0 + 0100] [ATDPN] [ATRV] [0902 VIN] [Speed Test]
+        │   │   ├── [Live Test]      every supported PID once, then 10 s of the Engine view
+        │   │   ├── [Save Log]       → logs/gauge-boy-log-<date>.txt
+        │   │   └── [B Back]         → SETUP                                      [B]
+        │   └── [B Back]             → HOME                                       [B]
         │
-        └── Wi-Fi guide              (top: step text; 5 steps)
-            ├── [BACK]               → SETUP > WI-FI, or HOME if opened from the Adapter card  [B]
-            ├── [<] step n/5 [>]                                                  [L/R]
-            └── [CHECK]              the same CHECK & CONNECT → results on bottom
+        └── Wi-Fi guide              (top: "Step n of 5: <title>" and the step's text)
+            ├── (< step >)           half circles: the other steps                 [L/R]
+            ├── (the last check's first line, or its progress)
+            ├── [Check & Connect]    the same check → results here and on SETUP > WI-FI
+            └── [B Back]             → SETUP > WI-FI, or HOME if opened from the Adapter card  [B]
 ```
 
 Any screen: a new achievement shows "Unlocked: <name>!" (or "Unlocked n achievements!") in the bottom screen's notice line for 5 s.
@@ -239,5 +240,5 @@ Any screen: a new achievement shows "Unlocked: <name>!" (or "Unlocked n achievem
 
 - SETUP is a menu of four pages (owner layout, gauge-boy-cib): TESTS (adapter and car tests, the log's buttons), WI-FI (connection), VEHICLE (make, model, year, engine size, VIN) and OTHER (units, About).
 - LIVE views and the PIDs in each, in list order: Engine (RPM, speed, coolant, throttle, load), Idle/Vacuum (RPM, MAP (PID 0B or 87) + vacuum or boost, short-term trims, timing, baro, fuel loop), Air/Fuel (MAF, MAP (0B or 87), intake air, throttle, short- and long-term trims, baro, fuel loop, commanded lambda), O2 Sensors (RPM, short-term trims, then every oxygen sensor the car has: narrow band voltage, PIDs 14-1B, or wide band lambda, 24-2B / 34-3B, banks 1-2, sensors 1-4), Warm-up (coolant, intake air, oil, outside air, run time, RPM), Drive (RPM, speed, throttle, load, timing, torque, gear ratio, odometer, fuel rate (the car's PID 5E / 9D, else estimated from MAF or MAP + engine size) and instant economy), All (every supported PID), Custom (your pick). Each view only shows what the car supports.
-- HOME, LIVE, DIAG, TRIM, TRACK and LOG (with GRAPH) are drawn with graphics (citro2d, the UI kit in `source/ui/kit.c`); SETUP and the Wi-Fi guide are still the text console until their M5 redesign. If graphics fail to start, every screen falls back to its text layout.
+- HOME, LIVE, DIAG, TRIM, TRACK and LOG (with GRAPH) are drawn with graphics (citro2d, the UI kit in `source/ui/kit.c`); SETUP and the Wi-Fi guide are graphics too; GARAGE, TRIP, MILEAGE and LIVE's Custom PID picker are still the text console. If graphics fail to start, every screen falls back to its text layout.
 - The code for these screens is in `source/spike_ui.c` (screens, buttons, actions) and `source/ui/` (HOME layout and drawing).
