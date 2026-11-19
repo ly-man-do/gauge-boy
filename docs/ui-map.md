@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, LIVE: fuel rate, economy, more PIDs; DIAG: Cleared line (gauge-boy-8ry, 8k9, 936)
+**As of:** 2026-11-18, HOME redesign: night theme, status bar, car card and LCD panels (gauge-boy-82l.11)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -10,9 +10,15 @@ The arrow (→) shows where a button goes or what it does. On the bottom screen 
 Gauge Boy
 ├── Unsupported device screen        (Old 3DS only: tap or START exits)
 └── Safety notice                    (tap the touch screen to continue)
-    └── HOME                         (graphics; top screen: car facts, found by itself
-                                     after connecting: car, VIN, protocol)
-        ├── [Garage card]            → GARAGE (BACK returns to HOME)
+    └── HOME                         (graphics, night theme. Top screen: 3DS-style status bar
+                                     (signal, Connected / Not connected, date, time, battery),
+                                     GAUGE BOY: OBD-II DELUXE, the car card (nickname, year make
+                                     model, CEL and code chips, protocol and adapter; "No car
+                                     yet" before one is known), ODOMETER and LAST DRIVE (distance,
+                                     today or the date, mileage-log average economy) in LCD
+                                     digits, the safety line)
+        ├── [Garage]                 → GARAGE (second line: nickname or model, "No car yet";
+        │                              BACK returns to HOME)
         │   └── GARAGE               (no polling; top: one car's card: a picture frame (photo
         │       │                     in M5), nickname, year make model, VIN or "(set in
         │       │                     SETUP)", logged distance and drives, odometer, bests;
@@ -39,11 +45,12 @@ Gauge Boy
         │           ├── [EDIT]       the selected entry: the same questions, filled in with it
         │           ├── [DELETE]     the selected entry, after a second tap ("AGAIN")
         │           └── [BACK]       → GARAGE                                     [B]
-        ├── [Adapter card]           → Wi-Fi guide (shows Connected / Not connected)
-        ├── [LIVE  · Dash gauges]    → LIVE view list
-        ├── [DIAG  · Codes & CEL]    → DIAG (amber with a lit lamp and "CEL ON" when the CEL is on)
-        ├── [TRIM  · Fuel trims]     → TRIM (starts polling)
-        ├── [TRACK · Track modes]    → TRACK
+        ├── [Adapter]                → Wi-Fi guide (Connected in green; Not connected in red,
+        │                              outlined red until another button is tapped)
+        ├── [LIVE]                   → LIVE view list
+        ├── [DIAG]                   → DIAG (amber, reading "CEL ON", when the CEL is on)
+        ├── [TRIM]                   → TRIM (starts polling)
+        ├── [TRACK]                  → TRACK
         │   ├── TRACK                (top: the modes, closed-course rules)
         │   │   ├── [TIME ATTACK]    → closed-course notice (once a session), then TIME ATTACK
         │   │   │                      notice: [BACK] → TRACK [B]   [I UNDERSTAND] → TIME ATTACK
@@ -88,8 +95,8 @@ Gauge Boy
         │       │                     green = picked; refused while moving ("Pick a run
         │       │                     while parked."); starts and re-arms by itself
         │       └── [BACK]           → TRACK (stops polling)                      [B]
-        ├── [LOG   · Record drives]  → LOG (lists the drives on the SD card)
-        ├── [SETUP · Settings]       → SETUP
+        ├── [LOG]                    → LOG (lists the drives on the SD card)
+        ├── [SETUP]                  → SETUP
         └── [START Close bar]        → closes Gauge Boy            [START]
         │
         ├── LIVE view list           (top: the last view's values)

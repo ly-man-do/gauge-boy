@@ -41,27 +41,18 @@ bool graph_draw_init(void)
         return false;
     }
     text_buf = C2D_TextBufNew(1024);
-    /* The top console uses RGB565, so the GPU writes that format too. */
-    target = C3D_RenderTargetCreate(240, 400, GPU_RB_RGBA8, GPU_RB_DEPTH16);
+    /* HOME's top target: a screen has only one linked target. */
+    target = (C3D_RenderTarget *)home_draw_top_target();
     if (text_buf == NULL || target == NULL) {
         graph_draw_exit();
         return false;
     }
-    C3D_RenderTargetSetOutput(target, GFX_TOP, GFX_LEFT,
-                              GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) |
-                              GX_TRANSFER_RAW_COPY(0) |
-                              GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGBA8) |
-                              GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGB565) |
-                              GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO));
     return true;
 }
 
 void graph_draw_exit(void)
 {
-    if (target != NULL) {
-        C3D_RenderTargetDelete(target);
-        target = NULL;
-    }
+    target = NULL;   /* HOME's: home_draw_exit deletes it */
     if (text_buf != NULL) {
         C2D_TextBufDelete(text_buf);
         text_buf = NULL;

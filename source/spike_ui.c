@@ -2230,6 +2230,10 @@ static void garage_scan(spike_t *s)
         if (c >= 0) {
             g.car[c].km += drv[i].km;
             g.car[c].drives++;
+            if (strcmp(names[i], g.car[c].last_name) > 0) {   /* names sort by date */
+                g.car[c].last_km = drv[i].km;
+                snprintf(g.car[c].last_name, sizeof g.car[c].last_name, "%.31s", names[i]);
+            }
         }
         drv[i].ok = false;
     }
@@ -4539,6 +4543,118 @@ static void graph_request(const ui_state_t *ui, const char *file)
     enqueue(BTN_GRAPH_LOAD);
 }
 
+/* HOME: the current car's key, title and garage card (if it has one).
+ * Call with shared.lock held. */
+static bool home_car(char *key, size_t klen, char *title, size_t tlen, garage_car_t *card,
+                     bool *have_card)
+{
+    baro_store_key(&shared.diag, app_cfg->car_make, app_cfg->car_model, app_cfg->car_year, key,
+                   klen);
+    *have_card = false;
+    title[0] = '\0';
+    if (key[0] == '\0') {
+        return false;
+    }
+    for (int i = 0; i < shared.garage.count; i++) {
+        if (strcmp(shared.garage.car[i].key, key) == 0) {
+            *card = shared.garage.car[i];
+            *have_card = true;
+            snprintf(title, tlen, "%s", card->title);
+        }
+    }
+    if (title[0] == '\0') {
+        time_t now = time(NULL);
+        struct tm *tm = gmtime(&now);
+        garage_title(key, tm != NULL ? tm->tm_year + 1900 : 0, title, tlen);
+    }
+    return true;
+}
+
+/* HOME's Garage button: the nickname, else the model ("Ridgeline" from
+ * "2008 Honda Ridgeline"); NULL if no car. */
+static const char *home_garage_line(char *out, size_t len)
+{
+    char key[32], title[48];
+    static garage_car_t card;
+    bool have_card;
+    LightLock_Lock(&shared.lock);
+    bool have = home_car(key, sizeof key, title, sizeof title, &card, &have_card);
+    LightLock_Unlock(&shared.lock);
+    if (!have) {
+        return NULL;
+    }
+    if (have_card && card.nickname[0] != '\0') {
+        snprintf(out, len, "%s", card.nickname);
+        return out;
+    }
+    const char *model = title;
+    const char *sp = strchr(title, ' ');
+    if (sp != NULL && strchr(sp + 1, ' ') != NULL) {
+        model = strchr(sp + 1, ' ') + 1;   /* after the year and the make */
+    }
+    snprintf(out, len, "%s", model[0] ? model : title);
+    return out;
+}
+
+/* HOME top screen (citro2d). */
+static void draw_home_top(bool connected)
+{
+    static garage_car_t card;
+    static mileage_list_t miles;
+    static char miles_text[sizeof shared.miles_text];
+    char key[32], title[48], adapter[ELM_LINE_MAX], today[40];
+    bool have_card;
+
+    LightLock_Lock(&shared.lock);
+    bool have_car = home_car(key, sizeof key, title, sizeof title, &card, &have_card);
+    bool cel_known = shared.diag.have_readiness;
+    bool cel = cel_known && shared.diag.readiness.mil_on;
+    int codes = shared.diag.have_stored ? shared.diag.stored.count : -1;
+    int protocol = shared.diag.link.protocol;
+    snprintf(adapter, sizeof adapter, "%s", shared.diag.link.adapter_id);
+    memcpy(miles_text, shared.miles_text, sizeof miles_text);
+    LightLock_Unlock(&shared.lock);
+
+    time_t now = time(NULL);
+    struct tm *tm = gmtime(&now);
+    snprintf(today, sizeof today, "%04d%02d%02d", tm != NULL ? tm->tm_year + 1900 : 0,
+             tm != NULL ? tm->tm_mon + 1 : 0, tm != NULL ? tm->tm_mday : 0);
+
+    home_top_t t;
+    memset(&t, 0, sizeof t);
+    t.connected = connected;
+    t.have_car = have_car;
+    t.nickname = have_card ? card.nickname : "";
+    t.title = title;
+    t.cel_known = cel_known;
+    t.cel_on = cel;
+    t.codes = codes;
+    t.protocol = protocol;
+    t.adapter_id = adapter;
+    t.adapter_host = app_cfg->adapter_host;
+    t.metric = app_cfg->metric;
+    t.have_odo = have_card && card.have_odo;
+    t.odo_km = card.odo_km;
+    t.have_last = have_card && card.last_name[0] != '\0';
+    t.last_km = card.last_km;
+    t.last_name = card.last_name;
+    t.today = today;
+    if (have_car && mileage_read(miles_text, key, &miles) > 0) {
+        t.have_economy = app_cfg->metric ? mileage_l100(miles.km, miles.fuel_l, &t.economy)
+                                         : mileage_mpg(miles.km, miles.fuel_l, &t.economy);
+    }
+
+    home_status_t s;
+    u8 level = 0, charging = 0;
+    s.battery = R_SUCCEEDED(PTMU_GetBatteryLevel(&level)) ? level : -1;
+    s.charging = R_SUCCEEDED(PTMU_GetBatteryChargeState(&charging)) && charging != 0;
+    u8 strength = osGetWifiStrength();
+    s.bars = strength > 0 ? strength + 1 : 0;
+    s.connected = connected;
+    s.now = now;
+    home_draw_top(&t, &s);
+}
+
 /* GRAPH top screen (citro2d; a text summary without graphics). */
 static void draw_graph_top(const ui_state_t *ui)
 {
@@ -4803,6 +4919,8 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
             }
         }
         v.notice = ui->notice;
+        char car[GARAGE_NICK_MAX + 48];
+        v.car = home_garage_line(car, sizeof car);
         home_draw(&v);
         return;
     }
@@ -5532,6 +5650,7 @@ void spike_ui_run(void)
         spike_logf(&spike, "%s", migrate_note);
     }
     home_gfx = home_draw_init();
+    bool ptmu_ok = R_SUCCEEDED(ptmuInit());   /* HOME's battery level */
     graph_gfx = home_gfx && graph_draw_init();
     if (!home_gfx) {
         spike_logf(&spike, "! HOME graphics could not start (fonts in romfs); using text HOME");
@@ -5594,6 +5713,8 @@ void spike_ui_run(void)
     Thread worker = threadCreate(worker_main, &spike, WORKER_STACK, worker_prio, -2, false);
     if (worker == NULL) {
         spike_logf(&spike, "! Could not start the worker thread; buttons will not work");
+    } else {
+        enqueue(BTN_GARAGE_SCAN);   /* HOME's car card: odometer, last drive */
     }
 
     ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false, -1, SCREEN_SETUP,
@@ -6610,6 +6731,11 @@ void spike_ui_run(void)
         bool connected = shared.connected;
         bool confirm_now = shared.confirm;
         LightLock_Unlock(&shared.lock);
+        static bool was_connected;
+        if (connected && !was_connected && worker != NULL) {
+            enqueue(BTN_GARAGE_SCAN);   /* HOME's car card: the car may be new */
+        }
+        was_connected = connected;
         if (confirm_now != drawn_confirm) {
             drawn_confirm = confirm_now;
             bottom_dirty = true;
@@ -6663,7 +6789,7 @@ void spike_ui_run(void)
             }
         }
         if (ui.screen == SCREEN_GARAGE || ui.screen == SCREEN_TRIP ||
-            ui.screen == SCREEN_MILEAGE) {
+            ui.screen == SCREEN_MILEAGE || ui.screen == SCREEN_HOME) {
             static unsigned garage_drawn = ~0u;
             LightLock_Lock(&shared.lock);
             unsigned gv = shared.garage_version;
@@ -6678,7 +6804,8 @@ void spike_ui_run(void)
                       ((ui.screen == SCREEN_SHIFT || ui.screen == SCREEN_GMETER ||
                         ui.screen == SCREEN_REVSYNC || ui.screen == SCREEN_ECO) &&
                        now - live_drawn_at >= 30) ||
-                      (ui.screen == SCREEN_TRIP && now - live_drawn_at >= 500);
+                      (ui.screen == SCREEN_TRIP && now - live_drawn_at >= 500) ||
+                      (ui.screen == SCREEN_HOME && home_gfx && now - live_drawn_at >= 1000);
 
         LightLock_Lock(&shared.lock);
         unsigned drive_version = shared.drive_version;
@@ -6711,6 +6838,15 @@ void spike_ui_run(void)
         if (top_dirty || busy != drawn_busy || connected != drawn_connected || live_due || ta_due ||
             (shows_log ? (version != drawn_version || scroll != drawn_scroll)
                        : !live_screen && diag_version != drawn_diag_version)) {
+            /* HOME's and GRAPH's top graphics reach the last column, which
+             * the text screens don't print: clear it all once on leaving. */
+            static bool home_top_shown;
+            bool home_top_now = ui.screen == SCREEN_HOME && home_gfx;
+            if (home_top_shown && !home_top_now && ui.screen != SCREEN_GRAPH) {
+                consoleSelect(&top_console);
+                printf("\x1b[0m\x1b[2J");
+            }
+            home_top_shown = home_top_now || (graph_gfx && ui.screen == SCREEN_GRAPH);
             if (ui.screen == SCREEN_TIME_ATTACK) {
                 draw_ta_top(busy, connected, cfg.metric, now);
                 live_drawn_at = now;
@@ -6755,6 +6891,9 @@ void spike_ui_run(void)
                 draw_graph_top(&ui);
             } else if (shows_log) {
                 draw_top(scroll, busy, connected);
+            } else if (ui.screen == SCREEN_HOME && home_gfx) {
+                draw_home_top(connected);
+                live_drawn_at = now;
             } else {
                 draw_diag_top(ui.screen == SCREEN_HOME, ui.tab, ui.selected, busy, connected);
             }
@@ -6794,6 +6933,9 @@ void spike_ui_run(void)
     }
     graph_draw_exit();
     home_draw_exit();
+    if (ptmu_ok) {
+        ptmuExit();
+    }
     spike_logf(&spike, "Session end");
     if (log_file != NULL) {
         fclose(log_file);

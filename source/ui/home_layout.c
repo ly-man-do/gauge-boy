@@ -2,15 +2,18 @@
 
 #include <stddef.h>
 
-/* Margins 13 px, gaps 6 px: the same grid as the owner-approved preview. */
-#define MARGIN   13
-#define GAP      6
+/* Mockup v4 (docs/mockups/home-v4.html): margins 6 px, gaps 5-6 px. */
+#define MARGIN   6
 #define STATUS_Y 5
-#define STATUS_H 32
-#define CARD_W   94
-#define CARD_H   78
-#define ROW1_Y   41
-#define ROW2_Y   125
+#define STATUS_H 40
+#define STATUS_W 151
+#define CARD_H   73
+#define ROW1_Y   50
+#define ROW2_Y   128
+
+/* The three columns: 99, 100 and 99 px wide. */
+static const int col_x[3] = { 6, 110, 215 };
+static const int col_w[3] = { 99, 100, 99 };
 
 static const struct {
     const char *label;
@@ -18,23 +21,22 @@ static const struct {
 } names[HOME_ITEM_COUNT] = {
     [HOME_GARAGE]     = { "", NULL },
     [HOME_ADAPTER] = { "", NULL },
-    [HOME_LIVE]    = { "LIVE",  "Dash gauges" },
-    [HOME_DIAG]    = { "DIAG",  "Codes & CEL" },
-    [HOME_TRIM]    = { "TRIM",  "Fuel trims" },
-    [HOME_TRACK]   = { "TRACK", "Track modes" },
-    [HOME_LOG]     = { "LOG",   "Record drives" },
-    [HOME_SETUP]   = { "SETUP", "Settings" },
+    [HOME_LIVE]    = { "LIVE",  NULL },
+    [HOME_DIAG]    = { "DIAG",  NULL },
+    [HOME_TRIM]    = { "TRIM",  NULL },
+    [HOME_TRACK]   = { "TRACK", NULL },
+    [HOME_LOG]     = { "LOG",   NULL },
+    [HOME_SETUP]   = { "SETUP", NULL },
     [HOME_CLOSE]   = { "", NULL },
 };
 
 home_rect_t home_item_rect(home_item_t item)
 {
     home_rect_t r = { 0, 0, 0, 0 };
-    int status_w = (HOME_SCREEN_W - 2 * MARGIN - GAP) / 2;   /* 144 */
     if (item == HOME_GARAGE || item == HOME_ADAPTER) {
-        r.x = MARGIN + (item == HOME_ADAPTER ? status_w + GAP : 0);
+        r.x = item == HOME_ADAPTER ? HOME_SCREEN_W - MARGIN - STATUS_W : MARGIN;
         r.y = STATUS_Y;
-        r.w = status_w;
+        r.w = STATUS_W;
         r.h = STATUS_H;
     } else if (item == HOME_CLOSE) {
         r.x = 0;
@@ -43,9 +45,9 @@ home_rect_t home_item_rect(home_item_t item)
         r.h = HOME_SCREEN_H - HOME_BAR_Y;
     } else if (item >= HOME_LIVE && item <= HOME_SETUP) {
         int k = item - HOME_LIVE;
-        r.x = MARGIN + (k % 3) * (CARD_W + GAP);
+        r.x = col_x[k % 3];
         r.y = k < 3 ? ROW1_Y : ROW2_Y;
-        r.w = CARD_W;
+        r.w = col_w[k % 3];
         r.h = CARD_H;
     }
     return r;
@@ -55,7 +57,7 @@ home_rect_t home_item_touch(home_item_t item)
 {
     home_rect_t r = home_item_rect(item);
     if (item == HOME_GARAGE || item == HOME_ADAPTER) {
-        r.h += r.y + 3;   /* from the top edge: 40 px */
+        r.h += r.y;   /* from the top edge */
         r.y = 0;
     }
     return r;
@@ -90,9 +92,9 @@ const char *home_cel_text(const home_view_t *v)
     return v->cel_on ? "CEL ON" : "CEL off";
 }
 
-const char *home_diag_sub(const home_view_t *v)
+const char *home_diag_label(const home_view_t *v)
 {
-    return v->cel_known && v->cel_on ? "CEL ON" : home_item_sub(HOME_DIAG);
+    return v->cel_known && v->cel_on ? "CEL ON" : home_item_label(HOME_DIAG);
 }
 
 const char *home_adapter_text(const home_view_t *v)

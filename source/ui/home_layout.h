@@ -6,10 +6,12 @@
  * Platform-free so the layout and touch zones are unit-tested; drawing is
  * in home_draw.c (citro2d).
  *
- *   [ Garage ] [ Not connected ]    status cards (tap: GARAGE / Wi-Fi guide)
- *   [ LIVE ] [ DIAG ] [ TRIM ]         menu cards: icon, label, second line
+ *   [ Garage    ] [ Adapter   ]       status buttons (tap: GARAGE / Wi-Fi guide)
+ *   [ LIVE ] [ DIAG ] [ TRIM ]         menu buttons: icon and label
  *   [ TRACK ] [ LOG ] [ SETUP ]
  *   ======= START Close =======        bar: tap to close, like START
+ *
+ * Mockup v4 (docs/mockups/home-v4.html), owner-approved 2026-11-18.
  */
 
 #include <stdbool.h>
@@ -40,31 +42,33 @@ typedef struct {
     bool cel_known;      /* a scan read the check engine light */
     bool cel_on;
     bool connected;      /* adapter connected */
-    int selected;        /* last tapped item (lime outline), -1 = none */
+    int selected;        /* last tapped item (red outline), -1 = none */
     int pressed;         /* item flashing after a tap, -1 = none */
     const char *notice;  /* shown in the bar instead of "START Close", or NULL */
+    const char *car;     /* Garage's second line: nickname or model, NULL = "No car yet" */
 } home_view_t;
 
-/* The card as drawn. */
+/* The button as drawn. */
 home_rect_t home_item_rect(home_item_t item);
 
-/* The touch zone: the card, except the status cards also take the strip
- * above them so they are 40 px tall. */
+/* The touch zone: the button, except the status buttons also take the
+ * strip above them, up to the top edge. */
 home_rect_t home_item_touch(home_item_t item);
 
 /* The item at a touch point, or -1. */
 int home_hit(int px, int py);
 
-/* Menu cards: "LIVE" / "Dash gauges" ...; status cards and the bar: "" / NULL. */
+/* Menu buttons: "LIVE" ...; status buttons and the bar: "". No second
+ * lines any more (NULL). */
 const char *home_item_label(home_item_t item);
 const char *home_item_sub(home_item_t item);
 
 /* "CEL off", "CEL ON", "CEL not read"; "Connected", "Not connected". */
 const char *home_cel_text(const home_view_t *v);
 
-/* The DIAG card's second line: "CEL ON" (the card turns amber, the panel's
- * CEL lamp) when the light is on, else "Codes & CEL". */
-const char *home_diag_sub(const home_view_t *v);
+/* The DIAG button's label: "CEL ON" (the button turns amber, the panel's
+ * CEL lamp) when the light is on, else "DIAG". */
+const char *home_diag_label(const home_view_t *v);
 
 #define HOME_GARAGE_TEXT "Garage"
 const char *home_adapter_text(const home_view_t *v);

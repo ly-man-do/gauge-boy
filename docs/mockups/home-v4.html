@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gauge Boy HOME mockup v4</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/dseg@0.46.0/css/dseg.css">
+<style>
+  @font-face { font-family: "Rodin"; src: local("FOT-Rodin ProN DB"), local("RodinProN-DB"), url("file:///Users/alex/Downloads/FOT-RodinProN-DB.otf") format("opentype"); }
+  :root {
+    --bg: #000000; --panel-a: #141414; --panel-b: #0A0A0A; --edge: #2E2E2E;
+    --btn-a: #3A3A3A; --btn-b: #222222; --btn-c: #111111;
+    --white: #F2FAFC; --white-dim: #9A9A9A; --white-faint: #5C5C5C;
+    --green: #5BD86A; --orange: #FF8A2B; --yellow: #F5D04A; --blue: #5AA8F5; --grey: #A8A8A8;
+    --red: #E2302A; --red-hi: #FF5A4E; --red-lo: #8E1A15; --amber: #F2A52B;
+    --glow: rgba(235,248,252,.55); --red-glow: rgba(226,48,42,.75);
+  }
+  body { margin: 0; padding: 20px; background: #202020; font-family: "Rodin", ui-rounded, "SF Pro Rounded", system-ui, sans-serif; color: #ddd; }
+  h1 { font-size: 17px; margin: 0 0 4px; font-weight: 600; }
+  p.note { margin: 0 0 10px; color: #aaa; font-size: 12.5px; max-width: 760px; line-height: 1.5; }
+  .zoom { margin: 0 0 16px; display: flex; gap: 6px; }
+  .zoom button { background: #333; color: #ddd; border: 1px solid #555; border-radius: 6px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .zoom button.on { background: #E2302A; border-color: #E2302A; color: #fff; }
+  #wrap { transform-origin: top left; }
+  .states { display: flex; gap: 40px; }
+  .ds { display: flex; flex-direction: column; align-items: center; gap: 22px; width: 400px; padding: 0 0 12px; }
+  .state-lbl { align-self: flex-start; font-size: 11px; color: #bbb; font-weight: 600; margin-bottom: -10px; }
+  .scr { position: relative; overflow: hidden; background: var(--bg); box-shadow: 0 0 0 5px #0d0d0d, 0 0 0 6px #3a3a3a; font-weight: 700; color: var(--white); }
+  .top { width: 400px; height: 240px; }
+  .bot { width: 320px; height: 240px; }
+
+  .grid { position: absolute; inset: 0; background:
+      radial-gradient(ellipse at 50% 35%, rgba(255,255,255,.07), rgba(0,0,0,0) 65%),
+      repeating-linear-gradient(0deg, rgba(0,0,0,0) 0 18px, rgba(255,255,255,.035) 18px 20px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,0) 0 18px, rgba(255,255,255,.035) 18px 20px); }
+
+  .sb { position: absolute; left: 0; top: 0; right: 0; height: 18px; display: flex; align-items: center; gap: 6px; padding: 0 6px;
+        font-size: 11px; background: linear-gradient(#1E1E1E, #0C0C0C); color: #CFCFCF; box-shadow: 0 1px 0 #333; z-index: 5; }
+  .bars { display: flex; align-items: flex-end; gap: 1px; height: 10px; }
+  .bars i { display: block; width: 2px; background: var(--white); box-shadow: 0 0 2px var(--glow); }
+  .bars i.off { opacity: .25; box-shadow: none; }
+  .pill { height: 12px; padding: 0 10px; border-radius: 6px; font-size: 9.5px; line-height: 12px; color: #fff;
+          background: linear-gradient(#7BE37F, #2E9A3A); box-shadow: inset 0 0 0 1px #A6F2A8, 0 0 4px rgba(80,210,90,.7); }
+  .pill.off { background: linear-gradient(#5A5A5A, #333); box-shadow: inset 0 0 0 1px #777; color: #DADADA; }
+  .sb .sp { flex: 1; }
+  .batt { width: 18px; height: 9px; border-radius: 2px; position: relative; display: flex; gap: 1px; padding: 1px; box-sizing: border-box; box-shadow: inset 0 0 0 1px #CFCFCF; }
+  .batt b { flex: 1; border-radius: 1px; background: var(--white); }
+  .batt:after { content: ""; position: absolute; right: -3px; top: 2.5px; width: 2px; height: 4px; background: #CFCFCF; border-radius: 0 1px 1px 0; }
+
+  .hdr { position: absolute; left: 0; right: 0; top: 21px; height: 18px; line-height: 18px; text-align: center; font-size: 14px; font-weight: 800; color: var(--white); text-shadow: 0 0 6px var(--glow); letter-spacing: .4px; white-space: nowrap; }
+  .hdr span { color: var(--orange); text-shadow: 0 0 6px rgba(255,138,43,.7); }
+  .rule { position: absolute; left: 12px; right: 12px; top: 43px; height: 2px;
+          background: repeating-linear-gradient(90deg, #DADADA 0 4px, transparent 4px 6px); opacity: .55; }
+  .rule .r { position: absolute; right: 0; top: 0; width: 64px; height: 2px; background: repeating-linear-gradient(90deg, var(--red) 0 4px, transparent 4px 6px); }
+
+  .panel { position: absolute; border-radius: 8px; background: linear-gradient(var(--panel-a), var(--panel-b)); box-shadow: inset 0 0 0 1px var(--edge), inset 0 1px 0 #3a3a3a; box-sizing: border-box; }
+  .lbl-s { font-size: 9px; color: var(--white-dim); letter-spacing: .6px; }
+  .seg { font-family: "DSEG7-Classic", monospace; font-weight: 400; color: var(--white); text-shadow: 0 0 5px var(--glow); }
+  .seg.unlit { color: var(--white-faint); text-shadow: none; }
+  .seg .ghost { position: absolute; color: rgba(255,255,255,.06); text-shadow: none; }
+  .comma { font-family: "Rodin", ui-rounded, system-ui; font-weight: 800; font-size: 20px; margin: 0 1px 0 2px; }
+  .unit { font-family: "Rodin", ui-rounded, system-ui; font-size: 11px; color: var(--white-dim); margin-left: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; height: 16px; padding: 0 7px; border-radius: 8px; font-size: 10px; margin-right: 4px; background: #161616; box-shadow: inset 0 0 0 1px #3A3A3A; color: #DADADA; }
+  .chip.unlit { color: var(--white-faint); }
+  .lamp { width: 7px; height: 7px; border-radius: 50%; background: #3A3A3A; }
+
+  .btn { position: absolute; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-sizing: border-box; color: var(--white);
+         background: linear-gradient(var(--btn-a) 0%, var(--btn-b) 55%, var(--btn-c) 100%);
+         box-shadow: inset 0 0 0 1px #4A4A4A, inset 0 1px 0 1px rgba(255,255,255,.12), 0 2px 0 #000, 0 3px 3px rgba(0,0,0,.7); }
+  .btn i { font-size: 24px; line-height: 24px; color: var(--white); text-shadow: 0 0 6px var(--glow); }
+  .btn .lbl { font-size: 13px; margin-top: 3px; letter-spacing: .4px; text-shadow: 0 0 4px rgba(255,255,255,.3); }
+  .btn.sel { box-shadow: 0 0 0 2px var(--red), 0 0 8px 2px var(--red-glow), inset 0 1px 0 1px rgba(255,255,255,.12); }
+  .wide { flex-direction: row; justify-content: center; gap: 8px; padding: 0 10px; }
+  .wide i { font-size: 20px; }
+  .wide > div { text-align: left; }
+  .wide .t1 { font-size: 12px; line-height: 13px; }
+  .wide .t2 { font-size: 9.5px; line-height: 11px; color: var(--white-dim); }
+  .close { position: absolute; left: 4px; right: 4px; bottom: 0; height: 32px; border-radius: 14px 14px 0 0; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 16px;
+           background: linear-gradient(#333, #151515); box-shadow: inset 0 1px 0 rgba(255,255,255,.15), inset 0 0 0 1px #3A3A3A; }
+  .close .start { font-size: 8.5px; font-weight: 800; padding: 1px 4px; border-radius: 3px; letter-spacing: .5px; background: var(--white); color: #151515; }
+  .safety { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center; font-size: 10px; color: var(--white-faint); }
+</style>
+</head>
+<body>
+<h1>Gauge Boy HOME, mockup v4 (night)</h1>
+<p class="note">New 3DS XL: top screen 4.88 in, 400x240 per eye (800x240 with 3D); bottom screen 4.18 in, 320x240. Both are about 96 pixels per inch, so they are drawn at the same scale, in true proportion. "1x" is roughly actual size on a standard display. Icons and numbers are placeholders. In the app, text is the 3DS system font, loaded from the console at runtime. home-v4.local.html previews it with a Rodin font that is kept out of the repo. The status bar will be restyled to match the 3DS system bar (not shown here).</p>
+<div class="zoom"><button data-z="1">1x (about actual size)</button><button data-z="2" class="on">2x</button><button data-z="3">3x</button></div>
+
+<div id="wrap"><div class="states">
+
+<!-- ======================= CONNECTED ======================= -->
+<div class="ds">
+<div class="state-lbl">Connected</div>
+
+<div class="scr top">
+  <div class="grid"></div>
+  <div class="sb">
+    <div class="bars"><i style="height:3px"></i><i style="height:5px"></i><i style="height:7px"></i><i style="height:10px"></i></div>
+    <div class="pill">Adapter connected</div>
+    <div class="sp"></div>
+    <span>11/18 (Wed)</span><span>21:12</span>
+    <div class="batt"><b></b><b></b><b></b><b style="opacity:.2"></b></div>
+  </div>
+  <div class="hdr">GAUGE BOY: <span>OBD-II DELUXE</span></div>
+  <div class="rule"><div class="r"></div></div>
+
+  <div class="panel" style="left:12px; top:52px; width:376px; height:58px; padding:8px 12px; display:flex; align-items:center; justify-content:space-between">
+    <div>
+      <div style="font-size:17px; font-weight:800; line-height:19px; text-shadow:0 0 5px rgba(255,255,255,.35)">My Ridgeline</div>
+      <div style="font-size:11px; color:var(--white-dim); font-weight:600">2008 Honda Ridgeline</div>
+    </div>
+    <div style="text-align:right">
+      <div><span class="chip"><span class="lamp"></span>CEL off</span><span class="chip" style="margin-right:0">0 codes</span></div>
+      <div style="font-size:9.5px; color:var(--white-faint); margin-top:4px">ISO 9141-2 &middot; ELM327 v2.3</div>
+    </div>
+  </div>
+
+  <div class="panel" style="left:12px; top:117px; width:184px; height:84px; padding:8px 12px">
+    <div class="lbl-s">ODOMETER</div>
+    <div class="seg" style="position:relative; font-size:24px; margin-top:8px; letter-spacing:1px"><span style="position:relative"><span class="ghost">888</span>123</span><span class="comma">,</span><span style="position:relative"><span class="ghost">888</span>456</span><span class="unit">mi</span></div>
+  </div>
+
+  <div class="panel" style="left:204px; top:117px; width:184px; height:84px; padding:8px 12px">
+    <div class="lbl-s">LAST DRIVE</div>
+    <div style="display:flex; align-items:baseline; gap:6px; margin-top:6px">
+      <span class="seg" style="position:relative; font-size:20px"><span class="ghost">88.8</span>12.4</span><span style="font-size:11px; color:var(--white-dim)">mi today</span>
+    </div>
+    <div style="display:flex; align-items:baseline; gap:6px; margin-top:6px">
+      <span class="seg" style="position:relative; font-size:14px; color:var(--red-hi); text-shadow:0 0 5px var(--red-glow)"><span class="ghost">88.8</span>17.8</span><span style="font-size:10px; color:var(--white-dim)">mpg average</span>
+    </div>
+  </div>
+
+  <div class="safety">Not for use by the driver while driving</div>
+</div>
+
+<div class="scr bot">
+  <div class="grid"></div>
+  <div class="btn wide" style="left:6px; top:5px; width:151px; height:40px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#F2FAFC" stroke-width="2" stroke-linejoin="round" style="filter:drop-shadow(0 0 3px rgba(235,248,252,.55))"><path d="M2.5 10 L12 4 L21.5 10 V20.5 H2.5 Z"/><path d="M6.5 20.5 V12 H17.5 V20.5"/><path d="M6.5 15 H17.5 M6.5 18 H17.5"/></svg><div><div class="t1">Garage</div><div class="t2">Ridgeline</div></div></div>
+  <div class="btn wide" style="left:163px; top:5px; width:151px; height:40px"><i class="ti ti-wifi" style="color:var(--green); text-shadow:0 0 6px rgba(80,210,90,.6)"></i><div><div class="t1">Adapter</div><div class="t2" style="color:var(--green)">Connected</div></div></div>
+
+  <div class="btn sel" style="left:6px;   top:50px;  width:99px;  height:73px"><i class="ti ti-gauge" style="color:var(--red-hi); text-shadow:0 0 7px var(--red-glow)"></i><div class="lbl">LIVE</div></div>
+  <div class="btn"     style="left:110px; top:50px;  width:100px; height:73px"><i class="ti ti-engine" style="color:var(--orange); text-shadow:0 0 7px rgba(255,138,43,.7)"></i><div class="lbl">DIAG</div></div>
+  <div class="btn"     style="left:215px; top:50px;  width:99px;  height:73px"><i class="ti ti-adjustments-horizontal" style="color:var(--yellow); text-shadow:0 0 7px rgba(245,208,74,.6)"></i><div class="lbl">TRIM</div></div>
+  <div class="btn"     style="left:6px;   top:128px; width:99px;  height:73px"><svg width="26" height="26" viewBox="0 0 24 24" style="filter:drop-shadow(0 0 3px rgba(235,248,252,.55))"><path d="M4.5 3 V22" stroke="#F2FAFC" stroke-width="2" stroke-linecap="round"/><rect x="5.5" y="4" width="15" height="10" fill="#111" stroke="#F2FAFC" stroke-width="1.5"/><g fill="#F2FAFC"><rect x="5.5" y="4" width="5" height="5"/><rect x="15.5" y="4" width="5" height="5"/><rect x="10.5" y="9" width="5" height="5"/></g></svg><div class="lbl">TRACK</div></div>
+  <div class="btn"     style="left:110px; top:128px; width:100px; height:73px"><i class="ti ti-chart-line" style="color:var(--blue); text-shadow:0 0 7px rgba(90,168,245,.7)"></i><div class="lbl">LOG</div></div>
+  <div class="btn"     style="left:215px; top:128px; width:99px;  height:73px"><i class="ti ti-settings" style="color:var(--grey); text-shadow:none"></i><div class="lbl">SETUP</div></div>
+
+  <div class="close"><span class="start">START</span>Close</div>
+</div>
+</div>
+
+<!-- ======================= NOT CONNECTED, NO CAR ======================= -->
+<div class="ds">
+<div class="state-lbl">Not connected, no car yet (first start)</div>
+
+<div class="scr top">
+  <div class="grid"></div>
+  <div class="sb">
+    <div class="bars"><i style="height:3px"></i><i class="off" style="height:5px"></i><i class="off" style="height:7px"></i><i class="off" style="height:10px"></i></div>
+    <div class="pill off">Not connected</div>
+    <div class="sp"></div>
+    <span>11/18 (Wed)</span><span>21:12</span>
+    <div class="batt"><b></b><b></b><b></b><b style="opacity:.2"></b></div>
+  </div>
+  <div class="hdr">GAUGE BOY: <span>OBD-II DELUXE</span></div>
+  <div class="rule"><div class="r"></div></div>
+
+  <div class="panel" style="left:12px; top:52px; width:376px; height:58px; padding:8px 12px; display:flex; align-items:center; justify-content:space-between">
+    <div>
+      <div style="font-size:17px; font-weight:800; line-height:19px; color:var(--white-dim)">No car yet</div>
+      <div style="font-size:11px; color:var(--white-faint); font-weight:600">Connect the adapter to read it</div>
+    </div>
+    <div style="text-align:right">
+      <div><span class="chip unlit"><span class="lamp"></span>CEL --</span><span class="chip unlit" style="margin-right:0">-- codes</span></div>
+      <div style="font-size:9.5px; color:var(--white-faint); margin-top:4px; white-space:nowrap">Adapter 192.168.0.10</div>
+    </div>
+  </div>
+
+  <div class="panel" style="left:12px; top:117px; width:184px; height:84px; padding:8px 12px">
+    <div class="lbl-s">ODOMETER</div>
+    <div class="seg unlit" style="position:relative; font-size:24px; margin-top:8px; letter-spacing:1px"><span style="position:relative"><span class="ghost">888</span>---</span><span class="comma" style="color:#2A2A2A">,</span><span style="position:relative"><span class="ghost">888</span>---</span><span class="unit" style="color:var(--white-faint)">mi</span></div>
+  </div>
+
+  <div class="panel" style="left:204px; top:117px; width:184px; height:84px; padding:8px 12px">
+    <div class="lbl-s">LAST DRIVE</div>
+    <div style="display:flex; align-items:baseline; gap:6px; margin-top:6px">
+      <span class="seg unlit" style="position:relative; font-size:20px"><span class="ghost">88.8</span>--.-</span><span style="font-size:11px; color:var(--white-faint)">mi</span>
+    </div>
+    <div style="font-size:10px; color:var(--white-faint); margin-top:4px">No drives logged yet</div>
+  </div>
+
+  <div class="safety">Not for use by the driver while driving</div>
+</div>
+
+<div class="scr bot">
+  <div class="grid"></div>
+  <div class="btn wide" style="left:6px; top:5px; width:151px; height:40px"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9A9A9A" stroke-width="2" stroke-linejoin="round"><path d="M2.5 10 L12 4 L21.5 10 V20.5 H2.5 Z"/><path d="M6.5 20.5 V12 H17.5 V20.5"/><path d="M6.5 15 H17.5 M6.5 18 H17.5"/></svg><div><div class="t1">Garage</div><div class="t2">No car yet</div></div></div>
+  <div class="btn wide sel" style="left:163px; top:5px; width:151px; height:40px"><i class="ti ti-wifi-off" style="color:var(--red-hi); text-shadow:0 0 7px var(--red-glow)"></i><div><div class="t1">Adapter</div><div class="t2" style="color:var(--red-hi)">Not connected</div></div></div>
+
+  <div class="btn" style="left:6px;   top:50px;  width:99px;  height:73px"><i class="ti ti-gauge" style="color:var(--red-hi); text-shadow:0 0 7px var(--red-glow)"></i><div class="lbl">LIVE</div></div>
+  <div class="btn" style="left:110px; top:50px;  width:100px; height:73px"><i class="ti ti-engine" style="color:var(--orange); text-shadow:0 0 7px rgba(255,138,43,.7)"></i><div class="lbl">DIAG</div></div>
+  <div class="btn" style="left:215px; top:50px;  width:99px;  height:73px"><i class="ti ti-adjustments-horizontal" style="color:var(--yellow); text-shadow:0 0 7px rgba(245,208,74,.6)"></i><div class="lbl">TRIM</div></div>
+  <div class="btn" style="left:6px;   top:128px; width:99px;  height:73px"><svg width="26" height="26" viewBox="0 0 24 24" style="filter:drop-shadow(0 0 3px rgba(235,248,252,.55))"><path d="M4.5 3 V22" stroke="#F2FAFC" stroke-width="2" stroke-linecap="round"/><rect x="5.5" y="4" width="15" height="10" fill="#111" stroke="#F2FAFC" stroke-width="1.5"/><g fill="#F2FAFC"><rect x="5.5" y="4" width="5" height="5"/><rect x="15.5" y="4" width="5" height="5"/><rect x="10.5" y="9" width="5" height="5"/></g></svg><div class="lbl">TRACK</div></div>
+  <div class="btn" style="left:110px; top:128px; width:100px; height:73px"><i class="ti ti-chart-line" style="color:var(--blue); text-shadow:0 0 7px rgba(90,168,245,.7)"></i><div class="lbl">LOG</div></div>
+  <div class="btn" style="left:215px; top:128px; width:99px;  height:73px"><i class="ti ti-settings" style="color:var(--grey); text-shadow:none"></i><div class="lbl">SETUP</div></div>
+
+  <div class="close"><span class="start">START</span>Close</div>
+</div>
+</div>
+
+</div></div>
+
+<p class="note" style="margin-top:18px">DIAG when the CEL is on (button and top-screen chip turn amber):</p>
+<div style="display:flex; gap:16px; align-items:center">
+  <div class="scr" style="width:100px; height:73px; background:#000; box-shadow:none">
+    <div class="btn" style="left:0; top:0; width:100px; height:73px; box-shadow: 0 0 0 2px var(--amber), 0 0 8px 2px rgba(242,165,43,.6), inset 0 1px 0 1px rgba(255,255,255,.12)"><i class="ti ti-engine" style="color:var(--amber); text-shadow:0 0 7px rgba(242,165,43,.8)"></i><div class="lbl" style="color:var(--amber)">CEL ON</div></div>
+  </div>
+  <span class="chip" style="color:var(--amber); box-shadow: inset 0 0 0 1px var(--amber)"><span class="lamp" style="background:var(--amber); box-shadow:0 0 4px var(--amber)"></span>CEL on</span>
+</div>
+
+<script>
+  const wrap = document.getElementById('wrap');
+  function setZ(z) {
+    wrap.style.transform = 'scale(' + z + ')';
+    wrap.style.height = (540 * z) + 'px';
+    wrap.style.width = (840 * z) + 'px';
+    document.querySelectorAll('.zoom button').forEach(b => b.classList.toggle('on', b.dataset.z == z));
+  }
+  document.querySelectorAll('.zoom button').forEach(b => b.onclick = () => setZ(+b.dataset.z));
+  setZ(2);
+</script>
+</body>
+</html>
