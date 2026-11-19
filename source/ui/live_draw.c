@@ -219,8 +219,10 @@ void live_draw_view_bottom(const live_controls_t *c)
     /* System Settings' half-circle arrows at the edges: the previous / next view. */
     live_rect_t l = live_view_rect(LIVE_HIT_PREV), r = live_view_rect(LIVE_HIT_NEXT);
     bool pl = c->pressed == LIVE_HIT_PREV, pr = c->pressed == LIVE_HIT_NEXT;
-    kit_image(kit_sysui(pl ? sysui_side_left_dn_idx : sysui_side_left_idx), l.x, l.y + (pl ? 1 : 0));
-    kit_image(kit_sysui(pr ? sysui_side_right_dn_idx : sysui_side_right_idx), r.x, r.y + (pr ? 1 : 0));
+    kit_image(kit_sysui(pl ? sysui_side_left_dn_idx : sysui_side_left_idx),
+              -(LIVE_SIDE_W - LIVE_SIDE_SHOWN), l.y + (pl ? 1 : 0));
+    kit_image(kit_sysui(pr ? sysui_side_right_dn_idx : sysui_side_right_idx),
+              LIVE_SCREEN_W - LIVE_SIDE_SHOWN, r.y + (pr ? 1 : 0));
 
     /* "● REC m:ss" above the toggle while recording, the dot pulsing slowly. */
     if (c->recording) {

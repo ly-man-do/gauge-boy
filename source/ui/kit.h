@@ -120,7 +120,11 @@ void kit_title(int icon, const char *text);
 /* The dotted rule across the top screen at y. */
 void kit_rule(float y);
 
-/* System Settings' Back tab in the bottom-left corner ("B Back"). */
+/* A bar label with its key, centred on cx, its line's middle at mid: "(B) Back",
+ * "[START] Close" (key caps as 3dsDL draws them). */
+void kit_key_label(const char *key, const char *label, float cx, float mid);
+
+/* System Settings' Back tab in the bottom-left corner ("(B) Back"). */
 void kit_back_tab(bool pressed);
 
 /* For screens with their own citro2d code (GRAPH). */

@@ -91,8 +91,8 @@ live_rect_t live_view_rect(live_hit_t what)
     live_rect_t r = { 0, 0, 0, 0 };
     switch (what) {
     case LIVE_HIT_BACK:   r = (live_rect_t){ 0, TAB_Y, TAB_W, LIVE_SCREEN_H - TAB_Y }; break;
-    case LIVE_HIT_PREV:   r = (live_rect_t){ 0, 48, 53, 106 }; break;
-    case LIVE_HIT_NEXT:   r = (live_rect_t){ LIVE_SCREEN_W - 53, 48, 53, 106 }; break;
+    case LIVE_HIT_PREV:   r = (live_rect_t){ 0, 48, LIVE_SIDE_SHOWN + 6, 106 }; break;
+    case LIVE_HIT_NEXT:   r = (live_rect_t){ LIVE_SCREEN_W - LIVE_SIDE_SHOWN - 6, 48, LIVE_SIDE_SHOWN + 6, 106 }; break;
     case LIVE_HIT_STOP:   r = (live_rect_t){ 54, 100, 106, 48 }; break;
     case LIVE_HIT_RECORD: r = (live_rect_t){ 160, 100, 106, 48 }; break;
     case LIVE_HIT_EDIT:   r = (live_rect_t){ 84, 156, 152, 40 }; break;

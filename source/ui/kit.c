@@ -431,23 +431,111 @@ void kit_title(int icon, const char *text)
     kit_rule(58.5f);
 }
 
+/* Key caps beside a bar's label, as 3dsDL draws them (ankushKun/3dsDL, ui.cpp drawKeyCap,
+ * used with its author's permission): A, B, X, Y, L and R are the system font's own
+ * button glyphs (U+E000-E005, a letter in a ring); other keys ("START") are a white
+ * rounded cap with the name in grey. Sizes are 3dsDL's, in its font units. */
+#define TEXT_BOOST 1.4f
+#define KEY_SCALE 0.36f
+#define GLYPH_SCALE 0.56f
+#define CAP_INK KIT_RGB(0x6C, 0x6C, 0x6C)
+
+static float font_unit(float scale)
+{
+    float fs = 1.0f;
+    if (ui_font == NULL) {
+        CFNT_s *f = fontGetSystemFont();
+        if (f != NULL && fontGetGlyphInfo(f)->cellHeight > 0) {
+            fs = 30.0f / fontGetGlyphInfo(f)->cellHeight;
+        }
+    }
+    return scale * TEXT_BOOST * fs;
+}
+
+/* The button's glyph as UTF-8 in out (4 bytes), or false if the font has none (Azahar's). */
+static bool key_glyph(const char *key, char out[4])
+{
+    static const char keys[] = "ABXYLR";
+    const char *at = key[0] != '\0' && key[1] == '\0' ? strchr(keys, key[0]) : NULL;
+    if (at == NULL || ui_font != NULL) {
+        return false;
+    }
+    u32 cp = 0xE000 + (u32)(at - keys);
+    CFNT_s *f = fontGetSystemFont();
+    if (f == NULL || fontGlyphIndexFromCodePoint(f, cp) == fontGetInfo(f)->alterCharIndex) {
+        return false;
+    }
+    out[0] = (char)(0xE0 | (cp >> 12));
+    out[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+    out[2] = (char)(0x80 | (cp & 0x3F));
+    out[3] = '\0';
+    return true;
+}
+
+/* A ring (annulus) from radius r0 to r1. */
+static void ring_circle(float cx, float cy, float r0, float r1, u32 c)
+{
+    const int n = 28;
+    for (int i = 0; i < n; i++) {
+        float t0 = 2 * PI_F * i / n, t1 = 2 * PI_F * (i + 1) / n;
+        kit_quad(cx + r1 * cosf(t0), cy + r1 * sinf(t0), cx + r1 * cosf(t1), cy + r1 * sinf(t1),
+                 cx + r0 * cosf(t1), cy + r0 * sinf(t1), cx + r0 * cosf(t0), cy + r0 * sinf(t0), c);
+    }
+}
+
+/* The key's width with the gap after it. */
+static float key_width(const char *key)
+{
+    char g[4];
+    if (key_glyph(key, g)) {
+        return kit_text_width(g, font_unit(GLYPH_SCALE)) + 4;
+    }
+    if (key[1] == '\0') {
+        return 16 + 5;   /* a ringed letter, 16 px across */
+    }
+    float w = kit_text_width(key, font_unit(KEY_SCALE)) + 11;
+    return (w < 15 ? 15 : w) + 5;
+}
+
+/* Draws the key centred on the line at mid, from x. */
+static void key_cap(const char *key, float x, float mid)
+{
+    char g[4];
+    if (key_glyph(key, g)) {
+        float s = font_unit(GLYPH_SCALE);
+        kit_text(g, x, roundf(mid - 30 * s / 2 + 1), s, KIT_INK, -1, false);
+        return;
+    }
+    if (key[1] == '\0') {
+        /* No glyph (Azahar's font): the same look, a white ring round the letter. */
+        float s = font_unit(KEY_SCALE);
+        ring_circle(x + 8, mid, 6.6f, 8, KIT_INK);
+        kit_text(key, x + 8, roundf(mid - 30 * s / 2), s, KIT_INK, 0, false);
+        return;
+    }
+    float s = font_unit(KEY_SCALE), w = key_width(key) - 5;
+    kit_rrect(x, mid - 7.5f, w, 15, 4, KIT_INK);
+    kit_text(key, roundf(x + w / 2), roundf(mid - 30 * s / 2), s, CAP_INK, 0, false);
+}
+
+void kit_key_label(const char *key, const char *label, float cx, float mid)
+{
+    float ls = 0.75f;
+    float kw = key_width(key), lw = kit_text_width(label, ls);
+    float x = roundf(cx - (kw + lw) / 2);
+    key_cap(key, x, mid);
+    float ly = mid - 30 * ls / 2;
+    kit_text(label, x + kw, ly - 1, ls, KIT_SHADOW, -1, false);
+    kit_text(label, x + kw, ly, ls, KIT_INK, -1, false);
+}
+
 void kit_back_tab(bool pressed)
 {
-    /* System Settings' left tab: a "B" button cap and "Back", centred in the
-     * 30 px above the bottom edge like the bar's "START Close". */
+    /* System Settings' left tab: "(B) Back", centred in the 30 px above the bottom
+     * edge like the bar's "START Close". */
     C2D_Image tab = kit_sysui(pressed ? sysui_tab_left_dn_idx : sysui_tab_left_idx);
-    float y = KIT_H - tab.subtex->height;
-    kit_image(tab, 0, y);
-    float ls = 0.75f, bs = 0.42f, dy = pressed ? 1 : 0;
-    float ly = KIT_H - 15 - 30 * ls / 2 + dy;
-    float badge_w = kit_text_width("B", bs) + 10, badge_h = 15;
-    float back_w = kit_text_width("Back", ls);
-    float x = (118 - (badge_w + 6 + back_w)) / 2;
-    float by = KIT_H - 15 - badge_h / 2 + dy;
-    kit_rrect(x, by, badge_w, badge_h, 3, KIT_INK);
-    kit_text("B", x + badge_w / 2, by + badge_h / 2 - 30 * bs / 2, bs, KIT_RGB(70, 70, 70), 0, true);
-    kit_text("Back", x + badge_w + 6, ly - 1, ls, KIT_SHADOW, -1, false);
-    kit_text("Back", x + badge_w + 6, ly, ls, KIT_INK, -1, false);
+    kit_image(tab, 0, KIT_H - tab.subtex->height);
+    kit_key_label("B", "Back", 59, KIT_H - 15 + (pressed ? 1 : 0));
 }
 
 void *kit_top_target(void)

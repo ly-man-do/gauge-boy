@@ -65,6 +65,12 @@ typedef enum {
     LIVE_HIT_EDIT,       /* Custom only: Edit PIDs */
 } live_hit_t;
 
+/* The half circles show this much of themselves at the screen's edges, as on System
+ * Settings' pages (the rest of the circle is off screen). Their touch zones are a
+ * little wider: 40 px. */
+#define LIVE_SIDE_SHOWN 34
+#define LIVE_SIDE_W     53    /* the sprite: the circle's half, its centre on its outer edge */
+
 live_rect_t live_view_rect(live_hit_t what);
 
 /* What a touch on a PID view's bottom screen hits (Edit only on Custom). */

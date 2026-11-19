@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-19, LIVE v5 fixes: draggable scroll grip, press-and-lift controls, Transmission (gauge-boy-82l.16)
+**As of:** 2026-11-19, LIVE v5 fixes: edge half circles, (B) Back and START caps (gauge-boy-82l.17)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 

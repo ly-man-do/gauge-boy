@@ -99,15 +99,7 @@ void home_draw(const home_view_t *v)
     if (v->notice != NULL) {
         kit_text(v->notice, HOME_SCREEN_W / 2.0f, ly + 4, 0.5f, KIT_INK, 0, false);
     } else {
-        float bs = 0.42f;
-        float badge_w = kit_text_width("START", bs) + 12, badge_h = 15;
-        float close_w = kit_text_width("Close", ls);
-        float x = (HOME_SCREEN_W - (badge_w + 7 + close_w)) / 2;
-        float by = HOME_SCREEN_H - 15 - badge_h / 2;
-        kit_rrect(x, by, badge_w, badge_h, 3, KIT_INK);
-        kit_text("START", x + badge_w / 2, by + badge_h / 2 - 30 * bs / 2, bs, KIT_RGB(70, 70, 70), 0, true);
-        kit_text("Close", x + badge_w + 7, ly - 1, ls, KIT_SHADOW, -1, false);
-        kit_text("Close", x + badge_w + 7, ly, ls, KIT_INK, -1, false);
+        kit_key_label("START", "Close", HOME_SCREEN_W / 2.0f, HOME_SCREEN_H - 15);
     }
 
     kit_end();
