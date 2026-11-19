@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, HOME v7: the 3DS system buttons, bars and status bar; info panel of fact rows (gauge-boy-82l.12, 82l.13)
+**As of:** 2026-11-18, HOME v7 without badges or focus outlines (gauge-boy-82l.14)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -44,11 +44,10 @@ Gauge Boy
         │           ├── [EDIT]       the selected entry: the same questions, filled in with it
         │           ├── [DELETE]     the selected entry, after a second tap ("AGAIN")
         │           └── [BACK]       → GARAGE                                     [B]
-        ├── [Adapter]                → Wi-Fi guide (green Wi-Fi icon when connected; red, crossed out,
-        │                              a red "!" badge and the focus ring when not)
+        ├── [Adapter]                → Wi-Fi guide (green Wi-Fi icon when connected; red and crossed
+        │                              out when not)
         ├── [LIVE]                   → LIVE view list
-        ├── [DIAG]                   → DIAG (amber ring and icon when the CEL is on, a badge with
-        │                              the stored code count)
+        ├── [DIAG]                   → DIAG (amber outline, icon and label when the CEL is on)
         ├── [TRIM]                   → TRIM (starts polling)
         ├── [TRACK]                  → TRACK
         │   ├── TRACK                (top: the modes, closed-course rules)

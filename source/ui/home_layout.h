@@ -42,7 +42,7 @@ typedef struct {
     bool cel_known;      /* a scan read the check engine light */
     bool cel_on;
     bool connected;      /* adapter connected */
-    int selected;        /* last tapped item (red outline), -1 = none */
+    int selected;        /* last tapped item, -1 = none (not drawn) */
     int pressed;         /* item flashing after a tap, -1 = none */
     const char *notice;  /* shown in the bar instead of "START Close", or NULL */
     const char *car;     /* NULL when no car is known yet (the Garage icon dims) */

@@ -35,8 +35,6 @@
 #define COL_UNLIT     RGB(24, 24, 24)        /* LCD segments that are off */
 #define COL_RED       RGB(226, 48, 42)
 #define COL_RED_HI    RGB(255, 90, 78)
-#define COL_RED_GLOW  RGBA(226, 48, 42, 0x60)
-#define COL_RED_HAZE  RGBA(226, 48, 42, 0x30)
 #define COL_ORANGE    RGB(255, 138, 43)
 #define COL_AMBER     RGB(242, 165, 43)
 #define COL_AMBER_GLOW RGBA(242, 165, 43, 0x60)
@@ -198,12 +196,12 @@ static void ring(float x, float y, float w, float h, float r, float width, u32 c
     }
 }
 
-/* The red focus ring (amber for the CEL) with its glow. */
-static void focus(float x, float y, float w, float h, bool amber)
+/* The amber outline of DIAG while the CEL is on, with its glow. */
+static void cel_outline(float x, float y, float w, float h)
 {
-    ring(x - 3, y - 3, w + 6, h + 6, 12, 3, amber ? COL_AMBER_GLOW : COL_RED_HAZE);
-    ring(x - 1, y - 1, w + 2, h + 2, 10, 2, amber ? COL_AMBER_GLOW : COL_RED_GLOW);
-    ring(x, y, w, h, 9, 2.5f, amber ? COL_AMBER : COL_RED);
+    ring(x - 3, y - 3, w + 6, h + 6, 12, 3, COL_AMBER_GLOW);
+    ring(x - 1, y - 1, w + 2, h + 2, 10, 2, COL_AMBER_GLOW);
+    ring(x, y, w, h, 9, 2.5f, COL_AMBER);
 }
 
 /* The faint grid behind both screens. */
@@ -348,15 +346,7 @@ static void button(home_rect_t r, size_t idx, bool pressed)
     }
 }
 
-static void badge(float x, float y, const char *s, u32 c)
-{
-    circle(x, y, 8, RGB(0, 0, 0));
-    circle(x, y, 6.5f, c);
-    text(s, x, y - 6.5f, PX(10), COL_INK, 0, true);
-}
-
-static void status_button(home_item_t item, const home_view_t *v, size_t icon, const char *label,
-                          bool alert)
+static void status_button(home_item_t item, const home_view_t *v, size_t icon, const char *label)
 {
     home_rect_t r = home_item_rect(item);
     bool pressed = v->pressed == (int)item;
@@ -366,9 +356,6 @@ static void status_button(home_item_t item, const home_view_t *v, size_t icon, c
     float x = r.x + (r.w - (22 + 8 + tw)) / 2;
     image(sprite(icons, icon), x, y + (r.h - 22) / 2);
     text(label, x + 30, y + 8, s, COL_INK, -1, true);
-    if (alert) {
-        badge(r.x + r.w - 6, r.y + 6, "!", COL_RED);
-    }
 }
 
 void home_draw(const home_view_t *v)
@@ -384,13 +371,11 @@ void home_draw(const home_view_t *v)
     grid(HOME_SCREEN_W, HOME_SCREEN_H, 0);
 
     bool cel_on = v->cel_known && v->cel_on;
-    /* The ring marks the last tapped button; before any, Adapter when not connected. */
-    int focused = v->selected >= 0 ? v->selected : !v->connected ? HOME_ADAPTER : -1;
 
     status_button(HOME_GARAGE, v, v->car != NULL ? icons_garage_idx : icons_garage_dim_idx,
-                  HOME_GARAGE_TEXT, false);
+                  HOME_GARAGE_TEXT);
     status_button(HOME_ADAPTER, v, v->connected ? icons_adapter_on_idx : icons_adapter_off_idx,
-                  "Adapter", !v->connected);
+                  "Adapter");
 
     static const size_t tile_icon[HOME_ITEM_COUNT] = {
         [HOME_LIVE] = icons_live_idx, [HOME_DIAG] = icons_diag_idx, [HOME_TRIM] = icons_trim_idx,
@@ -405,17 +390,8 @@ void home_draw(const home_view_t *v)
         image(sprite(icons, lamp ? icons_diag_cel_idx : tile_icon[i]), cx - 15, y + 11);
         text(home_item_label((home_item_t)i), cx, y + 45, PX(14), lamp ? COL_AMBER : COL_INK, 0, true);
         if (lamp) {
-            focus(r.x, r.y, r.w, r.h, true);
-            if (v->codes > 0) {
-                char n[8];
-                snprintf(n, sizeof n, "%d", v->codes > 99 ? 99 : v->codes);
-                badge(r.x + r.w - 6, r.y + 6, n, RGB(230, 150, 20));
-            }
+            cel_outline(r.x, r.y, r.w, r.h);
         }
-    }
-    if (focused >= 0 && focused < HOME_CLOSE) {
-        home_rect_t r = home_item_rect((home_item_t)focused);
-        focus(r.x, r.y, r.w, r.h, false);
     }
 
     /* System Settings' bottom bar: "START Close" (tap to close), or a notice. */
