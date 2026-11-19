@@ -44,4 +44,7 @@ void diag_draw_page_bottom(const diag_page_view_t *v);
 /* Bottom: the clear-codes question; pressed 0 none, 1 Cancel, 2 Clear Codes. */
 void diag_draw_dialog_bottom(int pressed);
 
+/* The same question box for any question: one or two lines, Cancel and a red yes button. */
+void diag_draw_question(const char *line1, const char *line2, const char *yes, int pressed);
+
 #endif

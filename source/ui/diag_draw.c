@@ -299,12 +299,21 @@ void diag_draw_page_bottom(const diag_page_view_t *v)
 
 void diag_draw_dialog_bottom(int pressed)
 {
+    diag_draw_question("Clear the codes and reset", "the readiness monitors?", "Clear Codes", pressed);
+}
+
+void diag_draw_question(const char *line1, const char *line2, const char *yes, int pressed)
+{
     kit_begin(false, 0);
     kit_rrect(19, 29, 282, 102, 11, DLG_EDGE);
     kit_rrect(20, 30, 280, 100, 10, DLG_FILL);
     float s = KIT_PX(15);
-    kit_text("Clear the codes and reset", 160, 58, s, KIT_INK, 0, true);
-    kit_text("the readiness monitors?", 160, 80, s, KIT_INK, 0, true);
+    if (line2 != NULL && line2[0] != '\0') {
+        kit_text(line1, 160, 58, s, KIT_INK, 0, true);
+        kit_text(line2, 160, 80, s, KIT_INK, 0, true);
+    } else {
+        kit_text(line1, 160, 69, s, KIT_INK, 0, true);
+    }
     for (int i = 0; i < 2; i++) {
         bool clear = i == 1, p = pressed == i + 1;
         diag_rect_t r = diag_dialog_button(clear);
@@ -315,7 +324,7 @@ void diag_draw_dialog_bottom(int pressed)
             kit_rrect(r.x + 4, y + 4, r.w - 8, r.h - 9, 9, p ? KIT_RGBA(150, 30, 26, 0xE8) : RED_FACE);
         }
         float ts = KIT_PX(14);
-        kit_text(clear ? "Clear Codes" : "Cancel", r.x + r.w / 2.0f, y + r.h / 2.0f - 30 * ts / 2 - 1, ts,
+        kit_text(clear ? yes : "Cancel", r.x + r.w / 2.0f, y + r.h / 2.0f - 30 * ts / 2 - 1, ts,
                  KIT_INK, 0, true);
     }
     kit_end();

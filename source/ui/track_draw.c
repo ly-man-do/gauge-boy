@@ -139,9 +139,13 @@ void track_draw_bottom(track_kind_t kind, const track_bottom_t *b)
 
 void track_draw_info(track_kind_t kind, bool back_pressed)
 {
+    track_draw_info_text(track_info_text(kind), back_pressed);
+}
+
+void track_draw_info_text(const char *text, bool back_pressed)
+{
     kit_begin(false, 0);
     panel(14, 8, 292, 186);
-    const char *text = track_info_text(kind);
     /* The biggest size that fits. */
     static const float sizes[][2] = { { 11.5f, 15 }, { 11, 14.5f }, { 10.5f, 13.6f }, { 10, 13 } };
     int k = 0;

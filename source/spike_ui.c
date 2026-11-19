@@ -52,6 +52,7 @@
 #include "icons.h"
 #include "ui/diag_draw.h"
 #include "ui/live_draw.h"
+#include "ui/log_draw.h"
 #include "ui/track_draw.h"
 #include "ui/trim_draw.h"
 #include "obd/dtc.h"
@@ -2759,6 +2760,11 @@ typedef struct {
     int track_held;            /* ... the control held (track_hit_t) */
     bool track_held_in;
     int ach_scroll;            /* ACHIEVEMENTS (graphics): the list scrolled by, px */
+    bool log_open;             /* LOG (graphics): the selected drive's page (else the list) */
+    bool log_info;             /* ... the Info page shows */
+    int log_held;              /* ... the control held (log_hit_t) */
+    bool log_held_in;
+    int log_scroll;            /* ... the list scrolled by, px */
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
@@ -4429,6 +4435,110 @@ static void trim_row(int row, const char *label, bool have, float pct)
  * engine state and the hints. */
 static void status_now(kit_status_t *s, bool connected);
 
+/* The LOG screen shown (graphics), or -1 for other screens. */
+static int log_kind_of(const ui_state_t *ui)
+{
+    if (!home_gfx) {
+        return -1;
+    }
+    if (ui->screen == SCREEN_GRAPH) {
+        return LOG_GRAPH;
+    }
+    if (ui->screen != SCREEN_LOG) {
+        return -1;
+    }
+    return ui->log_info ? LOG_INFO : ui->log_open ? LOG_DRIVE : LOG_LIST;
+}
+
+static void log_fact(diag_fact_t *f, int *n, const char *tag, const char *value, const char *detail)
+{
+    diag_fact_t *x = &f[(*n)++];
+    memset(x, 0, sizeof *x);
+    snprintf(x->tag, sizeof x->tag, "%.15s", tag);
+    snprintf(x->value, sizeof x->value, "%.39s", value);   /* the drawing cuts what doesn't fit */
+    snprintf(x->detail, sizeof x->detail, "%.63s", detail);
+}
+
+/* LOG's top screen (graphics): the drives, a drive's details, or the Delete question. */
+static void draw_log_gfx_top(const ui_state_t *ui, bool connected)
+{
+    static drive_info_t d;
+    LightLock_Lock(&shared.lock);
+    int count = shared.drive_count;
+    bool listed = shared.drives_listed;
+    int sel = ui->selected;
+    bool have = sel >= 0 && sel < count;
+    unsigned long total = 0;
+    for (int i = 0; i < count; i++) {
+        total += shared.drives[i].size;
+    }
+    if (have) {
+        d = shared.drives[sel];
+    } else if (count > 0) {
+        d = shared.drives[0];   /* the newest */
+    }
+    LightLock_Unlock(&shared.lock);
+    kit_status_t st;
+    status_now(&st, connected);
+    char when[16], car[48], dur[16], buf[64], size[16];
+    if (ui->delete_dialog && have) {
+        log_row_parts(&d, when, sizeof when, car, sizeof car, dur, sizeof dur);
+        char text[200];
+        snprintf(text, sizeof text, "This removes the drive (%s, %s, %s) from the SD card.\n\n"
+                 "This can't be undone.", when, car, dur);
+        track_draw_text_top(icons_log_idx, "DELETE DRIVE?", text, &st);
+        return;
+    }
+    diag_fact_t f[DIAG_FACTS_MAX];
+    int n = 0;
+    if (ui->log_open && have) {
+        log_row_parts(&d, when, sizeof when, car, sizeof car, dur, sizeof dur);
+        if (!d.ok) {
+            log_fact(f, &n, "File", d.name, "");
+            diag_draw_facts_top(icons_log_idx, when, f, n, "Not a Gauge Boy drive log.", "", &st);
+            return;
+        }
+        log_fact(f, &n, "Car", d.car[0] ? d.car : "Not known", d.car[0] ? "" : "no VIN read");
+        if (d.vin[0] != '\0') {
+            log_fact(f, &n, "VIN", d.vin, "");
+        }
+        log_fact(f, &n, "Protocol", d.protocol[0] ? d.protocol : "Not recorded", "");
+        if (d.duration_s >= 0 && d.rate_hz > 0) {
+            snprintf(buf, sizeof buf, "about %ld rows at %g a second",
+                     (long)(d.duration_s * d.rate_hz + 0.5f), (double)d.rate_hz);
+        } else {
+            buf[0] = '\0';
+        }
+        log_fact(f, &n, "Length", dur, buf);
+        log_size(d.size, size, sizeof size);
+        log_fact(f, &n, "Size", size, d.metric ? "metric units" : "US units");
+        char cols[16];
+        snprintf(cols, sizeof cols, "%d", d.columns);
+        log_fact(f, &n, "Values", cols, "recorded");
+        diag_draw_facts_top(icons_log_idx, when, f, n, d.values, "", &st);
+        return;
+    }
+    if (!listed) {
+        log_fact(f, &n, "Drives", "Reading", "the SD card...");
+        diag_draw_facts_top(icons_log_idx, "LOG", f, n, "", "", &st);
+        return;
+    }
+    snprintf(buf, sizeof buf, "%d", count);
+    log_fact(f, &n, "Drives", buf, count == 1 ? "recorded" : "recorded");
+    if (count > 0) {
+        log_row_parts(&d, when, sizeof when, car, sizeof car, dur, sizeof dur);
+        char detail[64];
+        snprintf(detail, sizeof detail, "%.40s, %.15s", car, dur);
+        log_fact(f, &n, "Newest", when, detail);
+        log_size(total, size, sizeof size);
+        log_fact(f, &n, "On the SD card", size, "sdmc:/3ds/gauge-boy/drives/");
+    }
+    diag_draw_facts_top(icons_log_idx, "LOG", f, n,
+                        count > 0 ? "Tap a drive for its details."
+                                  : "No recorded drives yet. Record one with REC on LIVE.",
+                        "", &st);
+}
+
 /* The TRACK screen shown (graphics), or -1 for other screens. */
 static int track_kind_of(const ui_state_t *ui)
 {
@@ -5712,6 +5822,68 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         cleared_after_confirm = false;
         return;
     }
+    if (ui->delete_dialog && home_gfx) {
+        diag_draw_question("Delete this drive", "from the SD card?", "Delete",
+                           ui->dialog_held_in ? ui->dialog_held : 0);
+        cleared_after_confirm = false;
+        return;
+    }
+    int lk = log_kind_of(ui);
+    if (lk >= 0) {
+        int pressed = ui->log_held_in ? ui->log_held : LOG_HIT_NONE;
+        if (lk == LOG_INFO) {
+            track_draw_info_text(log_info_text(), pressed == LOG_HIT_BACK);
+        } else if (lk == LOG_DRIVE) {
+            log_draw_drive(pressed, ui->notice);
+        } else if (lk == LOG_GRAPH) {
+            char value[48] = "GRAPH", showing[64];
+            LightLock_Lock(&shared.lock);
+            int ncols = shared.graph_ncols, col = shared.graph_col;
+            bool loading = shared.graph_loading;
+            if (ncols > 0) {
+                snprintf(value, sizeof value, "%s", shared.graph_columns[col].name);
+            }
+            LightLock_Unlock(&shared.lock);
+            char a[16], b[16], c[16];
+            log_duration((float)ui->graph_t0, a, sizeof a);
+            log_duration((float)ui->graph_t1, b, sizeof b);
+            log_duration((float)ui->graph_len, c, sizeof c);
+            if (loading) {
+                snprintf(showing, sizeof showing, "Loading...");
+            } else {
+                snprintf(showing, sizeof showing, "%s to %s of %s%s", a, b, c, "");
+            }
+            if (ncols > 1) {
+                size_t k = strlen(showing);
+                snprintf(showing + k, sizeof showing - k, "   value %d of %d", col + 1, ncols);
+            }
+            if (flashing(BTN_PAGE_PREV, now)) {
+                pressed = LOG_HIT_PREV;
+            } else if (flashing(BTN_PAGE_NEXT, now)) {
+                pressed = LOG_HIT_NEXT;
+            }
+            log_draw_graph(value, showing, pressed);
+        } else {
+            static drive_info_t drives[DRIVE_LIST_MAX];
+            static char whens[DRIVE_LIST_MAX][16], cars[DRIVE_LIST_MAX][48], durs[DRIVE_LIST_MAX][16];
+            static log_row_t rows[DRIVE_LIST_MAX];
+            LightLock_Lock(&shared.lock);
+            int count = shared.drive_count;
+            bool listed = shared.drives_listed;
+            memcpy(drives, shared.drives, sizeof drives[0] * (size_t)count);
+            LightLock_Unlock(&shared.lock);
+            for (int i = 0; i < count; i++) {
+                log_row_parts(&drives[i], whens[i], sizeof whens[i], cars[i], sizeof cars[i], durs[i],
+                              sizeof durs[i]);
+                rows[i] = (log_row_t){ whens[i], cars[i], durs[i] };
+            }
+            int held = ui->live_touching && !ui->live_dragged ? ui->live_row_held : -1;
+            log_draw_list(rows, count, diag_list_clamp(ui->log_scroll, count), held,
+                          ui->live_touching && ui->live_grip, pressed,
+                          listed ? "No recorded drives yet." : "Reading the SD card...", ui->notice);
+        }
+        return;
+    }
     int tk = track_kind_of(ui);
     if (tk >= 0) {
         draw_track_gfx_bottom(ui, cfg, now, (track_kind_t)tk);
@@ -6658,7 +6830,8 @@ void spike_ui_run(void)
                       false, LIVE_VIEW_ENGINE, SCREEN_HOME, false, 0, 0.0, 0.0, 0.0,
                       false, false, TA_RUN_LAUNCH, SCREEN_HOME, 0, 0, -1, 0, false, false, 0, 0,
                       -1, false, 0, LIVE_HIT_NONE, false, 0, DIAG_HIT_NONE, false, 0, false,
-                      false, TRIM_HIT_NONE, false, false, false, TRK_HIT_NONE, false, 0 };
+                      false, TRIM_HIT_NONE, false, false, false, TRK_HIT_NONE, false, 0,
+                      false, false, LOG_HIT_NONE, false, 0 };
     gm_vec_t gm_raw = { 0, 0, 0 };   /* G-METER: the latest sensor reading */
     live_menu_count();
     uint64_t notice_until = 0;
@@ -6745,7 +6918,13 @@ void spike_ui_run(void)
         }
         int action = 0;
         bool tapped = false;
-        if ((down & KEY_TOUCH) && ui.delete_dialog) {
+        if ((down & KEY_TOUCH) && ui.delete_dialog && home_gfx) {
+            touchPosition tp;
+            hidTouchRead(&tp);
+            ui.dialog_held = diag_dialog_hit(tp.px, tp.py);
+            ui.dialog_held_in = ui.dialog_held != 0;
+            bottom_dirty = true;
+        } else if ((down & KEY_TOUCH) && ui.delete_dialog) {
             touchPosition tp;
             hidTouchRead(&tp);
             int i = button_at(log_delete_buttons, 2, tp.px, tp.py);
@@ -6864,7 +7043,7 @@ void spike_ui_run(void)
             bool gfx_touch = home_gfx && (ui.screen == SCREEN_HOME || ui.screen == SCREEN_LIVE_MENU ||
                                           ui.screen == SCREEN_LIVE || ui.screen == SCREEN_DIAG ||
                                           ui.screen == SCREEN_DIAG_PAGE || ui.screen == SCREEN_TRIM ||
-                                          track_kind_of(&ui) >= 0);
+                                          track_kind_of(&ui) >= 0 || log_kind_of(&ui) >= 0);
             int i = gfx_touch ? -1 : button_at(list, count, tp.px, tp.py);
             int item = ui.screen == SCREEN_HOME && home_gfx ? home_hit(tp.px, tp.py) : -1;
             diag_hit_t dhit = !gfx_touch                     ? DIAG_HIT_NONE
@@ -6873,7 +7052,33 @@ void spike_ui_run(void)
                                                                   ui.tab != DIAG_TAB_READINESS)
                                                             : DIAG_HIT_NONE;
             int tkind = gfx_touch ? track_kind_of(&ui) : -1;
-            if (tkind >= 0) {
+            int lkind = gfx_touch ? log_kind_of(&ui) : -1;
+            if (lkind >= 0) {
+                /* LOG: controls pressed while held, act on lifting; the list scrolls and a
+                 * tap on a drive opens its page. */
+                int h = log_hit((log_kind_t)lkind, tp.px, tp.py);
+                if (h == LOG_HIT_NONE && lkind == LOG_LIST) {
+                    LightLock_Lock(&shared.lock);
+                    int n = shared.drive_count;
+                    LightLock_Unlock(&shared.lock);
+                    ui.live_touching = true;
+                    if (diag_list_bar_hit(tp.px, tp.py) && diag_list_max_scroll(n) > 0) {
+                        ui.live_grip = ui.live_dragged = true;
+                        ui.live_row_held = -1;
+                        ui.live_grip_grab = diag_list_grip_grab(tp.py, ui.log_scroll, n);
+                        ui.log_scroll = diag_list_scroll_for_grip(tp.py - ui.live_grip_grab, n);
+                    } else {
+                        ui.live_grip = ui.live_dragged = false;
+                        ui.live_touch_y0 = tp.py;
+                        ui.live_scroll0 = ui.log_scroll;
+                        ui.live_row_held = diag_list_hit(tp.px, tp.py, ui.log_scroll, n);
+                    }
+                } else {
+                    ui.log_held = h;
+                    ui.log_held_in = h != LOG_HIT_NONE;
+                }
+                bottom_dirty = true;
+            } else if (tkind >= 0) {
                 /* TRACK's controls: pressed while held, act on lifting; Achievements' list
                  * scrolls like a DIAG page. */
                 track_kind_t k = ui.track_info ? TRK_INFO : (track_kind_t)tkind;
@@ -7017,6 +7222,84 @@ void spike_ui_run(void)
                 }
                 ui.live_held = LIVE_HIT_NONE;
                 ui.live_held_in = false;
+                bottom_dirty = true;
+            }
+        }
+
+        /* LOG's controls (graphics): the same. */
+        if (ui.log_held != LOG_HIT_NONE) {
+            int lkind = log_kind_of(&ui);
+            if (lkind < 0 || confirming || ui.delete_dialog) {
+                ui.log_held = LOG_HIT_NONE;
+                ui.log_held_in = false;
+            } else if (hidKeysHeld() & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                bool in = log_hit((log_kind_t)lkind, tp.px, tp.py) == ui.log_held;
+                if (in != ui.log_held_in) {
+                    ui.log_held_in = in;
+                    bottom_dirty = true;
+                }
+            } else {
+                int h = ui.log_held, b = h - LOG_HIT_BUTTON;
+                if (ui.log_held_in && !tapped) {
+                    if (lkind == LOG_INFO) {
+                        ui.log_info = false;
+                        bottom_full = true;
+                    } else if (h == LOG_HIT_INFO) {
+                        ui.log_info = true;
+                        bottom_full = true;
+                    } else if (h == LOG_HIT_BACK && lkind == LOG_DRIVE) {
+                        ui.log_open = false;   /* back to the list */
+                        bottom_full = top_dirty = true;
+                    } else if (h == LOG_HIT_BACK) {
+                        action = BTN_BACK;
+                    } else if (h == LOG_HIT_PREV || h == LOG_HIT_NEXT) {
+                        action = h == LOG_HIT_PREV ? BTN_PAGE_PREV : BTN_PAGE_NEXT;
+                    } else if (lkind == LOG_DRIVE && b >= 0) {
+                        action = b == 0 ? BTN_LOG_GRAPH : BTN_LOG_ASK;
+                    } else if (lkind == LOG_GRAPH && b >= 0) {
+                        static const int g[5] = { BTN_GRAPH_EARLY, BTN_GRAPH_OUT, BTN_GRAPH_IN,
+                                                  BTN_GRAPH_LATE, BTN_GRAPH_ALL };
+                        action = g[b < 5 ? b : 4];
+                    }
+                    tapped = lifted = action != 0;
+                }
+                ui.log_held = LOG_HIT_NONE;
+                ui.log_held_in = false;
+                bottom_dirty = true;
+            }
+        }
+
+        /* LOG's list (graphics): drag or the grip scrolls it; a tap opens a drive. */
+        if (ui.live_touching && ui.screen == SCREEN_LOG) {
+            LightLock_Lock(&shared.lock);
+            int n = shared.drive_count;
+            LightLock_Unlock(&shared.lock);
+            if (confirming || ui.delete_dialog) {
+                ui.live_touching = ui.live_grip = false;
+            } else if (hidKeysHeld() & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                int dy = tp.py - ui.live_touch_y0;
+                if (!ui.live_grip && !ui.live_dragged && (dy > 6 || dy < -6)) {
+                    ui.live_dragged = true;
+                    bottom_dirty = true;
+                }
+                int sc = ui.live_grip ? diag_list_scroll_for_grip(tp.py - ui.live_grip_grab, n)
+                       : ui.live_dragged ? diag_list_clamp(ui.live_scroll0 - dy, n) : ui.log_scroll;
+                if (sc != ui.log_scroll) {
+                    ui.log_scroll = sc;
+                    bottom_dirty = true;
+                }
+            } else {
+                ui.live_touching = ui.live_grip = false;
+                if (!ui.live_dragged && ui.live_row_held >= 0 && ui.live_row_held < n) {
+                    ui.selected = ui.live_row_held;
+                    ui.log_open = true;
+                    bottom_full = top_dirty = true;
+                }
+                ui.live_row_held = -1;
                 bottom_dirty = true;
             }
         }
@@ -7174,7 +7457,7 @@ void spike_ui_run(void)
 
         /* The clear question (graphics): Cancel or Clear Codes when the finger lifts. */
         if (ui.dialog_held != 0) {
-            if (!ui.clear_dialog) {
+            if (!ui.clear_dialog && !ui.delete_dialog) {
                 ui.dialog_held = 0;
                 ui.dialog_held_in = false;
             } else if (hidKeysHeld() & KEY_TOUCH) {
@@ -7186,7 +7469,21 @@ void spike_ui_run(void)
                     bottom_dirty = true;
                 }
             } else {
-                if (ui.dialog_held_in) {
+                if (ui.dialog_held_in && ui.delete_dialog) {
+                    if (ui.dialog_held == 2 && worker != NULL) {
+                        LightLock_Lock(&shared.lock);
+                        if (ui.selected >= 0 && ui.selected < shared.drive_count) {
+                            snprintf(shared.drive_delete, sizeof shared.drive_delete, "%s",
+                                     shared.drives[ui.selected].name);
+                        }
+                        LightLock_Unlock(&shared.lock);
+                        enqueue(BTN_LOG_DELETE);
+                        ui.selected = -1;
+                        ui.log_open = false;   /* the drive is gone: back to the list */
+                    }
+                    ui.delete_dialog = false;
+                    bottom_full = top_dirty = true;
+                } else if (ui.dialog_held_in) {
                     if (ui.dialog_held == 2 && worker != NULL) {
                         enqueue(BTN_CLEAR_CODES);
                     }
@@ -7239,7 +7536,8 @@ void spike_ui_run(void)
         }
 
         /* LIVE's view list (graphics): drag to scroll, lift to pick. */
-        if (ui.live_touching && ui.screen != SCREEN_DIAG_PAGE && ui.screen != SCREEN_ACHIEVE) {
+        if (ui.live_touching && ui.screen != SCREEN_DIAG_PAGE && ui.screen != SCREEN_ACHIEVE &&
+            ui.screen != SCREEN_LOG) {
             if (ui.screen != SCREEN_LIVE_MENU || confirming) {
                 ui.live_touching = ui.live_grip = false;
             } else if ((hidKeysHeld() & KEY_TOUCH) && ui.live_grip) {
@@ -7297,7 +7595,15 @@ void spike_ui_run(void)
                    !confirming) {
             ui.trim_info = true;
             bottom_full = true;
+        } else if (ui.log_info && ui.screen == SCREEN_LOG && (down & KEY_B)) {
+            ui.log_info = false;   /* B closes Info */
+            bottom_full = true;
+        } else if (home_gfx && ui.screen == SCREEN_LOG && !ui.log_open && !ui.log_info &&
+                   !ui.delete_dialog && (down & KEY_Y) && !confirming) {
+            ui.log_info = true;
+            bottom_full = true;
         } else if (ui.delete_dialog && (down & KEY_B)) {
+            top_dirty = true;
             ui.delete_dialog = false;
             bottom_full = true;
         } else if (!confirming && !tapped && !ui.clear_dialog && !ui.delete_dialog &&
@@ -7408,6 +7714,8 @@ void spike_ui_run(void)
                 ui.screen = SCREEN_LOG;
                 ui.page = 0;
                 ui.selected = -1;
+                ui.log_open = ui.log_info = false;
+                ui.log_scroll = 0;
                 if (worker != NULL) {
                     enqueue(BTN_LOG_SCAN);
                 }
@@ -7478,7 +7786,7 @@ void spike_ui_run(void)
             case BTN_LOG_ASK:
                 if (ui.selected >= 0) {
                     ui.delete_dialog = true;
-                    bottom_full = true;
+                    bottom_full = top_dirty = true;
                 } else {
                     ui.notice = "DELETE: tap a drive first";
                     notice_until = now + 3000;
@@ -7931,6 +8239,11 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
+                if (ui.screen == SCREEN_LOG && home_gfx && ui.log_open) {
+                    ui.log_open = false;   /* the drive's page -> the list */
+                    bottom_full = top_dirty = true;
+                    break;
+                }
                 if (ui.screen == SCREEN_DIAG_PAGE) {
                     ui.screen = SCREEN_DIAG;
                     ui.selected = -1;
@@ -8264,6 +8577,7 @@ void spike_ui_run(void)
                 }
                 if (ui.selected >= drive_count) {
                     ui.selected = -1;
+                    ui.log_open = false;
                 }
                 top_dirty = bottom_full = true;
             }
@@ -8281,7 +8595,7 @@ void spike_ui_run(void)
             bool diag_gfx = home_gfx && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_DIAG_PAGE);
             bool trim_gfx = home_gfx && ui.screen == SCREEN_TRIM;
             bool gfx_top_now = (ui.screen == SCREEN_HOME && home_gfx) || live_gfx || diag_gfx || trim_gfx ||
-                               track_kind_of(&ui) >= 0;
+                               track_kind_of(&ui) >= 0 || (home_gfx && ui.screen == SCREEN_LOG);
             if (gfx_top_shown && !gfx_top_now && ui.screen != SCREEN_GRAPH) {
                 consoleSelect(&top_console);
                 printf("\x1b[0m\x1b[2J");
@@ -8351,6 +8665,8 @@ void spike_ui_run(void)
                 draw_guide_top(ui.page, cfg.adapter_host, busy, connected);
             } else if (ui.screen == SCREEN_ABOUT) {
                 draw_about_top(busy, connected);
+            } else if (ui.screen == SCREEN_LOG && home_gfx) {
+                draw_log_gfx_top(&ui, connected);
             } else if (ui.screen == SCREEN_LOG) {
                 draw_log_top(ui.selected, busy, connected);
             } else if (ui.screen == SCREEN_GRAPH) {

@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-19, TRACK redesign: menu, modes and Info pages (gauge-boy-82l.21)
+**As of:** 2026-11-19, LOG redesign: drive list, drive page, Delete, Graph controls (gauge-boy-82l.22)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -172,24 +172,25 @@ Gauge Boy
         │                            layout: STORED / PENDING / PERM / READY tabs, paged
         │                            rows, BACK < > TRIM CLEAR SCAN)
         │
-        ├── LOG                      (top: the selected drive's details: date, car, VIN,
-        │   │                        protocol, length, size, values; else what LOG is)
-        │   ├── [list rows]          3 per page, newest first: date, car, length;
-        │   │                        tap → details on top (green = selected)
-        │   ├── [BACK]               → HOME                                       [B]
-        │   ├── [<] page n/m [>]                                                  [L/R]
-        │   ├── [GRAPH]              (a drive selected) → GRAPH
-        │   │   ├── (top: one value against time, drawn with graphics: axes, times,
-        │   │   │    a smooth line through the readings over a faint min / max band,
-        │   │   │    the window's min / max / average)
-        │   │   ├── [<<] [>>]        earlier / later (half a window)
-        │   │   ├── [ZOOM -] [ZOOM +] more / less of the drive (5 s at the least)
-        │   │   ├── [<] value n/m [>] the drive's other values                    [L/R]
-        │   │   ├── [ALL]            the whole drive
-        │   │   └── [BACK]           → LOG (same drive selected)                  [B]
-        │   └── [DELETE]             (a drive selected) → Delete question
-        │       ├── [CANCEL]         → LOG                                        [B]
-        │       └── [DELETE]         removes the file from the SD card, lists again
+        ├── LOG                      (top: how many drives, the newest, the space used)
+        │   ├── [drive rows]         newest first: date and time, car, length (scrolls: drag
+        │   │   │                    or the grip); tap → the drive's page
+        │   │   ├── (top: its details: car, VIN, protocol, length, size, the values)
+        │   │   ├── [Graph]          → GRAPH
+        │   │   │   ├── (top: one value against time, drawn with graphics: axes, times,
+        │   │   │   │    a smooth line through the readings over a faint min / max band,
+        │   │   │   │    the window's min / max / average)
+        │   │   │   ├── [<<] [>>]    earlier / later (half a window)
+        │   │   │   ├── [Zoom -] [Zoom +] more / less of the drive (5 s at the least)
+        │   │   │   ├── (< >)        half circles: the drive's other values         [L/R]
+        │   │   │   ├── [Whole Drive] the whole drive
+        │   │   │   └── [B Back]     → the drive's page                           [B]
+        │   │   ├── [Delete]         → Delete question (top: what it removes; can't be undone)
+        │   │   │   ├── [Cancel]     → the drive's page                           [B]
+        │   │   │   └── [Delete]     (red) removes the file from the SD card → the list
+        │   │   └── [B Back]         → the list                                   [B]
+        │   ├── [Y Info]             how to record a drive (REC on LIVE), what LOG does  [Y]
+        │   └── [B Back]             → HOME                                       [B]
         │
         ├── SETUP                    (top: session log on every SETUP page but About)  [L/R scroll log]
         │   ├── [TESTS]              → SETUP > TESTS

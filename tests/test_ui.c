@@ -6,6 +6,7 @@
 #include "ui/home_top.h"
 #include "ui/diag_ui.h"
 #include "ui/live_ui.h"
+#include "ui/log_ui.h"
 #include "ui/track_ui.h"
 #include "ui/trim_ui.h"
 
@@ -583,8 +584,60 @@ static void test_track_layout(void)
     CHECK_EQ_INT(t0.y, TRACK_LIST_H - (t2.y + t2.h));
 }
 
+static void test_log_ui(void)
+{
+    for (int k = 0; k < LOG_KIND_COUNT; k++) {
+        int ids[12], n = 0;
+        for (int h = LOG_HIT_BACK; h <= LOG_HIT_NEXT; h++) {
+            if (log_rect((log_kind_t)k, h).w > 0) {
+                ids[n++] = h;
+            }
+        }
+        for (int i = 0; i < log_button_count((log_kind_t)k); i++) {
+            ids[n++] = LOG_HIT_BUTTON + i;
+        }
+        for (int a = 0; a < n; a++) {
+            log_rect_t r = log_rect((log_kind_t)k, ids[a]);
+            CHECK(r.x >= 0 && r.y >= 0 && r.x + r.w <= 320 && r.y + r.h <= 240);
+            CHECK(r.w >= 40 && r.h >= 38);
+            CHECK_EQ_INT(log_hit((log_kind_t)k, r.x + r.w / 2, r.y + r.h / 2), ids[a]);
+            for (int b = a + 1; b < n; b++) {
+                log_rect_t q = log_rect((log_kind_t)k, ids[b]);
+                CHECK(!(r.x < q.x + q.w && q.x < r.x + r.w && r.y < q.y + q.h && q.y < r.y + r.h));
+            }
+        }
+    }
+    CHECK_EQ_INT(log_hit(LOG_LIST, 310, 230), LOG_HIT_INFO);
+    CHECK_EQ_INT(log_hit(LOG_DRIVE, 310, 230), LOG_HIT_NONE);
+    CHECK_EQ_INT(log_hit(LOG_GRAPH, 5, 100), LOG_HIT_PREV);
+
+    drive_info_t d;
+    memset(&d, 0, sizeof d);
+    d.ok = true;
+    snprintf(d.date, sizeof d.date, "2026-11-19 08:42:10");
+    d.duration_s = 1450.2f;
+    char when[16], car[48], dur[16];
+    log_row_parts(&d, when, sizeof when, car, sizeof car, dur, sizeof dur);
+    CHECK_EQ_STR(when, "11/19 08:42");
+    CHECK_EQ_STR(car, "Car not known");
+    CHECK_EQ_STR(dur, "24:10");
+    d.duration_s = -1.0f;
+    snprintf(d.car, sizeof d.car, "2008 Honda Ridgeline");
+    log_row_parts(&d, when, sizeof when, car, sizeof car, dur, sizeof dur);
+    CHECK_EQ_STR(car, "2008 Honda Ridgeline");
+    CHECK_EQ_STR(dur, "--");
+    log_duration(3723.0f, dur, sizeof dur);
+    CHECK_EQ_STR(dur, "1:02:03");
+    char size[16];
+    log_size(421000UL, size, sizeof size);
+    CHECK_EQ_STR(size, "412 KB");
+    log_size(1887437UL, size, sizeof size);
+    CHECK_EQ_STR(size, "1.8 MB");
+}
+
 void suite_ui(void)
 {
+    RUN_TEST(test_log_ui);
     RUN_TEST(test_track_layout);
     RUN_TEST(test_trim_bars);
     RUN_TEST(test_diag_layout);

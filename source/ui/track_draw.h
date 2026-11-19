@@ -28,6 +28,8 @@ void track_draw_bottom(track_kind_t kind, const track_bottom_t *b);
 
 /* An Info page: the screen's explanation and (B) Back. */
 void track_draw_info(track_kind_t kind, bool back_pressed);
+/* The same for any text ("\n\n" between paragraphs): LOG's Info. */
+void track_draw_info_text(const char *text, bool back_pressed);
 
 typedef struct {
     const char *name;
