@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-19, DIAG: Protocol row on the top screen (gauge-boy-82l.19)
+**As of:** 2026-11-19, TRIM redesign: bank bars, hints on the bottom, Info (gauge-boy-82l.20)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -122,13 +122,20 @@ Gauge Boy
         │       └── [B Back]         → view list and the Dashboard (ends a recording, saves
         │                            the view)                                    [B]
         │
-        ├── TRIM                     (top: short / long / total trim per bank as
-        │   │                        colored center-zero bars, engine state, hints)
-        │   ├── (bottom: what trims mean, the color zones, how to check them)
-        │   ├── [BACK]               → HOME (or DIAG, if opened from there), stops polling [B]
-        │   ├── [REC / REC m:ss]     records the trims (with totals, RPM, MAP / MAF, load)
-        │   │                        to drives/; red while recording; tap again to stop
-        │   └── [START / STOP]       pauses or resumes polling (STOP also ends a recording)
+        ├── TRIM                     (top: a panel per bank, BANK n up its left edge, with
+        │   │                        Long and Short center-zero bars, -25 to +25 %, in the
+        │   │                        zone colours (an end arrow past the range) and their
+        │   │                        values; then rpm, load and the engine state. Polls while
+        │   │                        open)
+        │   ├── (bottom: poll rate, the hints (hints, not diagnoses), REC m:ss while recording)
+        │   ├── [Stop | Record]      LIVE's toggle: records the trims (with totals, RPM, MAP /
+        │   │                        MAF, load) to drives/; Stop ends the recording
+        │   ├── [B Back]             → HOME, stops polling                        [B]
+        │   └── [Y Info]             → Info: what trims mean, the colour zones, how to check
+        │       │                    them (the top keeps updating)                [Y]
+        │       └── [B Back]         → TRIM's controls                            [B]
+        │                            (if graphics fail to start, TRIM falls back to the text
+        │                            layout: bars, BACK, REC, START / STOP)
         │
         ├── DIAG                     (top: car, CEL, and what each button holds: stored,
         │   │                        pending and permanent codes, readiness; the protocol;

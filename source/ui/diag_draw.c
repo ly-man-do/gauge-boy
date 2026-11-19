@@ -48,50 +48,6 @@ static const char *fit(const char *s, float w, float scale)
     return buf;
 }
 
-/* Word-wraps s into lines no wider than w px at scale; returns the line count. */
-static int wrap(const char *s, float w, float scale, char lines[][96], int max)
-{
-    int n = 0;
-    const char *p = s;
-    while (*p != '\0' && n < max) {
-        while (*p == ' ') {
-            p++;
-        }
-        if (*p == '\n') {   /* a blank line between paragraphs */
-            lines[n++][0] = '\0';
-            p++;
-            continue;
-        }
-        size_t take = 0, last_space = 0;
-        char probe[96];
-        while (p[take] != '\0' && p[take] != '\n' && take < sizeof probe - 1) {
-            memcpy(probe, p, take + 1);
-            probe[take + 1] = '\0';
-            if (kit_text_width(probe, scale) > w) {
-                break;
-            }
-            if (p[take] == ' ') {
-                last_space = take;
-            }
-            take++;
-        }
-        if (p[take] != '\0' && p[take] != '\n' && last_space > 0) {
-            take = last_space;
-        }
-        if (take == 0) {
-            take = 1;
-        }
-        snprintf(lines[n++], 96, "%.*s", (int)take, p);
-        p += take;
-        if (*p == '\n' && p[1] == '\n') {
-            p++;   /* "\n\n": the blank line comes next */
-        } else if (*p == '\n') {
-            p++;
-        }
-    }
-    return n;
-}
-
 static void panel(float y, float h)
 {
     kit_rrect(17, y, 366, h, 6, KIT_PANEL_EDGE);
@@ -110,7 +66,7 @@ void diag_draw_facts_top(int icon, const char *title, const diag_fact_t *f, int 
     kit_title(icon, title);
 
     char lines[4][96];
-    int nl = note != NULL && note[0] ? wrap(note, 344, KIT_PX(11), lines, 4) : 0;
+    int nl = note != NULL && note[0] ? kit_wrap(note, 344, KIT_PX(11), lines, 4) : 0;
     float h = 12 + n * FACT_PITCH + (nl > 0 ? 8 + nl * 15 : 0);
     if (h < 40) {
         h = 40;
@@ -175,11 +131,11 @@ void diag_draw_code_top(const diag_code_t *c, const kit_status_t *s)
 
     /* Its text: one line, or two smaller ones. */
     char lines[3][96];
-    int nl = wrap(c->text, 364, KIT_PX(14), lines, 3);
+    int nl = kit_wrap(c->text, 364, KIT_PX(14), lines, 3);
     if (nl <= 1) {
         kit_text(c->text, 200, 57, KIT_PX(14), KIT_INK, 0, true);
     } else {
-        nl = wrap(c->text, 364, KIT_PX(12), lines, 2);
+        nl = kit_wrap(c->text, 364, KIT_PX(12), lines, 2);
         for (int i = 0; i < nl; i++) {
             kit_text(lines[i], 200, 53 + i * 14, KIT_PX(12), KIT_INK, 0, true);
         }
@@ -196,7 +152,7 @@ void diag_draw_code_top(const diag_code_t *c, const kit_status_t *s)
                               : "A permanent code stays until the car's own tests pass again. "
                                 "Clearing can't remove it.";
         char wl[4][96];
-        int nw = wrap(why, 340, KIT_PX(12), wl, 4);
+        int nw = kit_wrap(why, 340, KIT_PX(12), wl, 4);
         panel(96, 20 + nw * 17);
         for (int i = 0; i < nw; i++) {
             kit_text(wl[i], 30, 106 + i * 17, KIT_PX(12), KIT_INK2, -1, false);
@@ -239,7 +195,7 @@ void diag_draw_clear_top(const kit_status_t *s)
         "inspection until it has been driven for a while.\n\nThe fault itself is not fixed. "
         "Park first: ignition on, engine off works on most cars.";
     char lines[12][96];
-    int n = wrap(text, 344, KIT_PX(12.5f), lines, 12);
+    int n = kit_wrap(text, 344, KIT_PX(12.5f), lines, 12);
     panel(67, 158);
     for (int i = 0; i < n; i++) {
         kit_text(lines[i], 27, 74 + i * 15.5f, KIT_PX(12.5f), KIT_INK, -1, false);

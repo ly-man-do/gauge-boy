@@ -23,7 +23,8 @@ static C2D_Font font_small;   /* Nunito Bold 8 pt: GRAPH's font */
 static C2D_Font ui_font;      /* NULL = the system font */
 static C2D_SpriteSheet sysui, icons;
 static C2D_TextBuf text_buf;
-static C2D_TextBuf measure_buf;   /* widths: cleared on each measure, so measuring never fills text_buf */
+static C2D_TextBuf measure_buf;
+static C3D_Mtx vtag_view;   /* widths: cleared on each measure, so measuring never fills text_buf */
 static bool romfs_ok, gpu_on, c2d_on;
 static float z;               /* rising depth: later shapes draw on top */
 
@@ -566,4 +567,59 @@ void *kit_top_target(void)
 void *kit_font_small(void)
 {
     return font_small;
+}
+
+int kit_wrap(const char *s, float w, float scale, char lines[][96], int max)
+{
+    int n = 0;
+    const char *p = s;
+    while (*p != '\0' && n < max) {
+        while (*p == ' ') {
+            p++;
+        }
+        if (*p == '\n') {   /* a blank line between paragraphs */
+            lines[n++][0] = '\0';
+            p++;
+            continue;
+        }
+        size_t take = 0, last_space = 0;
+        char probe[96];
+        while (p[take] != '\0' && p[take] != '\n' && take < sizeof probe - 1) {
+            memcpy(probe, p, take + 1);
+            probe[take + 1] = '\0';
+            if (kit_text_width(probe, scale) > w) {
+                break;
+            }
+            if (p[take] == ' ') {
+                last_space = take;
+            }
+            take++;
+        }
+        if (p[take] != '\0' && p[take] != '\n' && last_space > 0) {
+            take = last_space;
+        }
+        if (take == 0) {
+            take = 1;
+        }
+        snprintf(lines[n++], 96, "%.*s", (int)take, p);
+        p += take;
+        if (*p == '\n' && p[1] == '\n') {
+            p++;   /* "\n\n": the blank line comes next */
+        } else if (*p == '\n') {
+            p++;
+        }
+    }
+    return n;
+}
+
+void kit_vtag(const char *text, float cx, float cy, float w, float h)
+{
+    /* Turned a quarter left: drawn flat around the origin, the view rotated. */
+    C2D_ViewSave(&vtag_view);
+    C2D_ViewTranslate(cx, cy);
+    C2D_ViewRotateDegrees(-90.0f);
+    kit_rrect(-w / 2, -h / 2, w, h, 4, KIT_TAG);
+    float s = KIT_PX(10);
+    kit_text(text, 0, -30 * s / 2, s, KIT_TAG_INK, 0, true);
+    C2D_ViewRestore(&vtag_view);
 }

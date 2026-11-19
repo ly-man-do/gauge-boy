@@ -52,6 +52,7 @@
 #include "icons.h"
 #include "ui/diag_draw.h"
 #include "ui/live_draw.h"
+#include "ui/trim_draw.h"
 #include "obd/dtc.h"
 #include "obd/obd_diag.h"
 #include "obd/obd_live.h"
@@ -2703,6 +2704,9 @@ typedef struct {
     bool diag_held_in;         /* ... and the finger is still on it */
     int dialog_held;           /* clear question (graphics): 1 Cancel, 2 Clear Codes held */
     bool dialog_held_in;
+    bool trim_info;            /* TRIM (graphics): the Info page shows */
+    int trim_held;             /* ... the control held (trim_hit_t) */
+    bool trim_held_in;
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
@@ -2843,7 +2847,7 @@ static void trim_start(void)
     static const uint8_t pids[] = { OBD_PID_STFT_B1, OBD_PID_STFT_B2, OBD_PID_LTFT_B1,
                                     OBD_PID_LTFT_B2, 0x0C, 0x0D, OBD_PID_MAP, OBD_PID_MAP_WIDE,
                                     0x10, 0x04 };
-    static const uint32_t periods[] = { 0, 0, 1000, 1000, 1000, 2000, 2000, 2000, 2000, 2000 };
+    static const uint32_t periods[] = { 0, 0, 1000, 1000, 1000, 2000, 2000, 2000, 2000, 1000 };
     LightLock_Lock(&shared.lock);
     live_start_locked(pids, periods, (int)sizeof pids);
     LightLock_Unlock(&shared.lock);
@@ -4364,6 +4368,33 @@ static void trim_row(int row, const char *label, bool have, float pct)
 
 /* TRIM top screen: both banks' short, long and total trims as bars, the
  * engine state and the hints. */
+static void status_now(kit_status_t *s, bool connected);
+
+/* TRIM's top screen (citro2d): the banks' bars and the engine line. */
+static void draw_trim_gfx_top(bool connected)
+{
+    static obd_live_t lv;
+    LightLock_Lock(&shared.lock);
+    lv = shared.live;
+    bool have = shared.live_have;
+    LightLock_Unlock(&shared.lock);
+    trim_state_t ts;
+    float load = 0;
+    bool have_load = false;
+    if (have) {
+        trim_state_from_live(&lv, &ts);
+        have_load = obd_live_value(&lv, 0x04, &load);
+    } else {
+        memset(&ts, 0, sizeof ts);
+        ts.banks = 2;   /* until the car says otherwise */
+    }
+    char engine[64];
+    trim_engine_text(&ts, have_load, load, engine, sizeof engine);
+    kit_status_t s;
+    status_now(&s, connected);
+    trim_draw_top(&ts, engine, &s);
+}
+
 static void draw_trim_top(int busy, bool connected)
 {
     static obd_live_t lv;
@@ -5075,6 +5106,41 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         }
         live_draw_list(names, LIVE_VIEW_COUNT, ui->live_scroll, held, ui->live_touching && ui->live_grip,
                        flashing(BTN_BACK, now));
+        return;
+    }
+    if (ui->screen == SCREEN_TRIM && home_gfx) {
+        trim_hit_t pressed = ui->trim_held_in ? (trim_hit_t)ui->trim_held : TRIM_HIT_NONE;
+        if (ui->trim_info) {
+            trim_draw_info(pressed == TRIM_HIT_BACK || flashing(BTN_BACK, now));
+            return;
+        }
+        static obd_live_t lv;
+        trim_controls_t c;
+        memset(&c, 0, sizeof c);
+        LightLock_Lock(&shared.lock);
+        lv = shared.live;
+        bool have = shared.live_have;
+        c.pids = have ? shared.live.count : shared.live_want_count;
+        c.rate = have ? shared.live_rate : 0.0f;
+        c.connected = shared.connected;
+        c.recording = shared.rec_want || shared.rec_active;
+        c.rec_ms = shared.rec_active ? now - shared.rec_started_ms : 0;
+        LightLock_Unlock(&shared.lock);
+        trim_state_t ts;
+        const char *hints[TRIM_HINTS_MAX];
+        if (have) {
+            trim_state_from_live(&lv, &ts);
+            c.nhints = trim_hints(&ts, hints, TRIM_HINTS_MAX);
+            c.hints_ok = trim_all_normal(&ts);
+        }
+        c.hints = hints;
+        c.pressed = pressed;
+        if (flashing(BTN_LIVE_STOP, now)) {
+            c.pressed = TRIM_HIT_STOP;
+        } else if (flashing(BTN_LIVE_RECORD, now)) {
+            c.pressed = TRIM_HIT_RECORD;
+        }
+        trim_draw_bottom(&c);
         return;
     }
     if (ui->screen == SCREEN_DIAG && home_gfx) {
@@ -5930,7 +5996,8 @@ void spike_ui_run(void)
     ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false, -1, SCREEN_SETUP,
                       false, LIVE_VIEW_ENGINE, SCREEN_HOME, false, 0, 0.0, 0.0, 0.0,
                       false, false, TA_RUN_LAUNCH, SCREEN_HOME, 0, 0, -1, 0, false, false, 0, 0,
-                      -1, false, 0, LIVE_HIT_NONE, false, 0, DIAG_HIT_NONE, false, 0, false };
+                      -1, false, 0, LIVE_HIT_NONE, false, 0, DIAG_HIT_NONE, false, 0, false,
+                      false, TRIM_HIT_NONE, false };
     gm_vec_t gm_raw = { 0, 0, 0 };   /* G-METER: the latest sensor reading */
     live_menu_count();
     uint64_t notice_until = 0;
@@ -6121,7 +6188,7 @@ void spike_ui_run(void)
             }
             bool gfx_touch = home_gfx && (ui.screen == SCREEN_HOME || ui.screen == SCREEN_LIVE_MENU ||
                                           ui.screen == SCREEN_LIVE || ui.screen == SCREEN_DIAG ||
-                                          ui.screen == SCREEN_DIAG_PAGE);
+                                          ui.screen == SCREEN_DIAG_PAGE || ui.screen == SCREEN_TRIM);
             int i = gfx_touch ? -1 : button_at(list, count, tp.px, tp.py);
             int item = ui.screen == SCREEN_HOME && home_gfx ? home_hit(tp.px, tp.py) : -1;
             diag_hit_t dhit = !gfx_touch                     ? DIAG_HIT_NONE
@@ -6129,7 +6196,12 @@ void spike_ui_run(void)
                             : ui.screen == SCREEN_DIAG_PAGE ? diag_page_tab_hit(tp.px, tp.py,
                                                                   ui.tab != DIAG_TAB_READINESS)
                                                             : DIAG_HIT_NONE;
-            if (dhit != DIAG_HIT_NONE || (gfx_touch && ui.screen == SCREEN_DIAG)) {
+            if (gfx_touch && ui.screen == SCREEN_TRIM) {
+                /* TRIM's toggle and tabs: pressed while held, act on lifting. */
+                ui.trim_held = trim_hit(tp.px, tp.py, ui.trim_info);
+                ui.trim_held_in = ui.trim_held != TRIM_HIT_NONE;
+                bottom_dirty = true;
+            } else if (dhit != DIAG_HIT_NONE || (gfx_touch && ui.screen == SCREEN_DIAG)) {
                 /* DIAG's buttons and tabs: pressed while held, act on lifting. */
                 ui.diag_held = dhit;
                 ui.diag_held_in = dhit != DIAG_HIT_NONE;
@@ -6246,6 +6318,46 @@ void spike_ui_run(void)
                 }
                 ui.live_held = LIVE_HIT_NONE;
                 ui.live_held_in = false;
+                bottom_dirty = true;
+            }
+        }
+
+        /* TRIM's controls (graphics): the same. */
+        if (ui.trim_held != TRIM_HIT_NONE) {
+            if (ui.screen != SCREEN_TRIM || confirming) {
+                ui.trim_held = TRIM_HIT_NONE;
+                ui.trim_held_in = false;
+            } else if (hidKeysHeld() & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                bool in = (int)trim_hit(tp.px, tp.py, ui.trim_info) == ui.trim_held;
+                if (in != ui.trim_held_in) {
+                    ui.trim_held_in = in;
+                    bottom_dirty = true;
+                }
+            } else {
+                if (ui.trim_held_in && !tapped) {
+                    switch (ui.trim_held) {
+                    case TRIM_HIT_BACK:
+                        if (ui.trim_info) {
+                            ui.trim_info = false;   /* back to the controls */
+                            bottom_full = true;
+                        } else {
+                            action = BTN_BACK;
+                            tapped = lifted = true;
+                        }
+                        break;
+                    case TRIM_HIT_INFO:
+                        ui.trim_info = true;
+                        bottom_full = true;
+                        break;
+                    case TRIM_HIT_STOP:   action = BTN_LIVE_STOP;   tapped = lifted = true; break;
+                    case TRIM_HIT_RECORD: action = BTN_LIVE_RECORD; tapped = lifted = true; break;
+                    default: break;
+                    }
+                }
+                ui.trim_held = TRIM_HIT_NONE;
+                ui.trim_held_in = false;
                 bottom_dirty = true;
             }
         }
@@ -6394,6 +6506,13 @@ void spike_ui_run(void)
         } else if (ui.clear_dialog && (down & KEY_B)) {
             ui.clear_dialog = false;   /* B cancels; there is no button shortcut to clear */
             bottom_full = top_dirty = true;
+        } else if (ui.trim_info && ui.screen == SCREEN_TRIM && (down & KEY_B)) {
+            ui.trim_info = false;   /* B closes Info, back to TRIM's controls */
+            bottom_full = true;
+        } else if (home_gfx && ui.screen == SCREEN_TRIM && !ui.trim_info && (down & KEY_Y) &&
+                   !confirming) {
+            ui.trim_info = true;
+            bottom_full = true;
         } else if (ui.delete_dialog && (down & KEY_B)) {
             ui.delete_dialog = false;
             bottom_full = true;
@@ -6497,6 +6616,7 @@ void spike_ui_run(void)
             case BTN_DIAG_TRIM:
                 ui.trim_back = action == BTN_DIAG_TRIM ? SCREEN_DIAG : SCREEN_HOME;
                 ui.screen = SCREEN_TRIM;
+                ui.trim_info = false;
                 trim_start();
                 bottom_full = top_dirty = true;
                 break;
@@ -7331,7 +7451,8 @@ void spike_ui_run(void)
             static bool gfx_top_shown;
             bool live_gfx = home_gfx && (ui.screen == SCREEN_LIVE_MENU || ui.screen == SCREEN_LIVE);
             bool diag_gfx = home_gfx && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_DIAG_PAGE);
-            bool gfx_top_now = (ui.screen == SCREEN_HOME && home_gfx) || live_gfx || diag_gfx;
+            bool trim_gfx = home_gfx && ui.screen == SCREEN_TRIM;
+            bool gfx_top_now = (ui.screen == SCREEN_HOME && home_gfx) || live_gfx || diag_gfx || trim_gfx;
             if (gfx_top_shown && !gfx_top_now && ui.screen != SCREEN_GRAPH) {
                 consoleSelect(&top_console);
                 printf("\x1b[0m\x1b[2J");
@@ -7363,6 +7484,11 @@ void spike_ui_run(void)
                 live_drawn_at = now;
             } else if (ui.screen == SCREEN_TRACK) {
                 draw_track_top(busy, connected);
+            } else if (trim_gfx) {
+                draw_trim_gfx_top(connected);
+                drawn_live_version = live_version;
+                live_drawn_at = now;
+                bottom_dirty = true;   /* the hints follow the values */
             } else if (ui.screen == SCREEN_TRIM) {
                 draw_trim_top(busy, connected);
                 drawn_live_version = live_version;
@@ -7411,7 +7537,8 @@ void spike_ui_run(void)
         }
         /* LIVE (graphics): the REC dot pulses while recording. */
         static uint64_t rec_drawn_at;
-        if (ui.screen == SCREEN_LIVE && home_gfx && now - rec_drawn_at >= 50) {
+        if ((ui.screen == SCREEN_LIVE || (ui.screen == SCREEN_TRIM && !ui.trim_info)) && home_gfx &&
+            now - rec_drawn_at >= 50) {
             LightLock_Lock(&shared.lock);
             bool rec = shared.rec_active;
             LightLock_Unlock(&shared.lock);

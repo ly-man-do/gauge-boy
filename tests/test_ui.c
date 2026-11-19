@@ -6,6 +6,7 @@
 #include "ui/home_top.h"
 #include "ui/diag_ui.h"
 #include "ui/live_ui.h"
+#include "ui/trim_ui.h"
 
 static bool overlap(home_rect_t a, home_rect_t b)
 {
@@ -459,8 +460,80 @@ static void test_diag_text(void)
     CHECK_EQ_STR(diag_page_title(DIAG_TAB_PERMANENT), "PERMANENT CODES");
 }
 
+static void test_trim_bars(void)
+{
+    /* Lit from 0 toward the value, 2 % a segment; the middle two segments are +-1 %. */
+    CHECK_EQ_INT(trim_seg(12, 0.0f, true), 0);
+    CHECK_EQ_INT(trim_seg(12, 0.5f, true), 0);   /* segment 12 is -1..+1: never lit */
+    CHECK_EQ_INT(trim_seg(13, 1.5f, true), 1);   /* +2 %, within a segment's half */
+    CHECK_EQ_INT(trim_seg(13, 0.5f, true), 0);
+    int lit = 0;
+    for (int i = 0; i < TRIM_SEGS; i++) {
+        lit += trim_seg(i, 17.2f, true) == 1;
+        CHECK(trim_seg(i, 17.2f, true) != 2);
+    }
+    CHECK_EQ_INT(lit, 9);                         /* +2 .. +18 */
+    CHECK_EQ_INT(trim_seg(11, -1.6f, true), 1);
+    CHECK_EQ_INT(trim_seg(13, -1.6f, true), 0);
+    /* Past the range: the end segment is an arrow, the rest lit. */
+    CHECK_EQ_INT(trim_seg(TRIM_SEGS - 1, 27.4f, true), 2);
+    CHECK_EQ_INT(trim_seg(TRIM_SEGS - 2, 27.4f, true), 1);
+    CHECK_EQ_INT(trim_seg(0, -40.0f, true), 2);
+    CHECK_EQ_INT(trim_seg(0, 40.0f, true), 0);
+    CHECK_EQ_INT(trim_seg(20, 30.0f, false), 0);
+    CHECK(trim_seg_zone(12) == TRIM_ZONE_GREEN);
+    CHECK(trim_seg_zone(18) == TRIM_ZONE_AMBER);   /* +13 % */
+    CHECK(trim_seg_zone(24) == TRIM_ZONE_RED);
+    CHECK(trim_seg_zone(0) == TRIM_ZONE_RED);
+
+    char buf[48];
+    trim_value_text(true, 17.24f, buf, sizeof buf);
+    CHECK_EQ_STR(buf, "+17.2 %");
+    trim_value_text(true, -1.6f, buf, sizeof buf);
+    CHECK_EQ_STR(buf, "-1.6 %");
+    trim_value_text(true, -0.01f, buf, sizeof buf);
+    CHECK_EQ_STR(buf, "0.0 %");
+    trim_value_text(false, 3.0f, buf, sizeof buf);
+    CHECK_EQ_STR(buf, "-- %");
+
+    trim_state_t s;
+    memset(&s, 0, sizeof s);
+    s.banks = 2;
+    trim_engine_text(&s, false, 0, buf, sizeof buf);
+    CHECK_EQ_STR(buf, "Waiting for RPM");
+    s.have_rpm = s.have_speed = true;
+    s.rpm = 742;
+    trim_engine_text(&s, true, 24.3f, buf, sizeof buf);
+    CHECK_EQ_STR(buf, "742 rpm, 24 % load, at idle");
+    s.rpm = 2480;
+    trim_engine_text(&s, false, 0, buf, sizeof buf);
+    CHECK_EQ_STR(buf, "2,480 rpm, parked");
+    s.speed_kmh = 50;
+    trim_engine_text(&s, true, 31, buf, sizeof buf);
+    CHECK_EQ_STR(buf, "2,480 rpm, 31 % load, driving");
+
+    CHECK(!trim_all_normal(&s));                  /* no readings yet */
+    s.bank[0].have_short = s.bank[0].have_long = true;
+    s.bank[0].short_term = -1.6f;
+    s.bank[0].long_term = 3.1f;
+    CHECK(trim_all_normal(&s));
+    s.bank[1].have_long = true;
+    s.bank[1].long_term = 17.2f;
+    CHECK(!trim_all_normal(&s));
+
+    /* Touch: the tabs and the toggle; the Info page has Back only. */
+    CHECK(trim_hit(10, 230, false) == TRIM_HIT_BACK);
+    CHECK(trim_hit(310, 230, false) == TRIM_HIT_INFO);
+    CHECK(trim_hit(310, 230, true) == TRIM_HIT_NONE);
+    CHECK(trim_hit(100, 130, false) == TRIM_HIT_STOP);
+    CHECK(trim_hit(200, 130, false) == TRIM_HIT_RECORD);
+    CHECK(trim_hit(200, 130, true) == TRIM_HIT_NONE);
+    CHECK(trim_hit(160, 30, false) == TRIM_HIT_NONE);
+}
+
 void suite_ui(void)
 {
+    RUN_TEST(test_trim_bars);
     RUN_TEST(test_diag_layout);
     RUN_TEST(test_diag_text);
     RUN_TEST(test_live_dash_values);

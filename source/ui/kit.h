@@ -97,10 +97,17 @@ float kit_text_width(const char *s, float scale);
  * the line. bold draws it twice, half a pixel apart. */
 void kit_text(const char *s, float x, float y, float scale, u32 c, int align, bool bold);
 
+/* Word-wraps s into lines no wider than w px at scale ("\n" ends a paragraph, "\n\n"
+ * leaves a blank line); returns the line count. */
+int kit_wrap(const char *s, float w, float scale, char lines[][96], int max);
+
 /* LCD digits ("123,456", "--.-", " 42") h px tall with unlit "8"s behind (a space is
  * just the unlit "8"); returns the width. */
 float kit_lcd(const char *s, float x, float y, float h, u32 c);
 float kit_lcd_width(const char *s, float h);
+
+/* A grey tag w x h centred on (cx, cy), turned a quarter left (its text reads upward). */
+void kit_vtag(const char *text, float cx, float cy, float w, float h);
 
 /* ---------- system pieces ---------- */
 
