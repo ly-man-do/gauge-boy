@@ -357,6 +357,7 @@ int diag_home_facts(const obd_diag_t *d, const char *nickname, obd_units_t units
     } else {
         fact(out, &n, max, "Readiness", DIAG_INK_GREY, "Not read", "");
     }
+    fact(out, &n, max, "Protocol", DIAG_INK_WHITE, elm_protocol_name(d->link.protocol), "");
     if (d->result != OBD_LINK_OK || d->stopped_at != OBD_DIAG_STEP_DONE) {
         snprintf(note, note_len, "The scan stopped early (%s): tap Scan again.",
                  obd_diag_step_str(d->stopped_at));

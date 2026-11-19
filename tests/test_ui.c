@@ -396,7 +396,9 @@ static void test_diag_text(void)
 
     diag_sample(&d);
     n = diag_home_facts(&d, "Big Red", OBD_UNITS_US, f, DIAG_FACTS_MAX, note, sizeof note);
-    CHECK_EQ_INT(n, 6);   /* Car, CEL, Stored, Pending, Permanent, Readiness */
+    CHECK_EQ_INT(n, 7);   /* Car, CEL, Stored, Pending, Permanent, Readiness, Protocol */
+    CHECK_EQ_STR(f[6].tag, "Protocol");
+    CHECK_EQ_STR(f[6].value, elm_protocol_name(3));
     CHECK_EQ_STR(f[0].value, "Big Red");
     CHECK_EQ_STR(f[1].value, "On");
     CHECK(f[1].cel_icon && f[1].ink == DIAG_INK_AMBER);

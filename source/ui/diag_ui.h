@@ -100,7 +100,7 @@ typedef struct {
     bool cel_icon;           /* the CEL lamp before the value */
 } diag_fact_t;
 
-#define DIAG_FACTS_MAX 8
+#define DIAG_FACTS_MAX 8   /* DIAG's first page uses 7 */
 
 /* DIAG's first page: the car, the CEL and what each button holds. nickname is the
  * Garage's name for the car ("" none). note gets a line for under the rows ("" none). */

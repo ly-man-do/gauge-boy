@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-19, DIAG redesign: four buttons, a page each, Back / Clear tabs (gauge-boy-82l.18)
+**As of:** 2026-11-19, DIAG: Protocol row on the top screen (gauge-boy-82l.19)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -131,8 +131,8 @@ Gauge Boy
         │   └── [START / STOP]       pauses or resumes polling (STOP also ends a recording)
         │
         ├── DIAG                     (top: car, CEL, and what each button holds: stored,
-        │   │                        pending and permanent codes, readiness; scan progress
-        │   │                        under the panel)
+        │   │                        pending and permanent codes, readiness; the protocol;
+        │   │                        scan progress under the panel)
         │   ├── [Stored]             → Stored codes page (top: count, modules, freeze frame)
         │   │   ├── [code rows]      scroll (drag, or the scroll bar's grip); tap → the code
         │   │   │                    on top: its text, module and freeze frame (red outline)
