@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-19, SETUP redesign (gauge-boy-82l.24)
+**As of:** 2026-11-19, GARAGE redesign with the car photo (gauge-boy-82l.25)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -17,33 +17,40 @@ Gauge Boy
                                      Car, CEL (lamp, Off / ON and how far), Codes (count and
                                      the first ones), Odometer (big LCD digits), Adapter
                                      (version and protocol, or Not connected and the address))
-        ├── [Garage]                 → GARAGE (icon dims before a car is known; BACK returns to HOME)
-        │   └── GARAGE               (no polling; top: one car's card: a picture frame (photo
-        │       │                     in M5), nickname, year make model, VIN or "(set in
-        │       │                     SETUP)", logged distance and drives, odometer, bests;
+        ├── [Garage]                 → GARAGE (icon dims before a car is known; Back returns to HOME)
+        │   └── GARAGE               (no polling; top: one car's card: its photo (the Garage
+        │       │                     icon and "No photo yet" until there is one), nickname,
+        │       │                     year make model, VIN or "(set in SETUP)", odometer in
+        │       │                     LCD digits, logged distance and drives, two bests;
         │       │                     "Counting drive n of m..." while it reads new drives)
-        │       ├── [TRIP]           → TRIP METER
-        │       ├── [MILEAGE LOG]    → MILEAGE LOG
-        │       ├── [<] [>]          the card before / after (the connected car's first)
-        │       ├── [NICKNAME]       keyboard; saved to garage.csv (empty removes it)
-        │       ├── [BACK]           → HOME                                       [B]
-        │       ├── TRIP METER       (the card's car: odometer now (live if it's the connected
-        │       │   │                 car: polls PID A6, else the last saved), trip distance
-        │       │   │                 in big digits since RESET TRIP, its date and start)
-        │       │   ├── [RESET TRIP] a new trip from the odometer now; refused while moving
-        │       │   └── [BACK]       → GARAGE (stops polling)                     [B]
-        │       └── MILEAGE LOG      (the card's car: average economy, then the newest
-        │           │                 entries: date, end odometer, distance, fuel, mpg / L/100,
-        │           │                 cost; "Spent" total and cost a mile / km)
-        │           │                 (bottom: the entries newest first, 3 a page; tap one to
-        │           │                 select it, green; it's highlighted on top too)
-        │           ├── [NEW ENTRY]  number pad x4: start odometer (from the last entry),
+        │       ├── (< name >)       half circles: the card before / after (the connected car's first)
+        │       ├── [Nickname]       keyboard; saved to garage.csv (empty removes it)
+        │       ├── [Photo]          → CAMERA (the outer camera live on the top screen, corner
+        │       │   │                 guides around the part kept)
+        │       │   ├── [Take Photo] the shot (or A) → [Use Photo] keeps it as the card's photo
+        │       │   │                (photos/<car>.bmp, 160 x 120), [Retake], [Remove] (no photo)
+        │       │   └── [B Back]     → GARAGE (camera off)                        [B]
+        │       ├── [Trip]           → TRIP METER
+        │       ├── [Mileage Log]    → MILEAGE LOG
+        │       ├── [Y Info]         what the Garage counts, the half circles, Nickname, Photo  [Y]
+        │       ├── [B Back]         → HOME                                       [B]
+        │       ├── TRIP METER       (the card's car: the trip in LCD digits since Reset Trip,
+        │       │   │                 when and where it started, the odometer now (live if
+        │       │   │                 it's the connected car: polls PID A6, else the last saved))
+        │       │   ├── [Reset Trip] a new trip from the odometer now; refused while moving
+        │       │   ├── [Y Info]     how the trip meter reads the odometer        [Y]
+        │       │   └── [B Back]     → GARAGE (stops polling)                     [B]
+        │       └── MILEAGE LOG      (top: average economy, distance, fuel, money spent)
+        │           ├── [entry rows] newest first: date, odometer and distance, economy
+        │           │   │            (scrolls); tap → the entry's page (top: its numbers)
+        │           │   ├── [Edit]   number pad x4, filled in with it
+        │           │   ├── [Delete] → Delete question (top: what it removes): [Cancel] /
+        │           │   │            red [Delete]                                 [B cancels]
+        │           │   └── [B Back] → the list                                   [B]
+        │           ├── [X New Entry] number pad x4: start odometer (from the last entry),
         │           │                 end odometer (from the odometer), fuel, price per gallon
         │           │                 (US) or litre (metric), optional; refused while moving
-        │           ├── [<] n/m [>]  list pages
-        │           ├── [EDIT]       the selected entry: the same questions, filled in with it
-        │           ├── [DELETE]     the selected entry, after a second tap ("AGAIN")
-        │           └── [BACK]       → GARAGE                                     [B]
+        │           └── [B Back]     → GARAGE                                     [B]
         ├── [Adapter]                → Wi-Fi guide (green Wi-Fi icon when connected; red and crossed
         │                              out when not)
         ├── [LIVE]                   → LIVE view list
@@ -240,5 +247,5 @@ Any screen: a new achievement shows "Unlocked: <name>!" (or "Unlocked n achievem
 
 - SETUP is a menu of four pages (owner layout, gauge-boy-cib): TESTS (adapter and car tests, the log's buttons), WI-FI (connection), VEHICLE (make, model, year, engine size, VIN) and OTHER (units, About).
 - LIVE views and the PIDs in each, in list order: Engine (RPM, speed, coolant, throttle, load), Idle/Vacuum (RPM, MAP (PID 0B or 87) + vacuum or boost, short-term trims, timing, baro, fuel loop), Air/Fuel (MAF, MAP (0B or 87), intake air, throttle, short- and long-term trims, baro, fuel loop, commanded lambda), O2 Sensors (RPM, short-term trims, then every oxygen sensor the car has: narrow band voltage, PIDs 14-1B, or wide band lambda, 24-2B / 34-3B, banks 1-2, sensors 1-4), Warm-up (coolant, intake air, oil, outside air, run time, RPM), Drive (RPM, speed, throttle, load, timing, torque, gear ratio, odometer, fuel rate (the car's PID 5E / 9D, else estimated from MAF or MAP + engine size) and instant economy), All (every supported PID), Custom (your pick). Each view only shows what the car supports.
-- HOME, LIVE, DIAG, TRIM, TRACK and LOG (with GRAPH) are drawn with graphics (citro2d, the UI kit in `source/ui/kit.c`); SETUP and the Wi-Fi guide are graphics too; GARAGE, TRIP, MILEAGE and LIVE's Custom PID picker are still the text console. If graphics fail to start, every screen falls back to its text layout.
+- HOME, LIVE, DIAG, TRIM, TRACK and LOG (with GRAPH) are drawn with graphics (citro2d, the UI kit in `source/ui/kit.c`); SETUP, the Wi-Fi guide, GARAGE (with its camera), TRIP and MILEAGE are graphics too; LIVE's Custom PID picker is still the text console. If graphics fail to start, every screen falls back to its text layout.
 - The code for these screens is in `source/spike_ui.c` (screens, buttons, actions) and `source/ui/` (HOME layout and drawing).

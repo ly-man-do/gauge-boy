@@ -1,10 +1,12 @@
 /* Tests for source/ui: the HOME bottom screen layout and touch zones. */
 #include <string.h>
 
+#include "data/car_photo.h"
 #include "harness.h"
 #include "ui/home_layout.h"
 #include "ui/home_top.h"
 #include "ui/diag_ui.h"
+#include "ui/garage_ui.h"
 #include "ui/live_ui.h"
 #include "ui/log_ui.h"
 #include "ui/setup_ui.h"
@@ -674,8 +676,100 @@ static void test_setup_ui(void)
     CHECK_EQ_STR(setup_menu_label(3), "Tests");
 }
 
+static void test_car_photo(void)
+{
+    char name[40];
+    car_photo_name("honda/ridgeline 2/2008", name, sizeof name);
+    CHECK_EQ_STR(name, "honda_ridgeline_2_2008");
+    car_photo_name("1HGXX00000X000000", name, sizeof name);
+    CHECK_EQ_STR(name, "1HGXX00000X000000");
+    car_photo_name("../x", name, sizeof name);
+    CHECK_EQ_STR(name, "___x");   /* no way out of the folder */
+
+    /* The crop: the middle 320 columns, each photo pixel the average of four. */
+    static uint16_t frame[CAR_PHOTO_CAM_W * CAR_PHOTO_CAM_H], photo[CAR_PHOTO_W * CAR_PHOTO_H],
+        back[CAR_PHOTO_W * CAR_PHOTO_H];
+    for (int y = 0; y < CAR_PHOTO_CAM_H; y++) {
+        for (int x = 0; x < CAR_PHOTO_CAM_W; x++) {
+            frame[y * CAR_PHOTO_CAM_W + x] = x < 40 || x >= 360 ? 0xF800   /* red outside */
+                                           : (uint16_t)(((x - 40) / 2 % 32) & 0x1F);   /* blue ramp */
+        }
+    }
+    car_photo_crop(frame, photo);
+    CHECK_EQ_INT(photo[0], 0);
+    CHECK_EQ_INT(photo[5], 5);
+    CHECK_EQ_INT(photo[CAR_PHOTO_W - 1], (CAR_PHOTO_W - 1) % 32);
+    frame[0 * CAR_PHOTO_CAM_W + 40] = 0x1F;   /* one of four pixels brighter: rounded average */
+    car_photo_crop(frame, photo);
+    CHECK_EQ_INT(photo[0], 8);
+
+    /* BMP round trip (5-6-5 survives 8-bit channels exactly). */
+    for (int i = 0; i < CAR_PHOTO_W * CAR_PHOTO_H; i++) {
+        photo[i] = (uint16_t)(i * 2654435761u >> 16);
+    }
+    static uint8_t bmp[CAR_PHOTO_BMP_SIZE];
+    CHECK_EQ_INT((int)car_photo_bmp_write(photo, bmp, sizeof bmp), CAR_PHOTO_BMP_SIZE);
+    CHECK(bmp[0] == 'B' && bmp[1] == 'M');
+    CHECK(car_photo_bmp_read(bmp, sizeof bmp, back));
+    CHECK(memcmp(photo, back, sizeof photo) == 0);
+    CHECK(!car_photo_bmp_read(bmp, 100, back));
+    bmp[18] = 100;   /* another width */
+    CHECK(!car_photo_bmp_read(bmp, sizeof bmp, back));
+    CHECK_EQ_INT((int)car_photo_bmp_write(photo, bmp, 1000), 0);
+
+    /* Tiling: 8 x 8 Morton tiles, the image's first row first. */
+    static uint16_t tex[16 * 16];
+    uint16_t img[16 * 16];
+    for (int i = 0; i < 256; i++) {
+        img[i] = (uint16_t)i;
+    }
+    car_photo_tile(img, 16, 16, tex, 16, 16);
+    CHECK_EQ_INT(tex[0], 0);
+    CHECK_EQ_INT(tex[1], 1);                /* x + 1 */
+    CHECK_EQ_INT(tex[2], 16);               /* y + 1 */
+    CHECK_EQ_INT(tex[4], 2);                /* x + 2 */
+    CHECK_EQ_INT(tex[64], 8);               /* the next tile to the right */
+    CHECK_EQ_INT(tex[2 * 64], 8 * 16);      /* the next tile row */
+}
+
+static void test_garage_ui(void)
+{
+    for (int k = 0; k < GAR_KIND_COUNT; k++) {
+        int ids[16], n = 0;
+        for (int h = GAR_HIT_BACK; h < GAR_HIT_BUTTON; h++) {
+            if (garage_rect((garage_kind_t)k, h).w > 0) {
+                ids[n++] = h;
+            }
+        }
+        for (int i = 0; i < garage_button_count((garage_kind_t)k); i++) {
+            ids[n++] = GAR_HIT_BUTTON + i;
+        }
+        CHECK(n >= 1);
+        for (int a = 0; a < n; a++) {
+            garage_rect_t r = garage_rect((garage_kind_t)k, ids[a]);
+            CHECK(r.x >= 0 && r.y >= 0 && r.x + r.w <= 320 && r.y + r.h <= 240);
+            CHECK(r.w >= 40 && r.h >= 38);
+            CHECK_EQ_INT(garage_hit((garage_kind_t)k, r.x + r.w / 2, r.y + r.h / 2), ids[a]);
+            if (ids[a] >= GAR_HIT_BUTTON) {
+                CHECK(r.y + r.h <= 202);
+            }
+            for (int b = a + 1; b < n; b++) {
+                garage_rect_t q = garage_rect((garage_kind_t)k, ids[b]);
+                CHECK(!(r.x < q.x + q.w && q.x < r.x + r.w && r.y < q.y + q.h && q.y < r.y + r.h));
+            }
+        }
+    }
+    CHECK_EQ_INT(garage_hit(GAR_MILES, 310, 230), GAR_HIT_RIGHT);   /* New Entry */
+    CHECK_EQ_INT(garage_hit(GAR_ENTRY, 310, 230), GAR_HIT_NONE);
+    garage_rect_t f = garage_photo_frame();
+    CHECK_EQ_INT(f.w * 3, f.h * 4);   /* 4:3, as the photo */
+    CHECK(garage_info_text(GAR_TRIP)[0] != '\0');
+}
+
 void suite_ui(void)
 {
+    RUN_TEST(test_garage_ui);
+    RUN_TEST(test_car_photo);
     RUN_TEST(test_setup_ui);
     RUN_TEST(test_log_ui);
     RUN_TEST(test_track_layout);

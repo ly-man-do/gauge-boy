@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "data/car_photo.h"
 #include "icons.h"
 #include "icons_t3x.h"
 #include "sysui.h"
@@ -622,4 +623,57 @@ void kit_vtag(const char *text, float cx, float cy, float w, float h)
     float s = KIT_PX(10);
     kit_text(text, 0, -30 * s / 2, s, KIT_TAG_INK, 0, true);
     C2D_ViewRestore(&vtag_view);
+}
+
+static int pow2_at_least(int v)
+{
+    int p = 8;
+    while (p < v) {
+        p <<= 1;
+    }
+    return p;
+}
+
+bool kit_pic_init(kit_pic_t *p, int w, int h)
+{
+    memset(p, 0, sizeof *p);
+    int tw = pow2_at_least(w), th = pow2_at_least(h);
+    if (!C3D_TexInit(&p->tex, (u16)tw, (u16)th, GPU_RGB565)) {
+        return false;
+    }
+    C3D_TexSetFilter(&p->tex, GPU_LINEAR, GPU_LINEAR);
+    memset(p->tex.data, 0, p->tex.size);
+    p->w = w;
+    p->h = h;
+    p->sub.width = (u16)w;
+    p->sub.height = (u16)h;
+    p->sub.left = 0.0f;
+    p->sub.top = 1.0f;
+    p->sub.right = (float)w / (float)tw;
+    p->sub.bottom = 1.0f - (float)h / (float)th;
+    p->ok = true;
+    return true;
+}
+
+void kit_pic_set(kit_pic_t *p, const uint16_t *px)
+{
+    if (!p->ok) {
+        return;
+    }
+    car_photo_tile(px, p->w, p->h, (uint16_t *)p->tex.data, p->tex.width, p->tex.height);
+    C3D_TexFlush(&p->tex);
+}
+
+C2D_Image kit_pic_image(kit_pic_t *p)
+{
+    C2D_Image img = { &p->tex, &p->sub };
+    return img;
+}
+
+void kit_pic_free(kit_pic_t *p)
+{
+    if (p->ok) {
+        C3D_TexDelete(&p->tex);
+    }
+    p->ok = false;
 }

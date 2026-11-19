@@ -50,7 +50,10 @@
 #include "ui/graph_draw.h"
 #include "ui/home_draw.h"
 #include "icons.h"
+#include "data/car_photo.h"
+#include "ui/camera.h"
 #include "ui/diag_draw.h"
+#include "ui/garage_draw.h"
 #include "ui/live_draw.h"
 #include "ui/log_draw.h"
 #include "ui/setup_draw.h"
@@ -186,6 +189,15 @@
 #define BTN_MILES_ADD     121    /* worker: add shared.miles_new for shared.miles_key */
 #define BTN_MILES_DROP    122    /* worker: delete shared.miles_key's entry shared.miles_index */
 #define BTN_MILES_SET     123    /* worker: replace that entry with shared.miles_new */
+#define BTN_PHOTO_LOAD    124    /* worker: read shared.photo_key's photo into shared.photo_px */
+#define BTN_PHOTO_SAVE    125    /* worker: write shared.photo_save_px as shared.photo_save_key's */
+#define BTN_PHOTO_REMOVE  126    /* worker: delete shared.photo_save_key's photo */
+#define PHOTOS_DIR CONFIG_DIR "/photos"
+#define BTN_GARAGE_PHOTO  (-190) /* UI: GARAGE (graphics): the camera for the card's photo */
+#define BTN_PHOTO_TAKE    (-191) /* UI: CAMERA: take the shot (A too) */
+#define BTN_PHOTO_USE     (-192) /* UI: ... keep it as the card's photo */
+#define BTN_PHOTO_RETAKE  (-193)
+#define BTN_PHOTO_DROP    (-194) /* UI: ... remove the card's photo */
 
 /* Bottom-screen buttons in 8x8 console cells: 12-13x6 cells = 96-104x48 px.
  * The third row has the Wi-Fi slot buttons, the last one the log ones. */
@@ -335,7 +347,8 @@ typedef enum {
     SCREEN_ACHIEVE,            /* TRACK > ACHIEVEMENTS */
     SCREEN_TRIP,               /* GARAGE > TRIP METER */
     SCREEN_MILEAGE,            /* GARAGE > MILEAGE LOG */
-    SCREEN_DIAG_PAGE           /* DIAG (graphics): Stored, Pending, Permanent or Readiness */
+    SCREEN_DIAG_PAGE,          /* DIAG (graphics): Stored, Pending, Permanent or Readiness */
+    SCREEN_CAMERA              /* GARAGE (graphics): the card's photo with the outer camera */
 } screen_t;
 
 /* TRACK: one button per mode built so far, then BACK. */
@@ -706,6 +719,15 @@ static struct {
     track_best_t ta_bests[TA_RUN_COUNT];
     bool ta_have_last[TA_RUN_COUNT];    /* each run's last result this session */
     float ta_last[TA_RUN_COUNT];
+
+    /* GARAGE: the card's photo (brief 5e). The UI asks for a key's photo; the worker
+     * reads and writes the files. */
+    char photo_key[32];        /* the photo in photo_px is this car's */
+    bool photo_have;           /* ... and there is one */
+    unsigned photo_version;    /* bumped when photo_px or photo_have change */
+    uint16_t photo_px[CAR_PHOTO_W * CAR_PHOTO_H];
+    char photo_save_key[32];   /* BTN_PHOTO_SAVE / _REMOVE: this car */
+    uint16_t photo_save_px[CAR_PHOTO_W * CAR_PHOTO_H];
 
     volatile bool quit;
 } shared;
@@ -1777,6 +1799,64 @@ static void rec_step(spike_t *s, const obd_live_t *lv, const obd_link_t *link)
 
 static ta_t ta_w;
 
+/* GARAGE's photo (worker): the file for a car key. */
+static void photo_path(const char *key, char *out, size_t len)
+{
+    char name[40];
+    car_photo_name(key, name, sizeof name);
+    snprintf(out, len, PHOTOS_DIR "/%s.bmp", name);
+}
+
+/* Reads, writes or deletes a car's photo (BTN_PHOTO_LOAD / _SAVE / _REMOVE). */
+static void photo_work(spike_t *s, int action)
+{
+    static uint8_t bmp[CAR_PHOTO_BMP_SIZE];
+    static uint16_t px[CAR_PHOTO_W * CAR_PHOTO_H];
+    char key[32], path[96];
+    LightLock_Lock(&shared.lock);
+    snprintf(key, sizeof key, "%s", action == BTN_PHOTO_LOAD ? shared.photo_key : shared.photo_save_key);
+    if (action == BTN_PHOTO_SAVE) {
+        memcpy(px, shared.photo_save_px, sizeof px);
+    }
+    LightLock_Unlock(&shared.lock);
+    if (key[0] == '\0') {
+        return;
+    }
+    photo_path(key, path, sizeof path);
+    if (action == BTN_PHOTO_SAVE) {
+        mkdir(PHOTOS_DIR, 0777);
+        size_t n = car_photo_bmp_write(px, bmp, sizeof bmp);
+        FILE *f = fopen(path, "wb");
+        bool ok = f != NULL && fwrite(bmp, 1, n, f) == n;
+        if (f != NULL && fclose(f) != 0) {
+            ok = false;
+        }
+        spike_logf(s, ok ? "GARAGE: photo saved" : "! GARAGE: the photo couldn't be saved");
+        return;
+    }
+    if (action == BTN_PHOTO_REMOVE) {
+        remove(path);
+        spike_logf(s, "GARAGE: photo removed");
+        return;
+    }
+    size_t n = 0;
+    FILE *f = fopen(path, "rb");
+    if (f != NULL) {
+        n = fread(bmp, 1, sizeof bmp, f);
+        fclose(f);
+    }
+    bool have = n > 0 && car_photo_bmp_read(bmp, n, px);
+    LightLock_Lock(&shared.lock);
+    if (strcmp(shared.photo_key, key) == 0) {   /* still the card shown */
+        shared.photo_have = have;
+        if (have) {
+            memcpy(shared.photo_px, px, sizeof px);
+        }
+        shared.photo_version++;
+    }
+    LightLock_Unlock(&shared.lock);
+}
+
 /* This car's bests for every run, and the one for run (baro_key is set when polling starts). */
 static void ta_load_best(ta_run_t run, bool metric)
 {
@@ -2486,6 +2566,9 @@ static void worker_main(void *arg)
                 garage_scan(spike);
             } else if (action == BTN_ACH_LOAD) {
                 achieve_load();
+            } else if (action == BTN_PHOTO_LOAD || action == BTN_PHOTO_SAVE ||
+                       action == BTN_PHOTO_REMOVE) {
+                photo_work(spike, action);
             } else if (action >= BTN_ACH_BASE && action < BTN_ACH_BASE + ACH_COUNT) {
                 achieve_earn(spike, (achieve_id_t)(action - BTN_ACH_BASE));
             } else if (action == BTN_GARAGE_SAVE) {
@@ -2769,6 +2852,13 @@ typedef struct {
     int setup_held;            /* SETUP (graphics): the control held (setup_hit_t) */
     bool setup_held_in;
     int make_scroll;           /* ... the make picker scrolled by, px */
+    bool garage_info;          /* GARAGE / TRIP (graphics): the Info page shows */
+    bool cam_shot;             /* CAMERA: the shot taken (else the live view) */
+    int garage_held;           /* GARAGE screens (graphics): the control held (garage_hit_t) */
+    bool garage_held_in;
+    bool miles_open;           /* MILEAGE (graphics): the selected entry's page */
+    bool miles_dialog;         /* ... its Delete question */
+    int miles_scroll;          /* ... the list scrolled by, px */
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
@@ -4438,6 +4528,400 @@ static void trim_row(int row, const char *label, bool have, float pct)
 /* TRIM top screen: both banks' short, long and total trims as bars, the
  * engine state and the hints. */
 static void status_now(kit_status_t *s, bool connected);
+
+
+/* ---------- GARAGE, its camera, TRIP and MILEAGE (graphics) ---------- */
+
+static void set_fact(diag_fact_t *f, int *n, const char *tag, const char *value, const char *detail,
+                     diag_ink_t ink);
+
+static kit_pic_t cam_pic, card_pic;          /* the camera's frame; the card's photo */
+static uint16_t cam_frame[CAR_PHOTO_CAM_W * CAR_PHOTO_CAM_H];
+static unsigned card_pic_version = ~0u;      /* the photo_version in card_pic */
+static bool card_pic_have;
+
+/* The GARAGE screen shown (graphics), or -1 for other screens. */
+static int garage_kind_of(const ui_state_t *ui)
+{
+    if (!home_gfx) {
+        return -1;
+    }
+    switch (ui->screen) {
+    case SCREEN_GARAGE:  return ui->garage_info ? GAR_INFO : GAR_CARD;
+    case SCREEN_TRIP:    return ui->garage_info ? GAR_INFO : GAR_TRIP;
+    case SCREEN_CAMERA:  return ui->cam_shot ? GAR_SHOT : GAR_CAMERA;
+    case SCREEN_MILEAGE: return ui->miles_open ? GAR_ENTRY : GAR_MILES;
+    default:             return -1;
+    }
+}
+
+/* The card's car key, or "" (no cars). */
+static void card_key(int index, char *out, size_t len)
+{
+    LightLock_Lock(&shared.lock);
+    out[0] = '\0';
+    if (shared.garage.count > 0) {
+        int i = index < shared.garage.count ? index : shared.garage.count - 1;
+        snprintf(out, len, "%s", shared.garage.car[i].key);
+    }
+    LightLock_Unlock(&shared.lock);
+}
+
+/* Asks the worker for the card's photo when the card shows another car; copies a newly
+ * read one into its texture. */
+static void card_photo_update(int index)
+{
+    char key[32];
+    card_key(index, key, sizeof key);
+    LightLock_Lock(&shared.lock);
+    bool other = strcmp(shared.photo_key, key) != 0;
+    if (other) {
+        snprintf(shared.photo_key, sizeof shared.photo_key, "%s", key);
+        shared.photo_have = false;
+        shared.photo_version++;
+    }
+    unsigned v = shared.photo_version;
+    bool have = shared.photo_have;
+    LightLock_Unlock(&shared.lock);
+    if (other && key[0] != '\0') {
+        enqueue(BTN_PHOTO_LOAD);
+    }
+    if (v != card_pic_version) {
+        card_pic_version = v;
+        card_pic_have = have;
+        if (have) {
+            if (!card_pic.ok) {
+                kit_pic_init(&card_pic, CAR_PHOTO_W, CAR_PHOTO_H);
+            }
+            LightLock_Lock(&shared.lock);
+            kit_pic_set(&card_pic, shared.photo_px);
+            LightLock_Unlock(&shared.lock);
+        }
+    }
+}
+
+/* GARAGE's top (graphics): one car's card. */
+static void draw_garage_gfx_top(int index, bool metric, bool connected)
+{
+    static garage_t g;
+    static char bests[sizeof shared.garage_bests];
+    LightLock_Lock(&shared.lock);
+    g = shared.garage;
+    memcpy(bests, shared.garage_bests, sizeof bests);
+    char current[32], msg[48];
+    snprintf(current, sizeof current, "%s", shared.garage_current);
+    snprintf(msg, sizeof msg, "%s", shared.garage_msg);
+    bool scanning = shared.garage_scanning;
+    LightLock_Unlock(&shared.lock);
+    kit_status_t st;
+    status_now(&st, connected);
+    garage_card_t v;
+    memset(&v, 0, sizeof v);
+    v.msg = scanning ? msg : "";
+    if (g.count == 0) {
+        v.msg = scanning ? "Looking for your cars..." : "No cars yet: connect to one, or set one in SETUP > VEHICLE.";
+        garage_draw_card_top(&v, &st);
+        return;
+    }
+    if (index >= g.count) {
+        index = g.count - 1;
+    }
+    card_photo_update(index);
+    const garage_car_t *c = &g.car[index];
+    char vin[48], odo[24], logged[32], drives[24];
+    static char best[2][40];
+    v.have = true;
+    v.name = c->nickname[0] != '\0' ? c->nickname : c->title;
+    v.title = c->nickname[0] != '\0' ? c->title : "";
+    snprintf(vin, sizeof vin, c->vin[0] != '\0' ? "VIN %s" : "(set in SETUP)%s", c->vin);
+    v.vin = vin;
+    odo[0] = '\0';
+    if (c->have_odo) {
+        obd_format_grouped((long long)((metric ? c->odo_km : c->odo_km / 1.609344) + 0.5), odo, sizeof odo);
+    }
+    v.odo = odo;
+    v.unit = metric ? "km" : "mi";
+    char num[24];
+    obd_format_grouped((long long)((metric ? c->km : c->km / 1.609344) + 0.5), num, sizeof num);
+    snprintf(logged, sizeof logged, "%s %s", num, metric ? "km" : "mi");
+    snprintf(drives, sizeof drives, "in %d drive%s", c->drives, c->drives == 1 ? "" : "s");
+    v.logged = logged;
+    v.drives = drives;
+    static const struct { const char *run; const char *name; } runs[] = {
+        { "0-60", "0-60" }, { "0-100", "0-100" }, { "quarter", "1/4 mile" }, { "60-0", "60-0" },
+        { "100-0", "100-0" }, { "eco", "Eco" }, { "revsync", "Rev Sync" },
+    };
+    int nb = 0;
+    for (size_t i = 0; i < sizeof runs / sizeof runs[0] && nb < 2; i++) {
+        track_best_t b;
+        if (!track_bests_get(bests, c->key, runs[i].run, &b)) {
+            continue;
+        }
+        if (strcmp(runs[i].run, "eco") == 0) {
+            snprintf(best[nb], sizeof best[nb], "Best Eco %d %s", (int)b.seconds, eco_rank((int)b.seconds));
+        } else if (strcmp(runs[i].run, "revsync") == 0) {
+            snprintf(best[nb], sizeof best[nb], "Best Rev Sync %d %s", (int)b.seconds, rs_rank((int)b.seconds));
+        } else {
+            snprintf(best[nb], sizeof best[nb], "Best %s %.2f s", runs[i].name, (double)b.seconds);
+        }
+        v.best[nb] = best[nb];
+        nb++;
+    }
+    C2D_Image photo;
+    if (card_pic_have && card_pic.ok) {
+        photo = kit_pic_image(&card_pic);
+        v.photo = &photo;
+    }
+    garage_draw_card_top(&v, &st);
+}
+
+/* TRIP's top (graphics). */
+static void draw_trip_gfx_top(int index, bool metric, bool connected)
+{
+    garage_car_t c;
+    double now_km = 0.0;
+    bool live = false;
+    bool have = card_odometer(index, &c, &now_km, &live);
+    static char trip[sizeof shared.trip_text];
+    LightLock_Lock(&shared.lock);
+    memcpy(trip, shared.trip_text, sizeof trip);
+    bool polling = shared.trip_on && shared.live_on;
+    LightLock_Unlock(&shared.lock);
+    kit_status_t st;
+    status_now(&st, connected);
+    char car[96], big[16] = "", since[80] = "", odo[64] = "", a[32], b[32];
+    if (c.nickname[0] != '\0') {
+        snprintf(car, sizeof car, "%.32s, %.48s", c.nickname, c.title);
+    } else {
+        snprintf(car, sizeof car, "%s", c.title);
+    }
+    garage_trip_t t = { car, live, big, metric ? "km" : "mi", since, odo, "" };
+    if (!have) {
+        t.msg = polling ? "Reading the odometer..."
+                        : "No odometer reading for this car. The trip meter uses the car's odometer "
+                          "(PID A6, most cars from 2019); without it, use the Mileage Log.";
+        garage_draw_trip_top(&t, &st);
+        return;
+    }
+    snprintf(odo, sizeof odo, "Odometer now %s%s", dist_text(now_km, metric, a, sizeof a),
+             live ? "" : " (saved)");
+    float start = 0.0f;
+    char date[16] = "";
+    if (baro_store_get(trip, c.key, &start, date, sizeof date)) {
+        double d = now_km - start;
+        d = d < 0.0 ? 0.0 : d;
+        snprintf(big, sizeof big, "%.1f", metric ? d : d / MILEAGE_KM_MI);
+        snprintf(since, sizeof since, "since %s, at %s", date, dist_text(start, metric, b, sizeof b));
+    }
+    garage_draw_trip_top(&t, &st);
+}
+
+/* MILEAGE's top (graphics): the totals, or the selected entry's numbers. */
+static void draw_miles_gfx_top(const ui_state_t *ui, bool metric, bool connected)
+{
+    garage_car_t c;
+    double now_km = 0.0;
+    bool live = false;
+    card_odometer(ui->page, &c, &now_km, &live);
+    static char text[sizeof shared.miles_text];
+    static mileage_list_t list;
+    LightLock_Lock(&shared.lock);
+    memcpy(text, shared.miles_text, sizeof text);
+    LightLock_Unlock(&shared.lock);
+    mileage_read(text, c.key, &list);
+    kit_status_t st;
+    status_now(&st, connected);
+    diag_fact_t f[DIAG_FACTS_MAX];
+    int n = 0;
+    char a[48], b[48];
+    const char *cur = metric ? "" : "$";
+    int idx = list.n - 1 - ui->miles_sel;
+    if (ui->miles_open && idx >= 0 && idx < list.n) {
+        const mileage_entry_t *e = &list.e[idx];
+        double km = e->end_km - e->start_km, econ;
+        char s0[24], s1[24];
+        obd_format_grouped((long long)((metric ? e->start_km : e->start_km / MILEAGE_KM_MI) + 0.5), s0, sizeof s0);
+        obd_format_grouped((long long)((metric ? e->end_km : e->end_km / MILEAGE_KM_MI) + 0.5), s1, sizeof s1);
+        snprintf(a, sizeof a, "%.15s to %.15s", s0, s1);
+        set_fact(f, &n, "Odometer", a, metric ? "km" : "mi", DIAG_INK_WHITE);
+        set_fact(f, &n, "Distance", dist_text(km, metric, a, sizeof a), "", DIAG_INK_WHITE);
+        snprintf(a, sizeof a, "%.2f %s", metric ? e->fuel_l : e->fuel_l / MILEAGE_L_GAL, metric ? "L" : "gal");
+        set_fact(f, &n, "Fuel", a, "", DIAG_INK_WHITE);
+        bool has = metric ? mileage_l100(km, e->fuel_l, &econ) : mileage_mpg(km, e->fuel_l, &econ);
+        snprintf(a, sizeof a, has ? "%.1f %s" : "--", econ, metric ? "L/100 km" : "mpg");
+        set_fact(f, &n, "Economy", a, "", DIAG_INK_WHITE);
+        if (e->price_l > 0.0) {
+            snprintf(a, sizeof a, "%s%.2f", cur, metric ? e->price_l : e->price_l * MILEAGE_L_GAL);
+            set_fact(f, &n, "Price", a, metric ? "a litre" : "a gallon", DIAG_INK_WHITE);
+            double d = metric ? km : km / MILEAGE_KM_MI;
+            snprintf(a, sizeof a, "%s%.2f", cur, mileage_cost(e));
+            snprintf(b, sizeof b, d > 0 ? "%s%.2f a %s" : "", cur, mileage_cost(e) / (d > 0 ? d : 1),
+                     metric ? "km" : "mile");
+            set_fact(f, &n, "Cost", a, b, DIAG_INK_WHITE);
+        }
+        char title[32];
+        snprintf(title, sizeof title, "%.2s/%.2s FILL-UP", e->date + 5, e->date + 8);
+        if (ui->miles_dialog) {
+            char text[200];
+            snprintf(text, sizeof text, "This removes the %.5s fill-up (%s) from the mileage log.\n\n"
+                     "This can't be undone.", title, dist_text(km, metric, a, sizeof a));
+            track_draw_text_top(icons_garage_idx, "DELETE ENTRY?", text, &st);
+            return;
+        }
+        diag_draw_facts_top(icons_garage_idx, title, f, n, "", "", &st);
+        return;
+    }
+    double avg;
+    if (list.n == 0) {
+        diag_draw_facts_top(icons_garage_idx, "MILEAGE LOG", f, 0,
+                            "No entries yet. New Entry: the odometer at the start and end, and the "
+                            "fuel used (e.g. from one fill-up to the next).", "", &st);
+        return;
+    }
+    bool ok = metric ? mileage_l100(list.km, list.fuel_l, &avg) : mileage_mpg(list.km, list.fuel_l, &avg);
+    snprintf(a, sizeof a, ok ? "%.1f %s" : "--", avg, metric ? "L/100 km" : "mpg");
+    snprintf(b, sizeof b, "over %d fill-up%s", list.n, list.n == 1 ? "" : "s");
+    set_fact(f, &n, "Average", a, b, ok ? DIAG_INK_GREEN : DIAG_INK_WHITE);
+    set_fact(f, &n, "Distance", dist_text(list.km, metric, a, sizeof a), "logged", DIAG_INK_WHITE);
+    snprintf(a, sizeof a, "%.2f %s", metric ? list.fuel_l : list.fuel_l / MILEAGE_L_GAL, metric ? "L" : "gal");
+    set_fact(f, &n, "Fuel", a, "", DIAG_INK_WHITE);
+    if (list.cost > 0.0 && list.cost_km > 0.0) {
+        double per = list.cost / (metric ? list.cost_km : list.cost_km / MILEAGE_KM_MI);
+        snprintf(a, sizeof a, "%s%.2f", cur, list.cost);
+        snprintf(b, sizeof b, "%s%.2f a %s", cur, per, metric ? "km" : "mile");
+        set_fact(f, &n, "Spent", a, b, DIAG_INK_WHITE);
+    }
+    diag_draw_facts_top(icons_garage_idx, "MILEAGE LOG", f, n, "Tap an entry to edit or delete it.", "", &st);
+}
+
+/* The GARAGE screens' tops (graphics). */
+static void draw_garage_screens_top(const ui_state_t *ui, bool metric, bool connected)
+{
+    if (ui->screen == SCREEN_CAMERA) {
+        if (!cam_pic.ok) {
+            kit_pic_init(&cam_pic, CAR_PHOTO_CAM_W, CAR_PHOTO_CAM_H);
+        }
+        C2D_Image img = kit_pic_image(&cam_pic);
+        char key[32], name[48] = "";
+        card_key(ui->page, key, sizeof key);
+        LightLock_Lock(&shared.lock);
+        for (int i = 0; i < shared.garage.count; i++) {
+            if (strcmp(shared.garage.car[i].key, key) == 0) {
+                snprintf(name, sizeof name, "%s", shared.garage.car[i].nickname[0] ? shared.garage.car[i].nickname
+                                                                                  : shared.garage.car[i].title);
+            }
+        }
+        LightLock_Unlock(&shared.lock);
+        garage_draw_photo_top(cam_pic.ok ? &img : NULL, !ui->cam_shot,
+                              ui->cam_shot ? name : "Fit the car in the frame");
+        return;
+    }
+    if (ui->screen == SCREEN_TRIP) {
+        draw_trip_gfx_top(ui->page, metric, connected);
+    } else if (ui->screen == SCREEN_MILEAGE) {
+        draw_miles_gfx_top(ui, metric, connected);
+    } else {
+        draw_garage_gfx_top(ui->page, metric, connected);
+    }
+}
+
+/* The GARAGE screens' bottoms (graphics). */
+static void draw_garage_screens_bottom(const ui_state_t *ui, const gb_config_t *cfg)
+{
+    garage_kind_t kind = (garage_kind_t)garage_kind_of(ui);
+    int pressed = ui->garage_held_in ? ui->garage_held : GAR_HIT_NONE;
+    if (ui->miles_dialog) {
+        diag_draw_question("Delete this entry", "from the mileage log?", "Delete",
+                           ui->dialog_held_in ? ui->dialog_held : 0);
+        return;
+    }
+    if (kind == GAR_INFO) {
+        track_draw_info_text(garage_info_text(ui->screen == SCREEN_TRIP ? GAR_TRIP : GAR_CARD),
+                             pressed == GAR_HIT_BACK);
+        return;
+    }
+    if (kind == GAR_MILES) {
+        garage_car_t c;
+        double km;
+        bool live;
+        card_odometer(ui->page, &c, &km, &live);
+        static char text[sizeof shared.miles_text];
+        static mileage_list_t list;
+        static char dates[MILEAGE_MAX][8], mids[MILEAGE_MAX][48], econs[MILEAGE_MAX][24];
+        static garage_entry_row_t rows[MILEAGE_MAX];
+        LightLock_Lock(&shared.lock);
+        memcpy(text, shared.miles_text, sizeof text);
+        LightLock_Unlock(&shared.lock);
+        mileage_read(text, c.key, &list);
+        bool metric = cfg->metric;
+        for (int r = 0; r < list.n; r++) {
+            const mileage_entry_t *e = &list.e[list.n - 1 - r];   /* newest first */
+            double d = e->end_km - e->start_km, econ;
+            snprintf(dates[r], sizeof dates[r], "%.2s/%.2s", e->date + 5, e->date + 8);
+            char o[24], dd[24];
+            obd_format_grouped((long long)((metric ? e->end_km : e->end_km / MILEAGE_KM_MI) + 0.5), o, sizeof o);
+            snprintf(mids[r], sizeof mids[r], "%.15s %s, %.20s", o, metric ? "km" : "mi",
+                     dist_text(d, metric, dd, sizeof dd));
+            bool has = metric ? mileage_l100(d, e->fuel_l, &econ) : mileage_mpg(d, e->fuel_l, &econ);
+            snprintf(econs[r], sizeof econs[r], has ? "%.1f %s" : "--", econ, metric ? "L/100" : "mpg");
+            rows[r] = (garage_entry_row_t){ dates[r], mids[r], econs[r] };
+        }
+        int held = ui->live_touching && !ui->live_dragged ? ui->live_row_held : -1;
+        garage_draw_miles(rows, list.n, diag_list_clamp(ui->miles_scroll, list.n), held,
+                          ui->live_touching && ui->live_grip, pressed, "No entries yet.", ui->notice);
+        return;
+    }
+    garage_bottom_t b;
+    memset(&b, 0, sizeof b);
+    b.pressed = pressed;
+    b.notice = ui->notice;
+    b.caption = "";
+    static char name[48], sub[48];
+    switch (kind) {
+    case GAR_CARD: {
+        b.labels[0] = "Nickname";
+        b.labels[1] = "Photo";
+        b.labels[2] = "Trip";
+        b.labels[3] = "Mileage Log";
+        LightLock_Lock(&shared.lock);
+        int count = shared.garage.count, i = ui->page < count ? ui->page : count - 1;
+        if (count > 0) {
+            const garage_car_t *c = &shared.garage.car[i];
+            snprintf(name, sizeof name, "%s", c->nickname[0] ? c->nickname : c->title);
+            snprintf(sub, sizeof sub, "car %d of %d%s", i + 1, count,
+                     strcmp(c->key, shared.garage_current) == 0 ? ", connected" : "");
+        } else {
+            snprintf(name, sizeof name, "No cars yet");
+            sub[0] = '\0';
+        }
+        LightLock_Unlock(&shared.lock);
+        b.name = name;
+        b.sub = sub;
+        break;
+    }
+    case GAR_CAMERA:
+        b.labels[0] = "Take Photo";
+        b.caption = "or press A";
+        break;
+    case GAR_SHOT:
+        b.labels[0] = "Use Photo";
+        b.labels[1] = "Retake";
+        b.labels[2] = "Remove";
+        b.caption = "Remove goes back to no photo.";
+        break;
+    case GAR_TRIP:
+        b.labels[0] = "Reset Trip";
+        b.caption = "A new trip from the odometer now; while parked.";
+        break;
+    case GAR_ENTRY:
+        b.labels[0] = "Edit";
+        b.labels[1] = "Delete";
+        break;
+    default:
+        break;
+    }
+    garage_draw_bottom(kind, &b);
+}
 
 /* The SETUP page shown (graphics), or -1 for other screens. */
 static int setup_kind_of(const ui_state_t *ui)
@@ -6109,6 +6593,10 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         draw_setup_gfx_bottom(ui, cfg, now, busy);
         return;
     }
+    if (garage_kind_of(ui) >= 0) {
+        draw_garage_screens_bottom(ui, cfg);
+        return;
+    }
     int lk = log_kind_of(ui);
     if (lk >= 0) {
         int pressed = ui->log_held_in ? ui->log_held : LOG_HIT_NONE;
@@ -7112,7 +7600,8 @@ void spike_ui_run(void)
                       false, false, TA_RUN_LAUNCH, SCREEN_HOME, 0, 0, -1, 0, false, false, 0, 0,
                       -1, false, 0, LIVE_HIT_NONE, false, 0, DIAG_HIT_NONE, false, 0, false,
                       false, TRIM_HIT_NONE, false, false, false, TRK_HIT_NONE, false, 0,
-                      false, false, LOG_HIT_NONE, false, 0, SET_HIT_NONE, false, 0 };
+                      false, false, LOG_HIT_NONE, false, 0, SET_HIT_NONE, false, 0,
+                      false, false, GAR_HIT_NONE, false, false, false, 0 };
     gm_vec_t gm_raw = { 0, 0, 0 };   /* G-METER: the latest sensor reading */
     live_menu_count();
     uint64_t notice_until = 0;
@@ -7193,6 +7682,11 @@ void spike_ui_run(void)
         if (ui.screen != info_screen) {   /* a new screen opens on its controls, not Info */
             info_screen = ui.screen;
             ui.track_info = false;
+            ui.garage_info = false;
+            ui.miles_dialog = false;
+            if (ui.screen != SCREEN_MILEAGE) {
+                ui.miles_open = false;
+            }
             if (ui.screen != SCREEN_TIME_ATTACK) {
                 ui.ta_open = false;
             }
@@ -7320,12 +7814,13 @@ void spike_ui_run(void)
             case SCREEN_MILEAGE:   list = miles_buttons;     count = MILES_BUTTON_COUNT;     break;
             case SCREEN_TEST:  break;
             case SCREEN_DIAG_PAGE: break;
+            case SCREEN_CAMERA: break;
             }
             bool gfx_touch = home_gfx && (ui.screen == SCREEN_HOME || ui.screen == SCREEN_LIVE_MENU ||
                                           ui.screen == SCREEN_LIVE || ui.screen == SCREEN_DIAG ||
                                           ui.screen == SCREEN_DIAG_PAGE || ui.screen == SCREEN_TRIM ||
                                           track_kind_of(&ui) >= 0 || log_kind_of(&ui) >= 0 ||
-                                          setup_kind_of(&ui) >= 0);
+                                          setup_kind_of(&ui) >= 0 || garage_kind_of(&ui) >= 0);
             int i = gfx_touch ? -1 : button_at(list, count, tp.px, tp.py);
             int item = ui.screen == SCREEN_HOME && home_gfx ? home_hit(tp.px, tp.py) : -1;
             diag_hit_t dhit = !gfx_touch                     ? DIAG_HIT_NONE
@@ -7336,7 +7831,44 @@ void spike_ui_run(void)
             int tkind = gfx_touch ? track_kind_of(&ui) : -1;
             int lkind = gfx_touch ? log_kind_of(&ui) : -1;
             int skind = gfx_touch ? setup_kind_of(&ui) : -1;
-            if (skind >= 0) {
+            int gkind = gfx_touch ? garage_kind_of(&ui) : -1;
+            if (gkind >= 0 && ui.miles_dialog) {
+                ui.dialog_held = diag_dialog_hit(tp.px, tp.py);
+                ui.dialog_held_in = ui.dialog_held != 0;
+                bottom_dirty = true;
+            } else if (gkind >= 0) {
+                /* GARAGE: controls pressed while held, act on lifting; the mileage list
+                 * scrolls and a tap on an entry opens it. */
+                int h = garage_hit((garage_kind_t)gkind, tp.px, tp.py);
+                if (h == GAR_HIT_NONE && gkind == GAR_MILES) {
+                    garage_car_t c;
+                    double km;
+                    bool live;
+                    card_odometer(ui.page, &c, &km, &live);
+                    static char mtext[sizeof shared.miles_text];
+                    static mileage_list_t ml;
+                    LightLock_Lock(&shared.lock);
+                    memcpy(mtext, shared.miles_text, sizeof mtext);
+                    LightLock_Unlock(&shared.lock);
+                    int n = mileage_read(mtext, c.key, &ml);
+                    ui.live_touching = true;
+                    if (diag_list_bar_hit(tp.px, tp.py) && diag_list_max_scroll(n) > 0) {
+                        ui.live_grip = ui.live_dragged = true;
+                        ui.live_row_held = -1;
+                        ui.live_grip_grab = diag_list_grip_grab(tp.py, ui.miles_scroll, n);
+                        ui.miles_scroll = diag_list_scroll_for_grip(tp.py - ui.live_grip_grab, n);
+                    } else {
+                        ui.live_grip = ui.live_dragged = false;
+                        ui.live_touch_y0 = tp.py;
+                        ui.live_scroll0 = ui.miles_scroll;
+                        ui.live_row_held = diag_list_hit(tp.px, tp.py, ui.miles_scroll, n);
+                    }
+                } else {
+                    ui.garage_held = h;
+                    ui.garage_held_in = h != GAR_HIT_NONE;
+                }
+                bottom_dirty = true;
+            } else if (skind >= 0) {
                 /* SETUP: controls pressed while held, act on lifting; the make picker
                  * scrolls and a tap on a make saves it. */
                 int h = setup_hit((setup_kind_t)skind, tp.px, tp.py);
@@ -7528,6 +8060,110 @@ void spike_ui_run(void)
                 }
                 ui.live_held = LIVE_HIT_NONE;
                 ui.live_held_in = false;
+                bottom_dirty = true;
+            }
+        }
+
+        /* GARAGE's controls (graphics): the same. */
+        if (ui.garage_held != GAR_HIT_NONE) {
+            int gkind = garage_kind_of(&ui);
+            if (gkind < 0 || confirming || ui.miles_dialog) {
+                ui.garage_held = GAR_HIT_NONE;
+                ui.garage_held_in = false;
+            } else if (hidKeysHeld() & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                bool in = garage_hit((garage_kind_t)gkind, tp.px, tp.py) == ui.garage_held;
+                if (in != ui.garage_held_in) {
+                    ui.garage_held_in = in;
+                    bottom_dirty = true;
+                }
+            } else {
+                int h = ui.garage_held, b = h - GAR_HIT_BUTTON;
+                if (ui.garage_held_in && !tapped) {
+                    if (gkind == GAR_INFO) {
+                        ui.garage_info = false;   /* back to the controls */
+                        bottom_full = true;
+                    } else if (h == GAR_HIT_BACK) {
+                        action = BTN_BACK;
+                    } else if (h == GAR_HIT_RIGHT) {
+                        if (gkind == GAR_MILES) {
+                            action = BTN_MILES_NEW;
+                        } else {
+                            ui.garage_info = true;
+                            bottom_full = true;
+                        }
+                    } else if (h == GAR_HIT_PREV || h == GAR_HIT_NEXT) {
+                        action = h == GAR_HIT_PREV ? BTN_GARAGE_PREV : BTN_GARAGE_NEXT;
+                    } else if (b >= 0) {
+                        switch (gkind) {
+                        case GAR_CARD: {
+                            static const int card[4] = { BTN_GARAGE_NICK, BTN_GARAGE_PHOTO,
+                                                         BTN_GARAGE_TRIP, BTN_GARAGE_MILES };
+                            action = card[b];
+                            break;
+                        }
+                        case GAR_CAMERA: action = BTN_PHOTO_TAKE; break;
+                        case GAR_SHOT:
+                            action = b == GAR_USE ? BTN_PHOTO_USE : b == GAR_RETAKE ? BTN_PHOTO_RETAKE
+                                                                                   : BTN_PHOTO_DROP;
+                            break;
+                        case GAR_TRIP:  action = BTN_TRIP_RESET; break;
+                        case GAR_ENTRY:
+                            if (b == 0) {
+                                action = BTN_MILES_EDIT;
+                            } else {
+                                ui.miles_dialog = true;   /* Delete asks first */
+                                bottom_full = top_dirty = true;
+                            }
+                            break;
+                        default: break;
+                        }
+                    }
+                    tapped = lifted = action != 0;
+                }
+                ui.garage_held = GAR_HIT_NONE;
+                ui.garage_held_in = false;
+                bottom_dirty = true;
+            }
+        }
+
+        /* The mileage list (graphics): drag or the grip scrolls it; a tap opens an entry. */
+        if (ui.live_touching && ui.screen == SCREEN_MILEAGE) {
+            garage_car_t c;
+            double km;
+            bool live;
+            card_odometer(ui.page, &c, &km, &live);
+            static char mtext[sizeof shared.miles_text];
+            static mileage_list_t ml;
+            LightLock_Lock(&shared.lock);
+            memcpy(mtext, shared.miles_text, sizeof mtext);
+            LightLock_Unlock(&shared.lock);
+            int n = mileage_read(mtext, c.key, &ml);
+            if (confirming) {
+                ui.live_touching = ui.live_grip = false;
+            } else if (hidKeysHeld() & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                int dy = tp.py - ui.live_touch_y0;
+                if (!ui.live_grip && !ui.live_dragged && (dy > 6 || dy < -6)) {
+                    ui.live_dragged = true;
+                    bottom_dirty = true;
+                }
+                int sc = ui.live_grip ? diag_list_scroll_for_grip(tp.py - ui.live_grip_grab, n)
+                       : ui.live_dragged ? diag_list_clamp(ui.live_scroll0 - dy, n) : ui.miles_scroll;
+                if (sc != ui.miles_scroll) {
+                    ui.miles_scroll = sc;
+                    bottom_dirty = true;
+                }
+            } else {
+                ui.live_touching = ui.live_grip = false;
+                if (!ui.live_dragged && ui.live_row_held >= 0 && ui.live_row_held < n) {
+                    ui.miles_sel = ui.live_row_held;
+                    ui.miles_open = true;
+                    bottom_full = top_dirty = true;
+                }
+                ui.live_row_held = -1;
                 bottom_dirty = true;
             }
         }
@@ -7852,7 +8488,7 @@ void spike_ui_run(void)
 
         /* The clear question (graphics): Cancel or Clear Codes when the finger lifts. */
         if (ui.dialog_held != 0) {
-            if (!ui.clear_dialog && !ui.delete_dialog) {
+            if (!ui.clear_dialog && !ui.delete_dialog && !ui.miles_dialog) {
                 ui.dialog_held = 0;
                 ui.dialog_held_in = false;
             } else if (hidKeysHeld() & KEY_TOUCH) {
@@ -7864,7 +8500,16 @@ void spike_ui_run(void)
                     bottom_dirty = true;
                 }
             } else {
-                if (ui.dialog_held_in && ui.delete_dialog) {
+                if (ui.dialog_held_in && ui.miles_dialog) {
+                    ui.miles_dialog = false;
+                    if (ui.dialog_held == 2 && !tapped) {
+                        ui.miles_del_armed = now + 4000;   /* the confirmed delete */
+                        action = BTN_MILES_DEL;
+                        tapped = lifted = true;
+                        ui.miles_open = false;
+                    }
+                    bottom_full = top_dirty = true;
+                } else if (ui.dialog_held_in && ui.delete_dialog) {
                     if (ui.dialog_held == 2 && worker != NULL) {
                         LightLock_Lock(&shared.lock);
                         if (ui.selected >= 0 && ui.selected < shared.drive_count) {
@@ -7932,7 +8577,7 @@ void spike_ui_run(void)
 
         /* LIVE's view list (graphics): drag to scroll, lift to pick. */
         if (ui.live_touching && ui.screen != SCREEN_DIAG_PAGE && ui.screen != SCREEN_ACHIEVE &&
-            ui.screen != SCREEN_LOG && ui.screen != SCREEN_MAKE) {
+            ui.screen != SCREEN_LOG && ui.screen != SCREEN_MAKE && ui.screen != SCREEN_MILEAGE) {
             if (ui.screen != SCREEN_LIVE_MENU || confirming) {
                 ui.live_touching = ui.live_grip = false;
             } else if ((hidKeysHeld() & KEY_TOUCH) && ui.live_grip) {
@@ -7983,6 +8628,19 @@ void spike_ui_run(void)
                    !confirming) {
             ui.track_info = true;
             bottom_full = true;
+        } else if (ui.miles_dialog && (down & KEY_B)) {
+            ui.miles_dialog = false;
+            bottom_full = top_dirty = true;
+        } else if (ui.garage_info && garage_kind_of(&ui) >= 0 && (down & KEY_B)) {
+            ui.garage_info = false;
+            bottom_full = true;
+        } else if (home_gfx && (ui.screen == SCREEN_GARAGE || ui.screen == SCREEN_TRIP) &&
+                   !ui.garage_info && (down & KEY_Y) && !confirming) {
+            ui.garage_info = true;
+            bottom_full = true;
+        } else if (ui.screen == SCREEN_CAMERA && !ui.cam_shot && (down & KEY_A) && !confirming) {
+            action = BTN_PHOTO_TAKE;
+            tapped = true;
         } else if (ui.trim_info && ui.screen == SCREEN_TRIM && (down & KEY_B)) {
             ui.trim_info = false;   /* B closes Info, back to TRIM's controls */
             bottom_full = true;
@@ -8412,6 +9070,58 @@ void spike_ui_run(void)
                 top_dirty = true;
                 break;
             }
+            case BTN_GARAGE_PHOTO:
+                if (!camera_start()) {
+                    ui.notice = "The camera isn't available.";
+                    notice_until = now + 3000;
+                    break;
+                }
+                ui.screen = SCREEN_CAMERA;
+                ui.cam_shot = false;
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_PHOTO_TAKE:
+                if (ui.screen == SCREEN_CAMERA && !ui.cam_shot) {
+                    ui.cam_shot = true;   /* cam_frame holds the shot */
+                    camera_stop();
+                    bottom_full = top_dirty = true;
+                }
+                break;
+            case BTN_PHOTO_RETAKE:
+                ui.cam_shot = false;
+                if (!camera_start()) {
+                    ui.notice = "The camera isn't available.";
+                    notice_until = now + 3000;
+                }
+                bottom_full = top_dirty = true;
+                break;
+            case BTN_PHOTO_USE:
+            case BTN_PHOTO_DROP: {
+                char key[32];
+                card_key(ui.page, key, sizeof key);
+                if (key[0] == '\0') {
+                    break;
+                }
+                LightLock_Lock(&shared.lock);
+                snprintf(shared.photo_save_key, sizeof shared.photo_save_key, "%s", key);
+                if (action == BTN_PHOTO_USE) {
+                    car_photo_crop(cam_frame, shared.photo_save_px);
+                    memcpy(shared.photo_px, shared.photo_save_px, sizeof shared.photo_px);
+                }
+                snprintf(shared.photo_key, sizeof shared.photo_key, "%s", key);
+                shared.photo_have = action == BTN_PHOTO_USE;
+                shared.photo_version++;
+                LightLock_Unlock(&shared.lock);
+                if (worker != NULL) {
+                    enqueue(action == BTN_PHOTO_USE ? BTN_PHOTO_SAVE : BTN_PHOTO_REMOVE);
+                }
+                ui.notice = action == BTN_PHOTO_USE ? "Photo saved." : "Photo removed.";
+                notice_until = now + 3000;
+                camera_stop();
+                ui.screen = SCREEN_GARAGE;
+                bottom_full = top_dirty = true;
+                break;
+            }
             case BTN_GARAGE_NICK:
                 if (edit_nickname(ui.page) && worker != NULL) {
                     enqueue(BTN_GARAGE_SAVE);
@@ -8636,6 +9346,17 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
+                if (ui.screen == SCREEN_CAMERA) {
+                    camera_stop();
+                    ui.screen = SCREEN_GARAGE;
+                    bottom_full = top_dirty = true;
+                    break;
+                }
+                if (ui.screen == SCREEN_MILEAGE && home_gfx && ui.miles_open) {
+                    ui.miles_open = false;   /* the entry -> the list */
+                    bottom_full = top_dirty = true;
+                    break;
+                }
                 if (ui.screen == SCREEN_LOG && home_gfx && ui.log_open) {
                     ui.log_open = false;   /* the drive's page -> the list */
                     bottom_full = top_dirty = true;
@@ -8938,7 +9659,7 @@ void spike_ui_run(void)
             ui.screen == SCREEN_MILEAGE || ui.screen == SCREEN_HOME) {
             static unsigned garage_drawn = ~0u;
             LightLock_Lock(&shared.lock);
-            unsigned gv = shared.garage_version;
+            unsigned gv = shared.garage_version + shared.photo_version * 7919u;   /* a photo read too */
             LightLock_Unlock(&shared.lock);
             if (gv != garage_drawn) {
                 garage_drawn = gv;
@@ -8993,14 +9714,17 @@ void spike_ui_run(void)
             bool trim_gfx = home_gfx && ui.screen == SCREEN_TRIM;
             bool gfx_top_now = (ui.screen == SCREEN_HOME && home_gfx) || live_gfx || diag_gfx || trim_gfx ||
                                track_kind_of(&ui) >= 0 || (home_gfx && ui.screen == SCREEN_LOG) ||
-                               setup_kind_of(&ui) >= 0;
+                               setup_kind_of(&ui) >= 0 || garage_kind_of(&ui) >= 0;
             if (gfx_top_shown && !gfx_top_now && ui.screen != SCREEN_GRAPH) {
                 consoleSelect(&top_console);
                 printf("\x1b[0m\x1b[2J");
             }
             gfx_top_shown = gfx_top_now || (graph_gfx && ui.screen == SCREEN_GRAPH);
             bool track_gfx = track_kind_of(&ui) >= 0;
-            if (setup_kind_of(&ui) >= 0) {
+            if (garage_kind_of(&ui) >= 0) {
+                draw_garage_screens_top(&ui, cfg.metric, connected);
+                bottom_dirty = true;
+            } else if (setup_kind_of(&ui) >= 0) {
                 draw_setup_gfx_top(&ui, &cfg, connected, scroll);
                 bottom_dirty = true;   /* values on the rows follow the settings */
             } else if (track_gfx) {
@@ -9092,6 +9816,14 @@ void spike_ui_run(void)
         if (flashes_expired(now)) {
             bottom_dirty = true;
         }
+        /* The camera's live view: a new frame redraws the top screen. */
+        if (ui.screen == SCREEN_CAMERA && !ui.cam_shot && camera_poll(cam_frame)) {
+            if (!cam_pic.ok) {
+                kit_pic_init(&cam_pic, CAR_PHOTO_CAM_W, CAR_PHOTO_CAM_H);
+            }
+            kit_pic_set(&cam_pic, cam_frame);
+            draw_garage_screens_top(&ui, cfg.metric, shared.connected);
+        }
         /* LIVE (graphics): the REC dot pulses while recording. */
         static uint64_t rec_drawn_at;
         if ((ui.screen == SCREEN_LIVE || (ui.screen == SCREEN_TRIM && !ui.trim_info)) && home_gfx &&
@@ -9126,6 +9858,9 @@ void spike_ui_run(void)
     if (net_ok) {
         net_exit();
     }
+    camera_stop();
+    kit_pic_free(&cam_pic);
+    kit_pic_free(&card_pic);
     graph_draw_exit();
     home_draw_exit();
     if (ptmu_ok) {

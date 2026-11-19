@@ -83,6 +83,20 @@ void kit_image_part(C2D_Image img, float sx, float sy, float sw, float sh, float
 /* A sprite stretched to (x, y, w, h): corners of size c kept, edges stretched. */
 void kit_nine(C2D_Image img, float x, float y, float w, float h, float c);
 
+/* A picture made in memory (the camera, the car's photo): RGB565, w x h, in a
+ * power-of-two texture. kit_pic_set copies new pixels in (rows top first). */
+typedef struct {
+    C3D_Tex tex;
+    Tex3DS_SubTexture sub;
+    int w, h;
+    bool ok;
+} kit_pic_t;
+
+bool kit_pic_init(kit_pic_t *p, int w, int h);
+void kit_pic_set(kit_pic_t *p, const uint16_t *px);
+C2D_Image kit_pic_image(kit_pic_t *p);
+void kit_pic_free(kit_pic_t *p);
+
 /* The pressed ("_dn") version of a touchable system piece (the piece itself if none). */
 size_t kit_pressed(size_t idx);
 
