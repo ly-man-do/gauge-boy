@@ -8,8 +8,9 @@ read as black, as on the 3DS GPU). Materials that combine several textures use t
 largest one. Text panes are skipped: the app draws its labels with the system font.
 
 `night=True` recolors for Gauge Boy's night theme: low-saturation surface colors become
-neutral greys along the HOME Menu's dark-theme curve, bright accents keep their color,
-and vertex shading keeps its brightness but loses its tint.
+neutral greys along the HOME Menu's dark-theme curve, bright accents keep their color
+(`accents=False` greys them too), and vertex shading keeps its brightness but loses its
+tint.
 """
 import math
 import struct
@@ -108,18 +109,18 @@ def _sat(c):
     return (mx - mn) / mx if mx else 0
 
 
-def night_color(c):
-    """A surface color for the night theme (accents keep theirs)."""
+def night_color(c, accents=True):
+    """A surface color for the night theme (accents keep theirs unless accents=False)."""
     L = _lum(c)
-    if _sat(c) > 0.45 and L > 0.35:
+    if accents and _sat(c) > 0.45 and L > 0.35:
         return list(c)
     v = 255 * 0.55 * L ** 1.6
     return [v, v, v, c[3]]
 
 
-def night_shade(c):
+def night_shade(c, accents=True):
     """A vertex (shading) color without its tint."""
-    if _sat(c) > 0.45 and max(c[:3]) > 150:
+    if accents and _sat(c) > 0.45 and max(c[:3]) > 150:
         return list(c)
     L = _lum(c) * 255
     return [L, L, L, c[3]]
@@ -180,13 +181,16 @@ def _rect(p):
 class Renderer:
     """Renders a Layout into an RGBA float buffer the size of its root pane."""
 
-    def __init__(self, layout, textures, night=False, hide=None, show=None):
+    def __init__(self, layout, textures, night=False, hide=None, show=None, accents=True, colors=None):
         self.lyt, self.tex, self.hide, self.show = layout, textures, hide, show or {}
         self.mats = layout.mats
         if night:
-            self.mats = [dict(m, black=night_color(m['black']), white=night_color(m['white']))
+            self.mats = [dict(m, black=night_color(m['black'], accents), white=night_color(m['white'], accents))
                          for m in layout.mats]
-        self.night = night
+        self.night, self.accents = night, accents
+        for i, m in enumerate(self.mats):   # colors={material: (black, white)}, after the recolor
+            if colors and m['name'] in colors:
+                self.mats[i] = dict(m, black=list(colors[m['name']][0]), white=list(colors[m['name']][1]))
         self.w, self.h = int(layout.root['size'][0]), int(layout.root['size'][1])
         self.buf = [[[0.0, 0.0, 0.0, 0.0] for _ in range(self.w)] for _ in range(self.h)]
 
@@ -247,7 +251,7 @@ class Renderer:
         return self.buf
 
     def _shade(self, vtx):
-        return [night_shade(c) for c in vtx] if self.night else vtx
+        return [night_shade(c, self.accents) for c in vtx] if self.night else vtx
 
     def _draw(self, p, M, alpha):
         if p['name'] in self.show:

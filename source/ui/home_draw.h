@@ -7,7 +7,7 @@
  * otherwise text consoles: HOME draws over the whole of each, and the
  * other screens redraw them in full when they open.
  *
- * Night theme, mockup v4 (docs/mockups/home-v4.html). Text uses the 3DS
+ * Night theme, mockup v7 (docs/mockups/home-v7.html). Text uses the 3DS
  * system font, loaded from the console (brief 1.21.0); the romfs Nunito
  * font is only a fallback and GRAPH's font.
  */
@@ -17,15 +17,10 @@
 
 #include "home_layout.h"
 #include "home_top.h"
+#include "kit.h"
 
 /* The top screen's status bar, like the 3DS system bar. */
-typedef struct {
-    int bars;            /* Wi-Fi signal 0-4 lit bars */
-    bool connected;      /* adapter connected: the pill */
-    int battery;         /* 0-5 (PTMU level), -1 if unknown */
-    bool charging;
-    time_t now;          /* local time for the date and clock */
-} home_status_t;
+typedef kit_status_t home_status_t;
 
 /* Starts citro2d and loads the fonts. False if that failed: HOME then
  * falls back to the text layout. */

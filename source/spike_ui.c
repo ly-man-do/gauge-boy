@@ -12,6 +12,7 @@
 #include "spike_ui.h"
 
 #include <3ds.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,6 +49,7 @@
 #include "transport/tcp_transport.h"
 #include "ui/graph_draw.h"
 #include "ui/home_draw.h"
+#include "ui/live_draw.h"
 #include "obd/dtc.h"
 #include "obd/obd_diag.h"
 #include "obd/obd_live.h"
@@ -101,6 +103,8 @@
 #define BTN_DIAG_TRIM    (-35) /* UI: DIAG -> TRIM (lean / rich codes stored) */
 #define BTN_LIVE_REC     (-36) /* UI: LIVE: record a drive on / off */
 #define BTN_LIVE_VIEW    (-90) /* UI: LIVE view list (-90 - view) */
+#define BTN_LIVE_STOP    (-42) /* UI: LIVE graphics: the toggle's Stop half */
+#define BTN_LIVE_RECORD  (-43) /* UI: ... its Record half */
 #define BTN_GUIDE        (-8)  /* UI: SETUP -> Wi-Fi guide */
 #define BTN_CLEAR_ASK    (-5)  /* UI: open the clear-codes dialog */
 #define BTN_CLEAR_CANCEL (-6)
@@ -2681,6 +2685,11 @@ typedef struct {
     uint64_t miles_del_armed;  /* MILEAGE: DELETE tapped once, until this time */
     int miles_page;            /* MILEAGE: list page */
     int miles_sel;             /* ... selected entry, newest first; -1 = none */
+    int live_scroll;           /* LIVE view list (graphics): scrolled by, px */
+    bool live_touching;        /* ... a touch began on the list */
+    bool live_dragged;         /* ... and moved: a scroll, not a tap */
+    int live_touch_y0, live_scroll0;
+    int live_row_held;         /* ... the row under it, -1 = none */
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
@@ -2824,6 +2833,20 @@ static void trim_start(void)
     static const uint32_t periods[] = { 0, 0, 1000, 1000, 1000, 2000, 2000, 2000, 2000, 2000 };
     LightLock_Lock(&shared.lock);
     live_start_locked(pids, periods, (int)sizeof pids);
+    LightLock_Unlock(&shared.lock);
+    LightEvent_Signal(&shared.wake);
+}
+
+/* LIVE's Dashboard (the view list's top screen): RPM and speed fast, coolant
+ * and the odometer slowly. Stops a recording (it belongs to a view). */
+static void live_dash_start(void)
+{
+    uint8_t pids[8];
+    uint32_t periods[8];
+    int n = live_dash_request(pids, periods, 8);
+    LightLock_Lock(&shared.lock);
+    shared.rec_want = false;
+    live_start_locked(pids, periods, n);
     LightLock_Unlock(&shared.lock);
     LightEvent_Signal(&shared.wake);
 }
@@ -4592,6 +4615,62 @@ static const char *home_garage_line(char *out, size_t len)
     return out;
 }
 
+/* The top screen's status bar now (citro2d screens). */
+static void status_now(kit_status_t *s, bool connected)
+{
+    u8 level = 0, charging = 0;
+    s->battery = R_SUCCEEDED(PTMU_GetBatteryLevel(&level)) ? level : -1;
+    s->charging = R_SUCCEEDED(PTMU_GetBatteryChargeState(&charging)) && charging != 0;
+    u8 strength = osGetWifiStrength();
+    s->bars = strength > 0 ? strength + 1 : 0;
+    s->connected = connected;
+    s->now = time(NULL);
+}
+
+/* LIVE's Dashboard top screen (citro2d). */
+static void draw_live_dash_top(bool connected)
+{
+    static obd_live_t lv;
+    static garage_car_t card;
+    char key[32], title[48];
+    bool have_card = false;
+    LightLock_Lock(&shared.lock);
+    lv = shared.live;
+    bool have = shared.live_have;
+    bool cel_known = shared.diag.have_readiness;
+    bool cel = cel_known && shared.diag.readiness.mil_on;
+    home_car(key, sizeof key, title, sizeof title, &card, &have_card);
+    LightLock_Unlock(&shared.lock);
+    live_dash_t d;
+    live_dash_values(have ? &lv : NULL, app_cfg->metric ? OBD_UNITS_METRIC : OBD_UNITS_US,
+                     have_card && card.have_odo, card.odo_km, &d);
+    kit_status_t s;
+    status_now(&s, connected);
+    live_draw_dash(&d, cel_known, cel, &s);
+}
+
+/* A LIVE view's top screen (citro2d): its title and values. */
+static void draw_live_view_top(int view, bool connected)
+{
+    static obd_live_t lv;
+    static live_row_t rows[LIVE_VIEW_MAX];
+    LightLock_Lock(&shared.lock);
+    lv = shared.live;
+    bool have = shared.live_have;
+    LightLock_Unlock(&shared.lock);
+    int n = live_view_rows(have ? &lv : NULL, app_cfg->metric ? OBD_UNITS_METRIC : OBD_UNITS_US,
+                           (float)app_cfg->engine_dl / 10.0f, rows, LIVE_VIEW_MAX);
+    char title[32];
+    size_t k = 0;
+    for (const char *c = live_view_name(view); *c != '\0' && k + 1 < sizeof title; c++) {
+        title[k++] = (char)toupper((unsigned char)*c);
+    }
+    title[k] = '\0';
+    kit_status_t s;
+    status_now(&s, connected);
+    live_draw_view_top(title, rows, n, connected, &s);
+}
+
 /* HOME top screen (citro2d). */
 static void draw_home_top(bool connected)
 {
@@ -4636,12 +4715,7 @@ static void draw_home_top(bool connected)
     t.odo_km = card.odo_km;
 
     home_status_t s;
-    u8 level = 0, charging = 0;
-    s.battery = R_SUCCEEDED(PTMU_GetBatteryLevel(&level)) ? level : -1;
-    s.charging = R_SUCCEEDED(PTMU_GetBatteryChargeState(&charging)) && charging != 0;
-    u8 strength = osGetWifiStrength();
-    s.bars = strength > 0 ? strength + 1 : 0;
-    s.connected = connected;
+    status_now(&s, connected);
     s.now = now;
     home_draw_top(&t, &s);
 }
@@ -4914,6 +4988,44 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         char car[GARAGE_NICK_MAX + 48];
         v.car = home_garage_line(car, sizeof car);
         home_draw(&v);
+        return;
+    }
+    if (ui->screen == SCREEN_LIVE_MENU && home_gfx) {
+        static const char *names[LIVE_VIEW_COUNT];
+        for (int i = 0; i < LIVE_VIEW_COUNT; i++) {
+            names[i] = live_view_name(i);
+        }
+        int held = ui->live_touching && !ui->live_dragged ? ui->live_row_held : -1;
+        for (int i = 0; i < LIVE_VIEW_COUNT; i++) {
+            if (flashing(BTN_LIVE_VIEW - i, now)) {
+                held = i;
+            }
+        }
+        live_draw_list(names, LIVE_VIEW_COUNT, ui->live_scroll, held, flashing(BTN_BACK, now));
+        return;
+    }
+    if (ui->screen == SCREEN_LIVE && home_gfx) {
+        live_controls_t c;
+        memset(&c, 0, sizeof c);
+        LightLock_Lock(&shared.lock);
+        c.pids = shared.live_have ? shared.live.count : shared.live_want_count;
+        c.rate = shared.live_have ? shared.live_rate : 0.0f;
+        c.recording = shared.rec_want || shared.rec_active;
+        c.rec_ms = shared.rec_active ? now - shared.rec_started_ms : 0;
+        LightLock_Unlock(&shared.lock);
+        c.custom = ui->live_view == LIVE_VIEW_CUSTOM;
+        static const struct { int action; live_hit_t hit; } press[] = {
+            { BTN_BACK, LIVE_HIT_BACK }, { BTN_PAGE_PREV, LIVE_HIT_PREV },
+            { BTN_PAGE_NEXT, LIVE_HIT_NEXT }, { BTN_LIVE_STOP, LIVE_HIT_STOP },
+            { BTN_LIVE_RECORD, LIVE_HIT_RECORD }, { BTN_LIVE_EDIT, LIVE_HIT_EDIT },
+        };
+        c.pressed = LIVE_HIT_NONE;
+        for (unsigned i = 0; i < sizeof press / sizeof press[0]; i++) {
+            if (flashing(press[i].action, now)) {
+                c.pressed = press[i].hit;
+            }
+        }
+        live_draw_view_bottom(&c);
         return;
     }
 
@@ -5711,7 +5823,8 @@ void spike_ui_run(void)
 
     ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false, -1, SCREEN_SETUP,
                       false, LIVE_VIEW_ENGINE, SCREEN_HOME, false, 0, 0.0, 0.0, 0.0,
-                      false, false, TA_RUN_LAUNCH, SCREEN_HOME, 0, 0, -1 };
+                      false, false, TA_RUN_LAUNCH, SCREEN_HOME, 0, 0, -1, 0, false, false, 0, 0,
+                      -1 };
     gm_vec_t gm_raw = { 0, 0, 0 };   /* G-METER: the latest sensor reading */
     live_menu_count();
     uint64_t notice_until = 0;
@@ -5892,9 +6005,34 @@ void spike_ui_run(void)
             case SCREEN_MILEAGE:   list = miles_buttons;     count = MILES_BUTTON_COUNT;     break;
             case SCREEN_TEST:  break;
             }
-            int i = ui.screen == SCREEN_HOME && home_gfx ? -1 : button_at(list, count, tp.px, tp.py);
+            bool gfx_touch = home_gfx && (ui.screen == SCREEN_HOME || ui.screen == SCREEN_LIVE_MENU ||
+                                          ui.screen == SCREEN_LIVE);
+            int i = gfx_touch ? -1 : button_at(list, count, tp.px, tp.py);
             int item = ui.screen == SCREEN_HOME && home_gfx ? home_hit(tp.px, tp.py) : -1;
-            if (item >= 0) {
+            if (gfx_touch && ui.screen == SCREEN_LIVE_MENU) {
+                if (live_back_hit(tp.px, tp.py)) {
+                    action = BTN_BACK;
+                    tapped = true;
+                } else {
+                    /* A tap picks a row when the finger lifts; a drag scrolls. */
+                    ui.live_touching = true;
+                    ui.live_dragged = false;
+                    ui.live_touch_y0 = tp.py;
+                    ui.live_scroll0 = ui.live_scroll;
+                    ui.live_row_held = live_list_hit(tp.px, tp.py, ui.live_scroll, LIVE_VIEW_COUNT);
+                    bottom_dirty = true;
+                }
+            } else if (gfx_touch && ui.screen == SCREEN_LIVE) {
+                switch (live_view_hit(tp.px, tp.py, ui.live_view == LIVE_VIEW_CUSTOM)) {
+                case LIVE_HIT_BACK:   action = BTN_BACK;        tapped = true; break;
+                case LIVE_HIT_PREV:   action = BTN_PAGE_PREV;   tapped = true; break;
+                case LIVE_HIT_NEXT:   action = BTN_PAGE_NEXT;   tapped = true; break;
+                case LIVE_HIT_STOP:   action = BTN_LIVE_STOP;   tapped = true; break;
+                case LIVE_HIT_RECORD: action = BTN_LIVE_RECORD; tapped = true; break;
+                case LIVE_HIT_EDIT:   action = BTN_LIVE_EDIT;   tapped = true; break;
+                default: break;
+                }
+            } else if (item >= 0) {
                 action = home_item_action(item);
                 if (item != HOME_CLOSE) {
                     ui.home_selected = item;
@@ -5930,6 +6068,36 @@ void spike_ui_run(void)
                         tapped = true;
                     }
                 }
+            }
+        }
+
+        /* LIVE's view list (graphics): drag to scroll, lift to pick. */
+        if (ui.live_touching) {
+            if (ui.screen != SCREEN_LIVE_MENU || confirming) {
+                ui.live_touching = false;
+            } else if (hidKeysHeld() & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                int dy = tp.py - ui.live_touch_y0;
+                if (!ui.live_dragged && (dy > 6 || dy < -6)) {
+                    ui.live_dragged = true;
+                    bottom_dirty = true;
+                }
+                if (ui.live_dragged) {
+                    int sc = live_list_clamp(ui.live_scroll0 - dy, LIVE_VIEW_COUNT);
+                    if (sc != ui.live_scroll) {
+                        ui.live_scroll = sc;
+                        bottom_dirty = true;
+                    }
+                }
+            } else {
+                ui.live_touching = false;
+                if (!ui.live_dragged && ui.live_row_held >= 0 && !tapped) {
+                    action = BTN_LIVE_VIEW - ui.live_row_held;
+                    tapped = true;
+                }
+                ui.live_row_held = -1;
+                bottom_dirty = true;
             }
         }
 
@@ -5985,9 +6153,27 @@ void spike_ui_run(void)
                 ui.live_view = v < 0 ? LIVE_VIEW_ENGINE : v;
                 ui.screen = SCREEN_LIVE_MENU;
                 ui.page = 0;
+                ui.live_scroll = 0;
+                if (home_gfx) {
+                    live_dash_start();   /* the Dashboard on top */
+                }
                 bottom_full = top_dirty = true;
                 break;
             }
+            case BTN_LIVE_STOP:
+            case BTN_LIVE_RECORD:
+                LightLock_Lock(&shared.lock);
+                shared.rec_want = action == BTN_LIVE_RECORD;
+                if (shared.rec_want && !shared.live_on) {   /* recording polls too */
+                    shared.live_on = true;
+                    shared.live_gen++;
+                    shared.live_msg[0] = '\0';
+                }
+                shared.live_ui_version++;
+                LightLock_Unlock(&shared.lock);
+                LightEvent_Signal(&shared.wake);
+                top_dirty = true;
+                break;
             case BTN_LIVE_EDIT:
                 ui.screen = SCREEN_LIVE_EDIT;
                 ui.page = 0;
@@ -6589,8 +6775,16 @@ void spike_ui_run(void)
                     shared.live_ui_version++;
                     LightLock_Unlock(&shared.lock);
                 }
+                if (ui.screen == SCREEN_LIVE_MENU) {
+                    LightLock_Lock(&shared.lock);
+                    shared.live_on = false;   /* the Dashboard's polling */
+                    shared.live_ui_version++;
+                    LightLock_Unlock(&shared.lock);
+                }
                 if (ui.screen == SCREEN_LIVE_EDIT || ui.screen == SCREEN_LIVE) {
-                    if (ui.screen == SCREEN_LIVE) {
+                    if (ui.screen == SCREEN_LIVE && home_gfx) {
+                        live_dash_start();   /* back to the Dashboard */
+                    } else if (ui.screen == SCREEN_LIVE) {
                         LightLock_Lock(&shared.lock);
                         shared.live_on = false;
                         shared.live_ui_version++;
@@ -6832,13 +7026,14 @@ void spike_ui_run(void)
                        : !live_screen && diag_version != drawn_diag_version)) {
             /* HOME's and GRAPH's top graphics reach the last column, which
              * the text screens don't print: clear it all once on leaving. */
-            static bool home_top_shown;
-            bool home_top_now = ui.screen == SCREEN_HOME && home_gfx;
-            if (home_top_shown && !home_top_now && ui.screen != SCREEN_GRAPH) {
+            static bool gfx_top_shown;
+            bool live_gfx = home_gfx && (ui.screen == SCREEN_LIVE_MENU || ui.screen == SCREEN_LIVE);
+            bool gfx_top_now = (ui.screen == SCREEN_HOME && home_gfx) || live_gfx;
+            if (gfx_top_shown && !gfx_top_now && ui.screen != SCREEN_GRAPH) {
                 consoleSelect(&top_console);
                 printf("\x1b[0m\x1b[2J");
             }
-            home_top_shown = home_top_now || (graph_gfx && ui.screen == SCREEN_GRAPH);
+            gfx_top_shown = gfx_top_now || (graph_gfx && ui.screen == SCREEN_GRAPH);
             if (ui.screen == SCREEN_TIME_ATTACK) {
                 draw_ta_top(busy, connected, cfg.metric, now);
                 live_drawn_at = now;
@@ -6867,6 +7062,14 @@ void spike_ui_run(void)
                 draw_track_top(busy, connected);
             } else if (ui.screen == SCREEN_TRIM) {
                 draw_trim_top(busy, connected);
+                drawn_live_version = live_version;
+                live_drawn_at = now;
+            } else if (live_gfx && ui.screen == SCREEN_LIVE_MENU) {
+                draw_live_dash_top(connected);
+                drawn_live_version = live_version;
+                live_drawn_at = now;
+            } else if (live_gfx) {
+                draw_live_view_top(ui.live_view, connected);
                 drawn_live_version = live_version;
                 live_drawn_at = now;
             } else if (live_screen) {
@@ -6900,6 +7103,17 @@ void spike_ui_run(void)
         }
         if (flashes_expired(now)) {
             bottom_dirty = true;
+        }
+        /* LIVE (graphics): the REC dot pulses while recording. */
+        static uint64_t rec_drawn_at;
+        if (ui.screen == SCREEN_LIVE && home_gfx && now - rec_drawn_at >= 50) {
+            LightLock_Lock(&shared.lock);
+            bool rec = shared.rec_active;
+            LightLock_Unlock(&shared.lock);
+            if (rec) {
+                bottom_dirty = true;
+                rec_drawn_at = now;
+            }
         }
         if (bottom_dirty || bottom_full) {
             draw_bottom(&cfg, &ui, now, busy, bottom_full);

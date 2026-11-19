@@ -101,6 +101,7 @@ def icons():
            ('line', [(12, 13.5), (16.6, 8.3)], 2, RED), ('disc', (12, 13.5, 1.8), WHITE)]
     return {
         'live': (30, live(RED)), 'diag': (30, diag(ORANGE)), 'diag_cel': (30, diag(AMBER)),
+        'cel_on': (22, diag(AMBER)), 'cel_off': (22, diag((58, 58, 58))),
         'trim': (30, trim(YELLOW)), 'track': (30, track(WHITE)), 'log': (30, log(BLUE)),
         'setup': (30, setup(GREY)),
         'garage': (22, garage(WHITE)), 'garage_dim': (22, garage(DIM)),

@@ -12,8 +12,12 @@ What it makes, all for the night theme:
   not connected), the connection pill (blue / grey), the battery outline and its cells
   (normal / low), placed and colored as layout HudMenu_00 does
 - System Settings' grey bottom bar (TopBase_D_00), its Back / OK corner tabs (Base_D_01),
-  and its large and medium buttons (B_L, B_M), rendered from their layouts and recolored
-  to neutral night greys (tools/sysui/layout.py)
+  its large and medium buttons (B_L, B_M), the half-circle page arrows at the screen
+  edges (B_ArrowL, B_ArrowR), rendered from their layouts and recolored to neutral night
+  greys (tools/sysui/layout.py; the arrows lose their gold too)
+- HOME Menu Settings' OFF / ON toggle (PtBtnT_Abl_00: plain, left half chosen, right half
+  chosen, the chosen half red instead of green) and its scroll bar (PtSlideBar: track and
+  grip)
 
 Standard library only, plus ctrtool (3DSGuy/Project_CTR, MIT) to unpack the dumps.
 """
@@ -138,6 +142,103 @@ def settings_pieces(base, button):
     s['tab_right'] = layout.crop(tabs, 160, 202, 320, 240)
     s['button_large'] = layout.crop(render(button, 'B_L', hide=re.compile(r'N_Invalid')))
     s['button_medium'] = layout.crop(render(button, 'B_M', hide=re.compile(r'N_Invalid')))
+    # The page arrows at the screen edges: each layout draws a whole circle and the edge
+    # hides half of it, so keep the half that shows (the left arrow's right half).
+    for name, lyt, keep_right in (('side_left', 'B_ArrowL', True), ('side_right', 'B_ArrowR', False)):
+        full = layout.crop(render(button, lyt, hide=re.compile(r'N_Invalid'), accents=False))
+        mid = len(full[0]) // 2
+        s[name] = [row[mid:] if keep_right else row[:mid] for row in full]
+    return s
+
+
+# The chosen half of an OFF / ON toggle: the HOME Menu turns it a light green; Gauge Boy
+# turns it red, keeping the toggle's own shading (the face's brightness picks the shade).
+RED_DARK, RED_LIGHT = (140, 24, 20), (232, 66, 56)
+
+
+def chosen(plain, left):
+    """The plain toggle with one half's face recolored red (corners and edge kept)."""
+    out = [[list(p) for p in row] for row in plain]
+    h, w = len(plain), len(plain[0])
+    half = w // 2
+    x0, x1 = (3, half - 1) if left else (half + 1, w - 3)
+    y0, y1, r = 3, h - 3, 9
+    face = [plain[y][x] for y in range(y0, y1) for x in range(x0, x1)]
+    top = max(0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2] for p in face) or 1
+    for y in range(y0, y1):
+        for x in range(x0, x1):
+            # round only the outer corners (the divider side stays square)
+            cx = x0 + r if left and x < x0 + r else x1 - r if not left and x >= x1 - r else None
+            cy = y0 + r if y < y0 + r else y1 - r if y >= y1 - r else None
+            if cx is not None and cy is not None and (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 > r * r:
+                continue
+            p = plain[y][x]
+            k = (0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2]) / top
+            out[y][x] = [RED_DARK[i] + (RED_LIGHT[i] - RED_DARK[i]) * k for i in range(3)] + [p[3]]
+    return out
+
+
+def lerp_tex(tex, black, white):
+    """A texture through a material's black / white blend, recolored for the night."""
+    b, w = layout.night_color(black + (255,), False), layout.night_color(white + (255,), False)
+    return [[[b[i] + (w[i] - b[i]) * (p[0] / 255) for i in range(3)] + [p[3]] for p in row] for row in tex.rows]
+
+
+def notch(toggle, petit, left):
+    """The chosen half with the HOME Menu's notch (BtnTgl_03, a small down arrow) on its top
+    edge, centred, light as on the 3DS."""
+    out = [list(map(list, row)) for row in toggle]
+    tri = petit.texture('BtnTgl_03')
+    half = len(out[0]) // 2
+    x0 = (half // 2 if left else half + half // 2) - tri.w // 2
+    for y in range(tri.h):
+        for x in range(tri.w):
+            p = tri.rows[y][x]
+            a = p[3] / 255
+            if a <= 0:
+                continue
+            c = [242 * p[0] / 255 + 40 * (1 - p[0] / 255)] * 3
+            d = out[y][x0 + x]
+            out[y][x0 + x] = [c[i] * a + d[i] * (1 - a) for i in range(3)] + [max(d[3], p[3])]
+    return out
+
+
+def grip(petit, w=20, h=34):
+    """The scroll bar's grip (PtSlideBar's SBBtn window and SBBtnEmb ridges), built from its
+    corner textures: the renderer doesn't handle this window's four separate frames."""
+    top = lerp_tex(petit.texture('SBBtnWndwLT_16'), (0x6E, 0x6E, 0x70), (0xF5, 0xF5, 0xF3))
+    bot = lerp_tex(petit.texture('SBBtnWndwLB_16'), (0x6E, 0x6E, 0x70), (0xF5, 0xF5, 0xF3))
+    c = len(top)
+    out = [[[0, 0, 0, 0] for _ in range(w)] for _ in range(h)]
+    for y in range(h):
+        for x in range(w):
+            src = top if y < h // 2 else bot
+            # the corners' outer edges are at the top / left (LT) and bottom / left (LB);
+            # the right half mirrors them, the middle stretches their inner row / column
+            sy = min(y, c - 1) if y < h // 2 else max(0, c - (h - y))
+            sx = min(x, w - 1 - x, c - 1)
+            out[y][x] = list(src[sy][sx])
+    emb = lerp_tex(petit.texture('SBBtnEmb_8x16'), (0x89, 0x89, 0x8C), (0xE2, 0xE2, 0xE5))
+    ex, ey = (w - 8) // 2, (h - 16) // 2
+    for y in range(16):
+        for x in range(8):
+            p = emb[y][x]
+            a = p[3] / 255
+            d = out[ey + y][ex + x]
+            out[ey + y][ex + x] = [p[i] * a + d[i] * (1 - a) for i in range(3)] + [d[3]]
+    return out
+
+
+def home_settings_pieces(petit):
+    """HOME Menu Settings (the petit archive): the OFF / ON toggle (PtBtnT_Abl_00) and the
+    scroll bar (PtSlideBar), for the night theme."""
+    s = {}
+    plain = re.compile(r'P_IconR')
+    s['toggle'] = layout.crop(render(petit, 'PtBtnT_Abl_00', hide=plain, accents=False))
+    s['toggle_left'] = notch(chosen(s['toggle'], True), petit, True)
+    s['toggle_right'] = notch(chosen(s['toggle'], False), petit, False)
+    s['scroll_track'] = layout.crop(render(petit, 'PtSlideBar', hide=re.compile(r'N_Slide_00'), accents=False))
+    s['scroll_grip'] = grip(petit)
     return s
 
 
@@ -154,6 +255,7 @@ def main():
         sprites = status_bar(Archive(os.path.join(home, 'hud_LZ.bin')))
         sprites.update(settings_pieces(Archive(os.path.join(settings, 'base_LZ.bin')),
                                        Archive(os.path.join(settings, 'button_LZ.bin'))))
+        sprites.update(home_settings_pieces(Archive(os.path.join(home, 'petit_LZ.bin'))))
     names = sorted(sprites)
     for n in names:
         formats.write_png(os.path.join(OUT, n + '.png'), sprites[n])

@@ -27,6 +27,18 @@
 int live_view_lines(const obd_live_t *lv, int protocol, float rate, obd_units_t units,
                     float engine_l, int cols, char lines[][LIVE_VIEW_COLS + 1], int max);
 
+/* The same values as rows for the graphics top screen: a label, the value
+ * and its unit apart ("742", "rpm"), without the title or refresh rates.
+ * Returns the row count (0 before the first poll: lv NULL). */
+typedef struct {
+    char label[24];
+    char value[20];
+    char unit[16];
+} live_row_t;
+
+int live_view_rows(const obd_live_t *lv, obd_units_t units, float engine_l, live_row_t *rows,
+                   int max);
+
 /* PIDs the car supports that LIVE can show, in obd_pid table order (for
  * the toggles). Returns the count. */
 int live_choices(const obd_link_t *link, uint8_t *out, int max);

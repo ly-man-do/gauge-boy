@@ -659,6 +659,15 @@ static void test_live_view_lines(void)
     }
     lv.pid[2].dropped = true;   /* as after 3 NO DATA */
     n = live_view_lines(&lv, 3, 1.9f, OBD_UNITS_US, 0.0f, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
+    {
+        live_row_t rows[LIVE_VIEW_MAX];
+        int nr = live_view_rows(&lv, OBD_UNITS_US, 0.0f, rows, LIVE_VIEW_MAX);
+        CHECK(nr >= 1 && nr <= n);
+        CHECK(rows[0].label[0] != '\0');
+        CHECK(strchr(rows[0].value, ' ') == NULL);   /* the unit is apart */
+        CHECK_EQ_INT(live_view_rows(NULL, OBD_UNITS_US, 0.0f, rows, LIVE_VIEW_MAX), 0);
+        CHECK_EQ_INT(live_view_rows(&lv, OBD_UNITS_US, 0.0f, rows, 1), 1);
+    }
     CHECK_EQ_STR(lines[0], "ISO 9141-2 (5 baud init), 1.9 requests/s");
     CHECK(has_line(n, "RPM         710 rpm          every 2 s"));
     CHECK(has_line(n, "MAP         8.9 inHg"));
@@ -769,7 +778,19 @@ static void test_live_views(void)
         CHECK(live_view_warns(v) == (v == LIVE_VIEW_ALL || v == LIVE_VIEW_CUSTOM));
     }
     CHECK_EQ_INT(live_view_find("nope"), -1);
-    CHECK_EQ_STR(live_view_name(LIVE_VIEW_IDLE), "Idle & vacuum");
+    CHECK_EQ_STR(live_view_name(LIVE_VIEW_IDLE), "Idle/Vacuum");
+    CHECK_EQ_INT(LIVE_VIEW_WARMUP, 1);   /* the list order */
+    CHECK_EQ_INT(LIVE_VIEW_ALL, LIVE_VIEW_COUNT - 1);
+    CHECK_EQ_STR(live_view_name(LIVE_VIEW_TRANS), "Trans");
+    {
+        uint8_t dp[8];
+        uint32_t dq[8];
+        CHECK_EQ_INT(live_dash_request(dp, dq, 8), 4);
+        CHECK_EQ_INT(dp[0], 0x0C);
+        CHECK_EQ_INT(dp[1], 0x0D);
+        CHECK_EQ_INT((int)dq[2], 5000);
+        CHECK_EQ_INT(live_dash_request(dp, dq, 2), 2);
+    }
 
     /* Warm-up reads coolant every second; Engine leaves RPM at its own. */
     int n = live_view_request(LIVE_VIEW_WARMUP, NULL, 0, pids, periods, OBD_LIVE_MAX);

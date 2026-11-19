@@ -4,6 +4,7 @@
 #include "harness.h"
 #include "ui/home_layout.h"
 #include "ui/home_top.h"
+#include "ui/live_ui.h"
 
 static bool overlap(home_rect_t a, home_rect_t b)
 {
@@ -170,8 +171,115 @@ static void test_home_group_digits(void)
     CHECK_EQ_STR(home_protocol_name(13), "");
 }
 
+static void test_live_list(void)
+{
+    live_rect_t r = live_list_row(0, 0);
+    CHECK_EQ_INT(r.x + r.w / 2, LIVE_SCREEN_W / 2);   /* centred */
+    CHECK(r.h >= 36);
+    CHECK_EQ_INT(live_list_max_scroll(4), 0);          /* 4 rows fit */
+    int max = live_list_max_scroll(9);
+    CHECK_EQ_INT(max, 6 + 9 * 40 - LIVE_LIST_H);
+    CHECK_EQ_INT(live_list_clamp(-5, 9), 0);
+    CHECK_EQ_INT(live_list_clamp(999, 9), max);
+    CHECK_EQ_INT(live_list_hit(160, 20, 0, 9), 0);
+    CHECK_EQ_INT(live_list_hit(160, 44, 0, 9), -1);    /* the gap between rows */
+    CHECK_EQ_INT(live_list_hit(160, 50, 0, 9), 1);
+    CHECK_EQ_INT(live_list_hit(160, 20, 40, 9), 1);    /* scrolled one row */
+    CHECK_EQ_INT(live_list_hit(10, 20, 0, 9), -1);     /* left of the rows */
+    CHECK_EQ_INT(live_list_hit(160, 210, 0, 9), -1);   /* the Back tab's strip */
+    live_rect_t t = live_list_track();
+    CHECK_EQ_INT(live_list_grip_y(0, 9), t.y);
+    CHECK_EQ_INT(live_list_grip_y(max, 9) + LIVE_GRIP_H, t.y + t.h);
+    CHECK(live_list_grip_y(max / 2, 9) > t.y);
+    CHECK(t.x > r.x + r.w);                            /* the bar is right of the rows */
+}
+
+static void test_live_view_hits(void)
+{
+    CHECK_EQ_INT(live_view_hit(30, 220, false), LIVE_HIT_BACK);
+    CHECK(live_back_hit(30, 220));
+    CHECK(!live_back_hit(300, 220));
+    CHECK_EQ_INT(live_view_hit(10, 100, false), LIVE_HIT_PREV);
+    CHECK_EQ_INT(live_view_hit(310, 100, false), LIVE_HIT_NEXT);
+    CHECK_EQ_INT(live_view_hit(100, 120, false), LIVE_HIT_STOP);
+    CHECK_EQ_INT(live_view_hit(220, 120, false), LIVE_HIT_RECORD);
+    CHECK_EQ_INT(live_view_hit(160, 170, false), LIVE_HIT_NONE);
+    CHECK_EQ_INT(live_view_hit(160, 170, true), LIVE_HIT_EDIT);
+    CHECK_EQ_INT(live_view_hit(160, 20, true), LIVE_HIT_NONE);
+    for (int a = LIVE_HIT_BACK; a <= LIVE_HIT_EDIT; a++) {   /* touch rule: 40x40 */
+        live_rect_t r = live_view_rect((live_hit_t)a);
+        CHECK(r.w >= 40 && (r.h >= 38));
+        CHECK(r.x >= 0 && r.y >= 0 && r.x + r.w <= LIVE_SCREEN_W && r.y + r.h <= LIVE_SCREEN_H);
+    }
+}
+
+static void test_live_dash_math(void)
+{
+    CHECK_EQ_INT(live_tach_lit(0.0f), 0);
+    CHECK_EQ_INT(live_tach_lit(742.0f), 4);
+    CHECK_EQ_INT(live_tach_lit(7000.0f), LIVE_TACH_RED);
+    CHECK_EQ_INT(live_tach_lit(9500.0f), LIVE_TACH_SEGMENTS);
+    CHECK_EQ_INT(live_tach_lit(-5.0f), 0);
+    CHECK_EQ_INT(live_coolant_lit(20.0f), 0);
+    CHECK_EQ_INT(live_coolant_lit(88.0f), 6);
+    CHECK_EQ_INT(live_coolant_lit(140.0f), LIVE_MINI_SEGMENTS);
+    CHECK_EQ_INT(live_volts_lit(14.2f), 8);
+    CHECK_EQ_INT(live_volts_lit(9.0f), 0);
+    CHECK(live_rec_pulse(0) > 0.99f);
+    CHECK(live_rec_pulse(1200) < 0.21f);
+    CHECK(live_rec_pulse(2400) > 0.99f);
+}
+
+static void test_live_dash_values(void)
+{
+    live_dash_t d;
+    live_dash_values(NULL, OBD_UNITS_US, false, 0, &d);
+    CHECK(!d.have_rpm && !d.have_speed && !d.have_coolant && !d.have_volts);
+    CHECK_EQ_STR(d.speed, "---");
+    CHECK_EQ_STR(d.speed_unit, "mph");
+    CHECK_EQ_STR(d.coolant, "--- F");
+    CHECK_EQ_STR(d.battery, "--.- V");
+    CHECK_EQ_STR(d.odo, "---,---");
+    CHECK_EQ_STR(d.odo_unit, "mi");
+
+    /* The garage's odometer until the car reports its own. */
+    live_dash_values(NULL, OBD_UNITS_US, true, 198683.0, &d);
+    CHECK_EQ_STR(d.odo, "123,456");
+
+    static obd_live_t lv;
+    memset(&lv, 0, sizeof lv);
+    const uint8_t pids[] = { 0x0C, 0x0D, 0x05, 0xA6 };
+    const float vals[] = { 742.0f, 0.0f, 88.0f, 1000.0f };
+    for (int i = 0; i < 4; i++) {
+        lv.pid[i].pid = pids[i];
+        lv.pid[i].have = true;
+        lv.pid[i].value = vals[i];
+    }
+    lv.count = 4;
+    lv.have_volts = true;
+    lv.volts = 14.18f;
+    live_dash_values(&lv, OBD_UNITS_US, true, 198683.0, &d);
+    CHECK(d.have_rpm && d.rpm == 742.0f);
+    CHECK_EQ_STR(d.speed, "  0");
+    CHECK_EQ_STR(d.coolant, "190 F");
+    CHECK_EQ_STR(d.battery, "14.2 V");
+    CHECK_EQ_STR(d.odo, "621");   /* the car's own: 1000 km */
+
+    lv.pid[1].value = 100.0f;
+    live_dash_values(&lv, OBD_UNITS_METRIC, false, 0, &d);
+    CHECK_EQ_STR(d.speed, "100");
+    CHECK_EQ_STR(d.speed_unit, "km/h");
+    CHECK_EQ_STR(d.coolant, "88 C");
+    CHECK_EQ_STR(d.odo, "1,000");
+    CHECK_EQ_STR(d.odo_unit, "km");
+}
+
 void suite_ui(void)
 {
+    RUN_TEST(test_live_dash_values);
+    RUN_TEST(test_live_list);
+    RUN_TEST(test_live_view_hits);
+    RUN_TEST(test_live_dash_math);
     RUN_TEST(test_home_top_rows_no_car);
     RUN_TEST(test_home_top_rows_connected);
     RUN_TEST(test_home_group_digits);

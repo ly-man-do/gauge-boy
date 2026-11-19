@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, HOME v7 without badges or focus outlines (gauge-boy-82l.14)
+**As of:** 2026-11-18, LIVE v5: Dashboard, scrolling view list, Stop | Record toggle (gauge-boy-82l.15)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -98,23 +98,27 @@ Gauge Boy
         ├── [SETUP]                  → SETUP
         └── [START Close bar]        → closes Gauge Boy            [START]
         │
-        ├── LIVE view list           (top: the last view's values)
-        │   ├── [Engine] [Idle & vacuum] [Air & fuel]
-        │   ├── [O2 sensors] [Warm-up] [Drive]
-        │   ├── [All] [Custom] [Transmission]  tap a view → LIVE view (starts polling; green = last used);
-        │   │                        Transmission polls the transmission module alone (CAN cars)
-        │   ├── [BACK]               → HOME                                       [B]
-        │   └── LIVE view            (top: view, purpose or refresh warning, values,
-        │       │                    refresh rates, battery, vacuum)
-        │       ├── [BACK]           → view list, stops polling, saves the view   [B]
-        │       ├── [<] view n/7 [>] previous / next view                         [L/R]
-        │       ├── [START / STOP]   pauses or resumes polling (STOP also ends a recording)
-        │       ├── [REC / REC m:ss] records this view to drives/drive-<date>.csv; red while
-        │       │                    recording; tap again to stop (starts polling if stopped)
-        │       └── [EDIT PIDS]      (Custom only) → Custom PIDs
-        │           ├── [PID toggles] 6 per page, green = polled (the PIDs the car supports)
-        │           ├── [BACK]       → Custom view, saves the choice              [B]
-        │           └── [<] page n/m [>]                                          [L/R]
+        ├── LIVE view list           (top: the Dashboard: tach 0-8 x1000 rpm, speed, coolant
+        │   │                        C-H, battery 10-16 V, CEL engine icon, odometer;
+        │   │                        polls RPM, speed, coolant and the odometer)
+        │   ├── [Engine] [Warm-up] [Drive] [Air/Fuel] [Idle/Vacuum]
+        │   ├── [O2 Sensors] [Trans] [Custom] [All]
+        │   │                        a list that scrolls by dragging (scroll bar at the right);
+        │   │                        tap a view → LIVE view (starts polling). Trans polls the
+        │   │                        transmission module alone (CAN cars)
+        │   ├── [B Back]             → HOME, stops polling                        [B]
+        │   └── LIVE view            (top: the view's name and its values, one or two columns)
+        │       │                    (bottom: "n PIDs, r a second" at the top)
+        │       ├── [<] [>]          half circles at the edges: previous / next view  [L/R]
+        │       ├── ● REC m:ss       above the toggle while recording (the dot pulses)
+        │       ├── [Stop | Record]  a toggle: Record records this view to
+        │       │                    drives/drive-<date>.csv; Stop ends it (the chosen half is red)
+        │       ├── [Edit PIDs]      (Custom only) → Custom PIDs
+        │       │   ├── [PID toggles] 6 per page, green = polled (the PIDs the car supports)
+        │       │   ├── [BACK]       → Custom view, saves the choice              [B]
+        │       │   └── [<] page n/m [>]                                          [L/R]
+        │       └── [B Back]         → view list and the Dashboard (ends a recording, saves
+        │                            the view)                                    [B]
         │
         ├── TRIM                     (top: short / long / total trim per bank as
         │   │                        colored center-zero bars, engine state, hints)
@@ -203,6 +207,6 @@ Any screen: a new achievement shows "Unlocked: <name>!" (or "Unlocked n achievem
 ## Notes
 
 - SETUP is a menu of four pages (owner layout, gauge-boy-cib): TESTS (adapter and car tests, the log's buttons), WI-FI (connection), VEHICLE (make, model, year, engine size, VIN) and OTHER (units, About).
-- LIVE views and the PIDs in each: Engine (RPM, speed, coolant, throttle, load), Idle & vacuum (RPM, MAP (PID 0B or 87) + vacuum or boost, short-term trims, timing, baro, fuel loop), Air & fuel (MAF, MAP (0B or 87), intake air, throttle, short- and long-term trims, baro, fuel loop, commanded lambda), O2 sensors (RPM, short-term trims, then every oxygen sensor the car has: narrow band voltage, PIDs 14-1B, or wide band lambda, 24-2B / 34-3B, banks 1-2, sensors 1-4), Warm-up (coolant, intake air, oil, outside air, run time, RPM), Drive (RPM, speed, throttle, load, timing, torque, gear ratio, odometer, fuel rate (the car's PID 5E / 9D, else estimated from MAF or MAP + engine size) and instant economy), All (every supported PID), Custom (your pick). Each view only shows what the car supports.
+- LIVE views and the PIDs in each, in list order: Engine (RPM, speed, coolant, throttle, load), Idle/Vacuum (RPM, MAP (PID 0B or 87) + vacuum or boost, short-term trims, timing, baro, fuel loop), Air/Fuel (MAF, MAP (0B or 87), intake air, throttle, short- and long-term trims, baro, fuel loop, commanded lambda), O2 Sensors (RPM, short-term trims, then every oxygen sensor the car has: narrow band voltage, PIDs 14-1B, or wide band lambda, 24-2B / 34-3B, banks 1-2, sensors 1-4), Warm-up (coolant, intake air, oil, outside air, run time, RPM), Drive (RPM, speed, throttle, load, timing, torque, gear ratio, odometer, fuel rate (the car's PID 5E / 9D, else estimated from MAF or MAP + engine size) and instant economy), All (every supported PID), Custom (your pick). Each view only shows what the car supports.
 - Only HOME (bottom screen) and LOG > GRAPH (top screen) are drawn with graphics (citro2d). Every other screen is still the text console until M5 (UI polish).
 - The code for these screens is in `source/spike_ui.c` (screens, buttons, actions) and `source/ui/` (HOME layout and drawing).

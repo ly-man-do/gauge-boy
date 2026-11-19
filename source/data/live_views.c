@@ -65,16 +65,27 @@ static const view_pid_t drive[] = {
 
 static const view_def_t views[LIVE_VIEW_COUNT] = {
     [LIVE_VIEW_ENGINE]   = { "Engine", "engine", "Is it running right?", engine, N(engine) },
-    [LIVE_VIEW_IDLE]     = { "Idle & vacuum", "idle", "Vacuum leaks, rough idle", idle, N(idle) },
-    [LIVE_VIEW_AIR_FUEL] = { "Air & fuel", "airfuel", "Lean or rich, air flow", air_fuel,
+    [LIVE_VIEW_IDLE]     = { "Idle/Vacuum", "idle", "Vacuum leaks, rough idle", idle, N(idle) },
+    [LIVE_VIEW_AIR_FUEL] = { "Air/Fuel", "airfuel", "Lean or rich, air flow", air_fuel,
                              N(air_fuel) },
-    [LIVE_VIEW_O2]       = { "O2 sensors", "o2", "Is each oxygen sensor working?", o2, N(o2) },
+    [LIVE_VIEW_O2]       = { "O2 Sensors", "o2", "Is each oxygen sensor working?", o2, N(o2) },
     [LIVE_VIEW_WARMUP]   = { "Warm-up", "warmup", "Thermostat, cold start", warmup, N(warmup) },
     [LIVE_VIEW_DRIVE]    = { "Drive", "drive", "Load, fuel rate, economy", drive, N(drive) },
     [LIVE_VIEW_ALL]      = { "All", "all", "Every PID the car supports", NULL, 0 },
     [LIVE_VIEW_CUSTOM]   = { "Custom", "custom", "Your own pick (EDIT)", NULL, 0 },
-    [LIVE_VIEW_TRANS]    = { "Transmission", "trans", "The transmission module (CAN cars)", NULL, 0 },
+    [LIVE_VIEW_TRANS]    = { "Trans", "trans", "The transmission module (CAN cars)", NULL, 0 },
 };
+
+int live_dash_request(uint8_t *pids, uint32_t *periods, int max)
+{
+    static const view_pid_t dash[] = { { 0x0C, 0 }, { 0x0D, 0 }, { 0x05, 5000 }, { 0xA6, 60000 } };
+    int n = 0;
+    for (int i = 0; i < N(dash) && n < max; i++, n++) {
+        pids[n] = dash[i].pid;
+        periods[n] = dash[i].period_ms;
+    }
+    return n;
+}
 
 static bool valid(int view)
 {
