@@ -2859,6 +2859,7 @@ typedef struct {
     bool miles_open;           /* MILEAGE (graphics): the selected entry's page */
     bool miles_dialog;         /* ... its Delete question */
     int miles_scroll;          /* ... the list scrolled by, px */
+    int pid_scroll;            /* LIVE's Custom PID picker (graphics): scrolled by, px */
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
@@ -6597,6 +6598,40 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         draw_garage_screens_bottom(ui, cfg);
         return;
     }
+    if (ui->screen == SCREEN_LIVE_EDIT && home_gfx) {
+        /* The car's PIDs: a scrolling list, each On or Off. */
+        static diag_row_t rows[OBD_LIVE_MAX];
+        uint8_t choices[OBD_LIVE_MAX];
+        int nc = live_choices_now(choices);
+        LightLock_Lock(&shared.lock);
+        uint8_t pids[CONFIG_LIVE_PIDS_MAX];
+        int np = cfg->live_pid_count;
+        memcpy(pids, cfg->live_pids, sizeof pids);
+        LightLock_Unlock(&shared.lock);
+        for (int k = 0; k < nc; k++) {
+            bool on = live_pid_chosen(pids, np, choices[k]);
+            memset(&rows[k], 0, sizeof rows[k]);
+            snprintf(rows[k].name, sizeof rows[k].name, "%s", obd_pid_info(choices[k])->label);
+            snprintf(rows[k].right, sizeof rows[k].right, "%s", on ? "On" : "Off");
+            rows[k].ink = on ? DIAG_INK_GREEN : DIAG_INK_GREY;
+        }
+        static char corner[32];
+        snprintf(corner, sizeof corner, "%d of %d picked", np, CONFIG_LIVE_PIDS_MAX);
+        diag_page_view_t v;
+        memset(&v, 0, sizeof v);
+        v.rows = rows;
+        v.n = nc;
+        v.scroll = diag_list_clamp(ui->pid_scroll, nc);
+        v.selected = -1;
+        v.pressed_row = ui->live_touching && !ui->live_dragged ? ui->live_row_held : -1;
+        v.grip_pressed = ui->live_touching && ui->live_grip;
+        v.pressed_tab = flashing(BTN_BACK, now) ? DIAG_HIT_BACK : DIAG_HIT_NONE;
+        v.empty = "The car's PIDs show here once LIVE has found the car.";
+        v.notice = ui->notice;
+        v.corner = corner;
+        diag_draw_page_bottom(&v);
+        return;
+    }
     int lk = log_kind_of(ui);
     if (lk >= 0) {
         int pressed = ui->log_held_in ? ui->log_held : LOG_HIT_NONE;
@@ -7601,7 +7636,7 @@ void spike_ui_run(void)
                       -1, false, 0, LIVE_HIT_NONE, false, 0, DIAG_HIT_NONE, false, 0, false,
                       false, TRIM_HIT_NONE, false, false, false, TRK_HIT_NONE, false, 0,
                       false, false, LOG_HIT_NONE, false, 0, SET_HIT_NONE, false, 0,
-                      false, false, GAR_HIT_NONE, false, false, false, 0 };
+                      false, false, GAR_HIT_NONE, false, false, false, 0, 0 };
     gm_vec_t gm_raw = { 0, 0, 0 };   /* G-METER: the latest sensor reading */
     live_menu_count();
     uint64_t notice_until = 0;
@@ -7820,7 +7855,8 @@ void spike_ui_run(void)
                                           ui.screen == SCREEN_LIVE || ui.screen == SCREEN_DIAG ||
                                           ui.screen == SCREEN_DIAG_PAGE || ui.screen == SCREEN_TRIM ||
                                           track_kind_of(&ui) >= 0 || log_kind_of(&ui) >= 0 ||
-                                          setup_kind_of(&ui) >= 0 || garage_kind_of(&ui) >= 0);
+                                          setup_kind_of(&ui) >= 0 || garage_kind_of(&ui) >= 0 ||
+                                          ui.screen == SCREEN_LIVE_EDIT);
             int i = gfx_touch ? -1 : button_at(list, count, tp.px, tp.py);
             int item = ui.screen == SCREEN_HOME && home_gfx ? home_hit(tp.px, tp.py) : -1;
             diag_hit_t dhit = !gfx_touch                     ? DIAG_HIT_NONE
@@ -7832,7 +7868,29 @@ void spike_ui_run(void)
             int lkind = gfx_touch ? log_kind_of(&ui) : -1;
             int skind = gfx_touch ? setup_kind_of(&ui) : -1;
             int gkind = gfx_touch ? garage_kind_of(&ui) : -1;
-            if (gkind >= 0 && ui.miles_dialog) {
+            if (gfx_touch && ui.screen == SCREEN_LIVE_EDIT) {
+                /* The PID list: Back acts at once; a drag scrolls; a tap turns a PID on or off. */
+                uint8_t choices[OBD_LIVE_MAX];
+                int n = live_choices_now(choices);
+                if (diag_page_tab_hit(tp.px, tp.py, false) == DIAG_HIT_BACK) {
+                    action = BTN_BACK;
+                    tapped = true;
+                } else {
+                    ui.live_touching = true;
+                    if (diag_list_bar_hit(tp.px, tp.py) && diag_list_max_scroll(n) > 0) {
+                        ui.live_grip = ui.live_dragged = true;
+                        ui.live_row_held = -1;
+                        ui.live_grip_grab = diag_list_grip_grab(tp.py, ui.pid_scroll, n);
+                        ui.pid_scroll = diag_list_scroll_for_grip(tp.py - ui.live_grip_grab, n);
+                    } else {
+                        ui.live_grip = ui.live_dragged = false;
+                        ui.live_touch_y0 = tp.py;
+                        ui.live_scroll0 = ui.pid_scroll;
+                        ui.live_row_held = diag_list_hit(tp.px, tp.py, ui.pid_scroll, n);
+                    }
+                    bottom_dirty = true;
+                }
+            } else if (gkind >= 0 && ui.miles_dialog) {
                 ui.dialog_held = diag_dialog_hit(tp.px, tp.py);
                 ui.dialog_held_in = ui.dialog_held != 0;
                 bottom_dirty = true;
@@ -8124,6 +8182,48 @@ void spike_ui_run(void)
                 }
                 ui.garage_held = GAR_HIT_NONE;
                 ui.garage_held_in = false;
+                bottom_dirty = true;
+            }
+        }
+
+        /* LIVE's Custom PID list (graphics): drag or the grip scrolls it; a tap toggles a PID. */
+        if (ui.live_touching && ui.screen == SCREEN_LIVE_EDIT) {
+            uint8_t choices[OBD_LIVE_MAX];
+            int n = live_choices_now(choices);
+            if (confirming) {
+                ui.live_touching = ui.live_grip = false;
+            } else if (hidKeysHeld() & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                int dy = tp.py - ui.live_touch_y0;
+                if (!ui.live_grip && !ui.live_dragged && (dy > 6 || dy < -6)) {
+                    ui.live_dragged = true;
+                    bottom_dirty = true;
+                }
+                int sc = ui.live_grip ? diag_list_scroll_for_grip(tp.py - ui.live_grip_grab, n)
+                       : ui.live_dragged ? diag_list_clamp(ui.live_scroll0 - dy, n) : ui.pid_scroll;
+                if (sc != ui.pid_scroll) {
+                    ui.pid_scroll = sc;
+                    bottom_dirty = true;
+                }
+            } else {
+                ui.live_touching = ui.live_grip = false;
+                int k = ui.live_row_held;
+                if (!ui.live_dragged && k >= 0 && k < n && !tapped) {
+                    LightLock_Lock(&shared.lock);
+                    bool full = cfg.live_pid_count >= CONFIG_LIVE_PIDS_MAX &&
+                                !live_pid_chosen(cfg.live_pids, cfg.live_pid_count, choices[k]);
+                    LightLock_Unlock(&shared.lock);
+                    if (full) {
+                        ui.notice = "Up to 20 PIDs: turn one off first.";
+                        notice_until = now + 3000;
+                    } else {   /* the old page-based pick, for row k */
+                        ui.page = k / LIVE_PAGE_SLOTS;
+                        action = BTN_LIVE_PICK - k % LIVE_PAGE_SLOTS;
+                        tapped = lifted = true;
+                    }
+                }
+                ui.live_row_held = -1;
                 bottom_dirty = true;
             }
         }
@@ -8577,7 +8677,8 @@ void spike_ui_run(void)
 
         /* LIVE's view list (graphics): drag to scroll, lift to pick. */
         if (ui.live_touching && ui.screen != SCREEN_DIAG_PAGE && ui.screen != SCREEN_ACHIEVE &&
-            ui.screen != SCREEN_LOG && ui.screen != SCREEN_MAKE && ui.screen != SCREEN_MILEAGE) {
+            ui.screen != SCREEN_LOG && ui.screen != SCREEN_MAKE && ui.screen != SCREEN_MILEAGE &&
+            ui.screen != SCREEN_LIVE_EDIT) {
             if (ui.screen != SCREEN_LIVE_MENU || confirming) {
                 ui.live_touching = ui.live_grip = false;
             } else if ((hidKeysHeld() & KEY_TOUCH) && ui.live_grip) {
@@ -8728,6 +8829,7 @@ void spike_ui_run(void)
             case BTN_LIVE_EDIT:
                 ui.screen = SCREEN_LIVE_EDIT;
                 ui.page = 0;
+                ui.pid_scroll = 0;
                 bottom_full = top_dirty = true;
                 break;
             case BTN_LIVE_REC:
@@ -9709,7 +9811,8 @@ void spike_ui_run(void)
             /* HOME's and GRAPH's top graphics reach the last column, which
              * the text screens don't print: clear it all once on leaving. */
             static bool gfx_top_shown;
-            bool live_gfx = home_gfx && (ui.screen == SCREEN_LIVE_MENU || ui.screen == SCREEN_LIVE);
+            bool live_gfx = home_gfx && (ui.screen == SCREEN_LIVE_MENU || ui.screen == SCREEN_LIVE ||
+                                         ui.screen == SCREEN_LIVE_EDIT);
             bool diag_gfx = home_gfx && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_DIAG_PAGE);
             bool trim_gfx = home_gfx && ui.screen == SCREEN_TRIM;
             bool gfx_top_now = (ui.screen == SCREEN_HOME && home_gfx) || live_gfx || diag_gfx || trim_gfx ||

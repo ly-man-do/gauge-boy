@@ -293,6 +293,8 @@ void diag_draw_page_bottom(const diag_page_view_t *v)
     kit_back_tab(v->pressed_tab == DIAG_HIT_BACK);
     if (v->right_tab) {
         kit_right_tab("X", "Clear", v->pressed_tab == DIAG_HIT_RIGHT);
+    } else if (v->corner != NULL && v->corner[0] != '\0') {
+        kit_text(v->corner, KIT_BOTTOM_W - 14, KIT_H - 22, KIT_PX(11), KIT_INK3, 1, false);
     }
     kit_end();
 }

@@ -36,6 +36,7 @@ typedef struct {
     bool right_tab;        /* (X) Clear (code pages) */
     const char *empty;     /* shown when n is 0 */
     const char *notice;    /* "" or NULL none */
+    const char *corner;    /* grey text bottom-right when there's no right tab ("" or NULL none) */
 } diag_page_view_t;
 
 /* Bottom: a page's list and its tabs. */

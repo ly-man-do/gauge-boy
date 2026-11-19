@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-19, GARAGE redesign with the car photo (gauge-boy-82l.25)
+**As of:** 2026-11-19, LIVE's Custom PID picker as a list (gauge-boy-82l.26)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -132,10 +132,11 @@ Gauge Boy
         │       ├── ● REC m:ss       above the toggle while recording (the dot pulses)
         │       ├── [Stop | Record]  a toggle: Record records this view to
         │       │                    drives/drive-<date>.csv; Stop ends it (the chosen half is red)
-        │       ├── [Edit PIDs]      (Custom only) → Custom PIDs
-        │       │   ├── [PID toggles] 6 per page, green = polled (the PIDs the car supports)
-        │       │   ├── [BACK]       → Custom view, saves the choice              [B]
-        │       │   └── [<] page n/m [>]                                          [L/R]
+        │       ├── [Edit PIDs]      (Custom only) → Custom PIDs (top: the Custom view's values)
+        │       │   ├── [PID rows]   the PIDs the car supports, each ✓ On (green) or Off; a tap
+        │       │   │                turns it on or off and the view polls the new set (up to 20;
+        │       │   │                scrolls: drag or the grip); "n of 20 picked" beside Back
+        │       │   └── [B Back]     → Custom view, saves the choice              [B]
         │       └── [B Back]         → view list and the Dashboard (ends a recording, saves
         │                            the view)                                    [B]
         │
@@ -247,5 +248,5 @@ Any screen: a new achievement shows "Unlocked: <name>!" (or "Unlocked n achievem
 
 - SETUP is a menu of four pages (owner layout, gauge-boy-cib): TESTS (adapter and car tests, the log's buttons), WI-FI (connection), VEHICLE (make, model, year, engine size, VIN) and OTHER (units, About).
 - LIVE views and the PIDs in each, in list order: Engine (RPM, speed, coolant, throttle, load), Idle/Vacuum (RPM, MAP (PID 0B or 87) + vacuum or boost, short-term trims, timing, baro, fuel loop), Air/Fuel (MAF, MAP (0B or 87), intake air, throttle, short- and long-term trims, baro, fuel loop, commanded lambda), O2 Sensors (RPM, short-term trims, then every oxygen sensor the car has: narrow band voltage, PIDs 14-1B, or wide band lambda, 24-2B / 34-3B, banks 1-2, sensors 1-4), Warm-up (coolant, intake air, oil, outside air, run time, RPM), Drive (RPM, speed, throttle, load, timing, torque, gear ratio, odometer, fuel rate (the car's PID 5E / 9D, else estimated from MAF or MAP + engine size) and instant economy), All (every supported PID), Custom (your pick). Each view only shows what the car supports.
-- HOME, LIVE, DIAG, TRIM, TRACK and LOG (with GRAPH) are drawn with graphics (citro2d, the UI kit in `source/ui/kit.c`); SETUP, the Wi-Fi guide, GARAGE (with its camera), TRIP and MILEAGE are graphics too; LIVE's Custom PID picker is still the text console. If graphics fail to start, every screen falls back to its text layout.
+- HOME, LIVE, DIAG, TRIM, TRACK and LOG (with GRAPH) are drawn with graphics (citro2d, the UI kit in `source/ui/kit.c`); SETUP, the Wi-Fi guide, GARAGE (with its camera), TRIP and MILEAGE are graphics too; LIVE's Custom PID picker too: every screen is graphics now. If graphics fail to start, every screen falls back to its text layout.
 - The code for these screens is in `source/spike_ui.c` (screens, buttons, actions) and `source/ui/` (HOME layout and drawing).
