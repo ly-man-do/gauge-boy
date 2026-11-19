@@ -15,9 +15,8 @@ Gauge Boy
                                      Connected pill, date, time, battery), the GAUGE BOY:
                                      OBD-II DELUXE title row, and an info panel of fact rows:
                                      Car, CEL (lamp, Off / ON and how far), Codes (count and
-                                     the first ones), Odometer (LCD digits), Last drive,
-                                     Economy (mileage-log average), Adapter (version and
-                                     protocol, or Not connected and the address))
+                                     the first ones), Odometer (big LCD digits), Adapter
+                                     (version and protocol, or Not connected and the address))
         ├── [Garage]                 → GARAGE (icon dims before a car is known; BACK returns to HOME)
         │   └── GARAGE               (no polling; top: one car's card: a picture frame (photo
         │       │                     in M5), nickname, year make model, VIN or "(set in

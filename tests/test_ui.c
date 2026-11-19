@@ -94,12 +94,10 @@ static void test_home_top_rows_no_car(void)
     CHECK(r[3].lcd);
     CHECK_EQ_STR(r[3].value, "---,---");
     CHECK_EQ_STR(r[3].detail, "mi");
-    CHECK_EQ_STR(r[4].value, "None yet");
-    CHECK_EQ_STR(r[5].value, "--");
-    CHECK_EQ_STR(r[6].tag, "Adapter");
-    CHECK_EQ_STR(r[6].value, "Not connected");
-    CHECK_EQ_STR(r[6].detail, "192.168.0.10");
-    CHECK_EQ_INT(r[6].tone, HOME_TONE_RED);
+    CHECK_EQ_STR(r[4].tag, "Adapter");
+    CHECK_EQ_STR(r[4].value, "Not connected");
+    CHECK_EQ_STR(r[4].detail, "192.168.0.10");
+    CHECK_EQ_INT(r[4].tone, HOME_TONE_RED);
 }
 
 static void test_home_top_rows_connected(void)
@@ -117,12 +115,6 @@ static void test_home_top_rows_connected(void)
     t.adapter_id = "ELM327 V2.3";
     t.have_odo = true;
     t.odo_km = 123456.5 * 1.609344;
-    t.have_last = true;
-    t.last_km = 19.956;   /* 12.4 mi */
-    t.last_name = "drive-20261118-141344.csv";
-    t.today = "20261118";
-    t.have_economy = true;
-    t.economy = 14.06;
     home_row_t r[HOME_ROWS];
     home_top_rows(&t, r);
     CHECK_EQ_STR(r[0].value, "Big Red");
@@ -132,13 +124,8 @@ static void test_home_top_rows_connected(void)
     CHECK_EQ_INT(r[1].tone, HOME_TONE_NORMAL);
     CHECK_EQ_STR(r[2].value, "None stored");
     CHECK_EQ_STR(r[3].value, "123,456");
-    CHECK_EQ_STR(r[4].value, "12.4 mi");
-    CHECK_EQ_STR(r[4].detail, "today");
-    CHECK_EQ_STR(r[5].value, "14.1 mpg");
-    CHECK_EQ_STR(r[5].detail, "average");
-    CHECK_EQ_INT(r[5].tone, HOME_TONE_ECONOMY);
-    CHECK_EQ_STR(r[6].value, "ELM327 V2.3");
-    CHECK_EQ_STR(r[6].detail, "ISO 9141-2");
+    CHECK_EQ_STR(r[4].value, "ELM327 V2.3");
+    CHECK_EQ_STR(r[4].detail, "ISO 9141-2");
 
     t.nickname = "";
     t.cel_on = true;
@@ -146,9 +133,6 @@ static void test_home_top_rows_connected(void)
     t.mil_km = 11;        /* 7 mi */
     t.codes = 2;
     t.code_list = "P0171, P0174";
-    t.today = "20261119";
-    t.last_name = "drive-20260105-090000.csv";
-    t.last_km = 5000;
     t.adapter_id = "";
     t.protocol = 0;
     t.metric = true;
@@ -162,11 +146,8 @@ static void test_home_top_rows_connected(void)
     CHECK_EQ_STR(r[2].detail, "P0171, P0174");
     CHECK_EQ_STR(r[3].value, "198,683");
     CHECK_EQ_STR(r[3].detail, "km");
-    CHECK_EQ_STR(r[4].value, "999.9 km");
-    CHECK_EQ_STR(r[4].detail, "1/5");
-    CHECK_EQ_STR(r[5].value, "14.1 L/100 km");
-    CHECK_EQ_STR(r[6].value, "Connected");
-    CHECK_EQ_STR(r[6].detail, "");
+    CHECK_EQ_STR(r[4].value, "Connected");
+    CHECK_EQ_STR(r[4].detail, "");
     t.metric = false;
     home_top_rows(&t, r);
     CHECK_EQ_STR(r[1].detail, "for 7 mi");

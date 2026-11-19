@@ -44,8 +44,6 @@ typedef struct {
     double odo_km;
     char odo_date[16];
     int drives;
-    double last_km;               /* the newest drive's distance */
-    char last_name[32];           /* its file, "drive-YYYYMMDD-HHMMSS.csv"; "" if none */
 } garage_car_t;
 
 typedef struct {

@@ -57,21 +57,6 @@ static void set(home_row_t *r, const char *tag, home_tone_t tone, const char *va
     snprintf(r->detail, sizeof r->detail, "%s", detail != NULL ? detail : "");
 }
 
-/* "today" or "11/16" from "drive-YYYYMMDD-HHMMSS.csv"; "" if the name isn't one. */
-static void drive_day(const home_top_t *t, char *out, size_t len)
-{
-    const char *n = t->last_name != NULL ? t->last_name : "";
-    if (strncmp(n, "drive-", 6) != 0 || strlen(n) < 14) {
-        snprintf(out, len, "%s", "");
-    } else if (t->today != NULL && strncmp(n + 6, t->today, 8) == 0) {
-        snprintf(out, len, "today");
-    } else {
-        int month = (n[10] - '0') * 10 + (n[11] - '0');
-        int day = (n[12] - '0') * 10 + (n[13] - '0');
-        snprintf(out, len, "%d/%d", month, day);
-    }
-}
-
 void home_top_rows(const home_top_t *t, home_row_t rows[HOME_ROWS])
 {
     char a[HOME_ROW_TEXT], b[HOME_ROW_TEXT];
@@ -120,30 +105,11 @@ void home_top_rows(const home_top_t *t, home_row_t rows[HOME_ROWS])
     }
     rows[3].lcd = true;
 
-    /* Last drive */
-    if (t->have_last && t->last_km >= 0) {
-        double d = to_unit(t, t->last_km);
-        snprintf(a, sizeof a, "%.1f %s", d > 999.9 ? 999.9 : d, unit(t));
-        drive_day(t, b, sizeof b);
-        set(&rows[4], "Last drive", HOME_TONE_NORMAL, a, b);
-    } else {
-        set(&rows[4], "Last drive", HOME_TONE_DIM, "None yet", "");
-    }
-
-    /* Economy: the mileage log's average */
-    if (t->have_economy && t->economy > 0) {
-        snprintf(a, sizeof a, t->metric ? "%.1f L/100 km" : "%.1f mpg",
-                 t->economy > 99.9 ? 99.9 : t->economy);
-        set(&rows[5], "Economy", HOME_TONE_ECONOMY, a, "average");
-    } else {
-        set(&rows[5], "Economy", HOME_TONE_DIM, "--", "");
-    }
-
     /* Adapter */
     if (t->connected) {
         const char *id = t->adapter_id != NULL && t->adapter_id[0] ? t->adapter_id : "Connected";
-        set(&rows[6], "Adapter", HOME_TONE_NORMAL, id, home_protocol_name(t->protocol));
+        set(&rows[4], "Adapter", HOME_TONE_NORMAL, id, home_protocol_name(t->protocol));
     } else {
-        set(&rows[6], "Adapter", HOME_TONE_RED, "Not connected", t->adapter_host);
+        set(&rows[4], "Adapter", HOME_TONE_RED, "Not connected", t->adapter_host);
     }
 }

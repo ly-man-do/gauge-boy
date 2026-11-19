@@ -2230,10 +2230,6 @@ static void garage_scan(spike_t *s)
         if (c >= 0) {
             g.car[c].km += drv[i].km;
             g.car[c].drives++;
-            if (strcmp(names[i], g.car[c].last_name) > 0) {   /* names sort by date */
-                g.car[c].last_km = drv[i].km;
-                snprintf(g.car[c].last_name, sizeof g.car[c].last_name, "%.31s", names[i]);
-            }
         }
         drv[i].ok = false;
     }
@@ -4600,9 +4596,7 @@ static const char *home_garage_line(char *out, size_t len)
 static void draw_home_top(bool connected)
 {
     static garage_car_t card;
-    static mileage_list_t miles;
-    static char miles_text[sizeof shared.miles_text];
-    char key[32], title[48], adapter[ELM_LINE_MAX], today[40];
+    char key[32], title[48], adapter[ELM_LINE_MAX];
     bool have_card;
 
     LightLock_Lock(&shared.lock);
@@ -4619,13 +4613,8 @@ static void draw_home_top(bool connected)
     int mil_km = shared.diag.mil_km;
     int protocol = shared.diag.link.protocol;
     snprintf(adapter, sizeof adapter, "%s", shared.diag.link.adapter_id);
-    memcpy(miles_text, shared.miles_text, sizeof miles_text);
     LightLock_Unlock(&shared.lock);
-
     time_t now = time(NULL);
-    struct tm *tm = gmtime(&now);
-    snprintf(today, sizeof today, "%04d%02d%02d", tm != NULL ? tm->tm_year + 1900 : 0,
-             tm != NULL ? tm->tm_mon + 1 : 0, tm != NULL ? tm->tm_mday : 0);
 
     home_top_t t;
     memset(&t, 0, sizeof t);
@@ -4645,14 +4634,6 @@ static void draw_home_top(bool connected)
     t.metric = app_cfg->metric;
     t.have_odo = have_card && card.have_odo;
     t.odo_km = card.odo_km;
-    t.have_last = have_card && card.last_name[0] != '\0';
-    t.last_km = card.last_km;
-    t.last_name = card.last_name;
-    t.today = today;
-    if (have_car && mileage_read(miles_text, key, &miles) > 0) {
-        t.have_economy = app_cfg->metric ? mileage_l100(miles.km, miles.fuel_l, &t.economy)
-                                         : mileage_mpg(miles.km, miles.fuel_l, &t.economy);
-    }
 
     home_status_t s;
     u8 level = 0, charging = 0;

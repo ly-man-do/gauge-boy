@@ -11,9 +11,7 @@
  *   | [Car       ] Big Red   2008 Honda Ridgeline                      |
  *   | [CEL       ] o Off                                               |
  *   | [Codes     ] None stored                                         |
- *   | [Odometer  ] 123,456 mi            (LCD digits)                  |
- *   | [Last drive] 12.4 mi   today                                     |
- *   | [Economy   ] 14.1 mpg  average                                   |
+ *   | [Odometer  ] 123,456 mi            (big LCD digits)              |
  *   | [Adapter   ] ELM327 v2.3   ISO 9141-2                            |
  *
  * Mockup v7 (docs/mockups/home-v7.html), owner-approved 2026-11-18.
@@ -38,12 +36,6 @@ typedef struct {
     bool metric;
     bool have_odo;
     double odo_km;
-    bool have_last;
-    double last_km;
-    const char *last_name;     /* "drive-20261118-141344.csv" */
-    const char *today;         /* "20261118" */
-    bool have_economy;
-    double economy;            /* mpg (US) or L/100 km (metric) */
 } home_top_t;
 
 typedef enum {
@@ -51,10 +43,9 @@ typedef enum {
     HOME_TONE_DIM,             /* not known yet: grey */
     HOME_TONE_RED,             /* not connected */
     HOME_TONE_AMBER,           /* the CEL is on */
-    HOME_TONE_ECONOMY,         /* the economy value (light red) */
 } home_tone_t;
 
-#define HOME_ROWS 7
+#define HOME_ROWS 5
 #define HOME_ROW_TEXT 48
 
 typedef struct {
@@ -66,8 +57,7 @@ typedef struct {
     bool lamp;                      /* a CEL lamp before the value */
 } home_row_t;
 
-/* The info panel's seven rows: Car, CEL, Codes, Odometer, Last drive,
- * Economy, Adapter. */
+/* The info panel's five rows: Car, CEL, Codes, Odometer, Adapter. */
 void home_top_rows(const home_top_t *t, home_row_t rows[HOME_ROWS]);
 
 /* Short protocol name for ELM327 protocol numbers 1-12, "" otherwise. */

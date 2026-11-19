@@ -423,18 +423,21 @@ void home_draw(const home_view_t *v)
     if (v->pressed == HOME_CLOSE) {
         rect(4, HOME_BAR_Y + 10, HOME_SCREEN_W - 8, HOME_SCREEN_H - HOME_BAR_Y - 10, COL_PRESS);
     }
-    float ty = HOME_BAR_Y + 12;
+    /* The label as System Settings sets it: 22.5 px tall (scale 0.75), centred in the
+     * 30 px above the bottom edge, its shadow 1 px up behind it. */
+    float ls = 0.75f, ly = HOME_SCREEN_H - 15 - 30 * ls / 2;
     if (v->notice != NULL) {
-        text(v->notice, HOME_SCREEN_W / 2.0f, ty + 2, PX(11), COL_INK, 0, false);
+        text(v->notice, HOME_SCREEN_W / 2.0f, ly + 4, 0.5f, COL_INK, 0, false);
     } else {
-        float bs = PX(8.5f), cs = PX(16);
-        float badge_w = text_width("START", bs) + 20;
-        float close_w = text_width("Close", cs);
-        float x = (HOME_SCREEN_W - (badge_w + 6 + close_w)) / 2;
-        rrect(x, ty + 3, badge_w, 13, 3, COL_INK);
-        text("START", x + badge_w / 2 - 0.25f, ty + 3.5f, bs, RGB(60, 60, 60), 0, true);
-        text("Close", x + badge_w + 6, ty - 1, cs, COL_SHADOW, -1, true);
-        text("Close", x + badge_w + 6, ty - 2, cs, COL_INK, -1, true);
+        float bs = 0.42f;
+        float badge_w = text_width("START", bs) + 12, badge_h = 15;
+        float close_w = text_width("Close", ls);
+        float x = (HOME_SCREEN_W - (badge_w + 7 + close_w)) / 2;
+        float by = HOME_SCREEN_H - 15 - badge_h / 2;
+        rrect(x, by, badge_w, badge_h, 3, COL_INK);
+        text("START", x + badge_w / 2, by + badge_h / 2 - 30 * bs / 2, bs, RGB(70, 70, 70), 0, true);
+        text("Close", x + badge_w + 7, ly - 1, ls, COL_SHADOW, -1, false);
+        text("Close", x + badge_w + 7, ly, ls, COL_INK, -1, false);
     }
 
     C3D_FrameEnd(0);
@@ -481,7 +484,6 @@ static u32 tone_color(home_tone_t tone)
     case HOME_TONE_DIM:     return COL_INK3;
     case HOME_TONE_RED:     return COL_RED_HI;
     case HOME_TONE_AMBER:   return COL_AMBER;
-    case HOME_TONE_ECONOMY: return COL_RED_HI;
     default:                return COL_INK;
     }
 }
@@ -515,29 +517,33 @@ void home_draw_top(const home_top_t *t, const home_status_t *s)
     rrect(18, 68, 364, 156, 5, COL_PANEL);
     home_row_t rows[HOME_ROWS];
     home_top_rows(t, rows);
+    /* Rows 26 px apart; the odometer's row is taller for its big digits. */
+    static const float row_y[HOME_ROWS] = { 74, 100, 126, 152, 197 };
+    static const float row_h[HOME_ROWS] = { 20, 20, 20, 40, 20 };
     for (int i = 0; i < HOME_ROWS; i++) {
         const home_row_t *r = &rows[i];
-        float y = 76 + i * 20.5f;
-        rrect(27, y + 2.5f, 74, 15, 4, COL_TAG);
-        text(r->tag, 33, y + 3.5f, PX(10.5f), COL_TAG_INK, -1, true);
+        float y = row_y[i], mid = y + row_h[i] / 2;
+        rrect(27, mid - 7.5f, 74, 15, 4, COL_TAG);
+        text(r->tag, 33, mid - 6.5f, PX(10.5f), COL_TAG_INK, -1, true);
         float vx = 109;
         u32 c = tone_color(r->tone);
         if (r->lamp) {
             bool on = r->tone == HOME_TONE_AMBER;
             if (on) {
-                circle(vx + 4.5f, y + 10, 6.5f, COL_AMBER_GLOW);
+                circle(vx + 4.5f, mid, 6.5f, COL_AMBER_GLOW);
             }
-            circle(vx + 4.5f, y + 10, 4.5f, on ? COL_AMBER : COL_LAMP_OFF);
+            circle(vx + 4.5f, mid, 4.5f, on ? COL_AMBER : COL_LAMP_OFF);
             vx += 14;
         }
         float vw;
         if (r->lcd) {
-            vw = seg_text(r->value, vx, y + 3, 14, c) + 2;
-        } else {
-            text(r->value, vx, y, PX(15), c, -1, true);
-            vw = text_width(r->value, PX(15));
+            vw = seg_text(r->value, vx, mid - 13, 26, c) + 4;
+            text(r->detail, vx + vw + 2, mid - 2, PX(14), COL_INK3, -1, false);
+            continue;
         }
-        text(r->detail, vx + vw + 6, y + 3.5f, PX(12), COL_INK3, -1, false);
+        text(r->value, vx, mid - 10, PX(15), c, -1, true);
+        vw = text_width(r->value, PX(15));
+        text(r->detail, vx + vw + 6, mid - 6.5f, PX(12), COL_INK3, -1, false);
     }
 
     C3D_FrameEnd(0);
