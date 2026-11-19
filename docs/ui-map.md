@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-19, LOG redesign: drive list, drive page, Delete, Graph controls (gauge-boy-82l.22)
+**As of:** 2026-11-19, GRAPH's top screen in the night theme (gauge-boy-82l.23)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -177,9 +177,10 @@ Gauge Boy
         │   │   │                    or the grip); tap → the drive's page
         │   │   ├── (top: its details: car, VIN, protocol, length, size, the values)
         │   │   ├── [Graph]          → GRAPH
-        │   │   │   ├── (top: one value against time, drawn with graphics: axes, times,
-        │   │   │   │    a smooth line through the readings over a faint min / max band,
-        │   │   │   │    the window's min / max / average)
+        │   │   │   ├── (top: the status bar, the value as the title, then a panel with the
+        │   │   │   │    drive and one value against time: axes, times, a smooth blue line
+        │   │   │   │    through the readings over a faint min / max band; Min / Max /
+        │   │   │   │    Average under it)
         │   │   │   ├── [<<] [>>]    earlier / later (half a window)
         │   │   │   ├── [Zoom -] [Zoom +] more / less of the drive (5 s at the least)
         │   │   │   ├── (< >)        half circles: the drive's other values         [L/R]
@@ -238,5 +239,5 @@ Any screen: a new achievement shows "Unlocked: <name>!" (or "Unlocked n achievem
 
 - SETUP is a menu of four pages (owner layout, gauge-boy-cib): TESTS (adapter and car tests, the log's buttons), WI-FI (connection), VEHICLE (make, model, year, engine size, VIN) and OTHER (units, About).
 - LIVE views and the PIDs in each, in list order: Engine (RPM, speed, coolant, throttle, load), Idle/Vacuum (RPM, MAP (PID 0B or 87) + vacuum or boost, short-term trims, timing, baro, fuel loop), Air/Fuel (MAF, MAP (0B or 87), intake air, throttle, short- and long-term trims, baro, fuel loop, commanded lambda), O2 Sensors (RPM, short-term trims, then every oxygen sensor the car has: narrow band voltage, PIDs 14-1B, or wide band lambda, 24-2B / 34-3B, banks 1-2, sensors 1-4), Warm-up (coolant, intake air, oil, outside air, run time, RPM), Drive (RPM, speed, throttle, load, timing, torque, gear ratio, odometer, fuel rate (the car's PID 5E / 9D, else estimated from MAF or MAP + engine size) and instant economy), All (every supported PID), Custom (your pick). Each view only shows what the car supports.
-- Only HOME (bottom screen) and LOG > GRAPH (top screen) are drawn with graphics (citro2d). Every other screen is still the text console until M5 (UI polish).
+- HOME, LIVE, DIAG, TRIM, TRACK and LOG (with GRAPH) are drawn with graphics (citro2d, the UI kit in `source/ui/kit.c`); SETUP and the Wi-Fi guide are still the text console until their M5 redesign. If graphics fail to start, every screen falls back to its text layout.
 - The code for these screens is in `source/spike_ui.c` (screens, buttons, actions) and `source/ui/` (HOME layout and drawing).

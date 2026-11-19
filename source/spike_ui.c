@@ -5500,7 +5500,7 @@ static void draw_home_top(bool connected)
 }
 
 /* GRAPH top screen (citro2d; a text summary without graphics). */
-static void draw_graph_top(const ui_state_t *ui)
+static void draw_graph_top(const ui_state_t *ui, bool connected)
 {
     static graph_cols_t g;
     char title[48], sub[64], place[32], msg[48];
@@ -5518,14 +5518,20 @@ static void draw_graph_top(const ui_state_t *ui)
     snprintf(place, sizeof place, ncols > 0 ? "value %d of %d" : " ", col + 1, ncols);
     sub[0] = '\0';
     if (ui->selected >= 0 && ui->selected < shared.drive_count) {
-        drive_info_row(&shared.drives[ui->selected], sub, sizeof sub, 44);
+        char when[16], car[48], dur[16];
+        log_row_parts(&shared.drives[ui->selected], when, sizeof when, car, sizeof car, dur,
+                      sizeof dur);
+        snprintf(sub, sizeof sub, "%.11s  %.32s  %.12s", when, car, dur);
     }
     snprintf(msg, sizeof msg, "%s", shared.graph_msg);
     LightLock_Unlock(&shared.lock);
 
     if (graph_gfx) {
+        kit_status_t st;
+        status_now(&st, connected);
         graph_view_t v = { title, sub, place, loading ? NULL : &g,
-                           loading ? "Loading..." : msg[0] ? msg : NULL };
+                           loading ? "Loading..." : msg[0] ? msg : NULL,
+                           st.bars, st.connected, st.battery, st.charging, st.now };
         graph_draw(&v);
         return;
     }
@@ -8670,7 +8676,7 @@ void spike_ui_run(void)
             } else if (ui.screen == SCREEN_LOG) {
                 draw_log_top(ui.selected, busy, connected);
             } else if (ui.screen == SCREEN_GRAPH) {
-                draw_graph_top(&ui);
+                draw_graph_top(&ui, connected);
             } else if (shows_log) {
                 draw_top(scroll, busy, connected);
             } else if (ui.screen == SCREEN_HOME && home_gfx) {
