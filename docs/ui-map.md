@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-19, TRIM redesign: bank bars, hints on the bottom, Info (gauge-boy-82l.20)
+**As of:** 2026-11-19, TRACK redesign: menu, modes and Info pages (gauge-boy-82l.21)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -50,50 +50,60 @@ Gauge Boy
         ├── [DIAG]                   → DIAG (amber outline, icon and label when the CEL is on)
         ├── [TRIM]                   → TRIM (starts polling)
         ├── [TRACK]                  → TRACK
-        │   ├── TRACK                (top: the modes, closed-course rules)
-        │   │   ├── [TIME ATTACK]    → closed-course notice (once a session), then TIME ATTACK
-        │   │   │                      notice: [BACK] → TRACK [B]   [I UNDERSTAND] → TIME ATTACK
-        │   │   ├── [SHIFT LIGHT]    → SHIFT LIGHT
-        │   │   ├── [G-METER]        → G-METER
-        │   │   ├── [REV SYNC]       → REV SYNC
-        │   │   ├── [ECO]            → ECO CHALLENGE
-        │   │   ├── [ACHIEVEMENTS]   → ACHIEVEMENTS (next to BACK)
-        │   │   └── [BACK]           → HOME                                       [B]
-        │   ├── ACHIEVEMENTS         (top: the 12 stickers, unlocked with a date, or locked
-        │   │   │                     with how to get them; "n of 12 unlocked")
-        │   │   └── [BACK]           → TRACK                                      [B]
+        │   ├── TRACK                (top: what each mode does, achievements unlocked)
+        │   │   │                    Every TRACK screen: (B) Back bottom-left and (Y) Info
+        │   │   │                    bottom-right; Info shows the screen's explanation (the top
+        │   │   │                    keeps updating) and its Back returns to the controls [B]
+        │   │   ├── [Time Attack]    → closed-course notice (once a session), then TIME ATTACK
+        │   │   │                      notice (top: the rule): [I Understand] full width,
+        │   │   │                      [B Back] → TRACK                              [B]
+        │   │   ├── [Shift Light]    → SHIFT LIGHT
+        │   │   ├── [G-Meter]        → G-METER
+        │   │   ├── [Rev Sync]       → REV SYNC
+        │   │   ├── [Eco]            → ECO CHALLENGE
+        │   │   ├── [Achievements]   → ACHIEVEMENTS
+        │   │   ├── [Y Info]         closed courses, track days and passengers only; no
+        │   │   │                    touch while moving; no online leaderboards   [Y]
+        │   │   └── [B Back]         → HOME                                       [B]
+        │   ├── ACHIEVEMENTS         (top: the 12 stickers, coloured with a star when unlocked,
+        │   │   │                     "n of 12 unlocked")
+        │   │   ├── [list]           each one: its date, or how to get it (scrolls: drag or grip)
+        │   │   └── [B Back]         → TRACK                                      [B]
         │   ├── ECO CHALLENGE        (polls speed, RPM, MAF or MAP, intake temp; top: trip
-        │   │   │                     score in big digits and its rank once ranked, economy now
-        │   │   │                     and for the trip, distance, fuel, driving / idling time,
-        │   │   │                     hard starts / stops, a tip, this car's best trip score)
-        │   │   ├── [RESET TRIP]     a new trip; refused while moving
-        │   │   └── [BACK]           → TRACK (a ranked trip's score is offered as the best)
-        │   ├── REV SYNC             (polls RPM, speed twice a second; top: tach bar 0-7000
-        │   │   │                     with the target marked and the blip's peak, big target /
-        │   │   │                     GO! / blip / score, the grade, the rounds so far, this
-        │   │   │                     car's high score; locked unless speed reads 0)
-        │   │   ├── [START] / [AGAIN] a 5-round game; refused while locked
-        │   │   └── [BACK]           → TRACK (stops polling)                      [B]
+        │   │   │                     score in LCD digits and its rank badge once ranked,
+        │   │   │                     economy now and for the trip, this car's best, distance,
+        │   │   │                     fuel, driving / idling time, hard starts / stops, a tip)
+        │   │   ├── [Reset Trip]     a new trip; refused while moving
+        │   │   └── [B Back]         → TRACK (a ranked trip's score is offered as the best)
+        │   ├── REV SYNC             (polls RPM, speed twice a second; top: a 0-7000 LED bar
+        │   │   │                     with the target marked and the blip's peak, the target /
+        │   │   │                     GO! / blip / score in big digits, the grade, target,
+        │   │   │                     round and score, this car's high score)
+        │   │   ├── (bottom: "Parked: speed 0. Ready." or "Locked")
+        │   │   ├── [Start] / [Again] a 5-round game; refused while locked
+        │   │   └── [B Back]         → TRACK (stops polling)                      [B]
         │   ├── G-METER              (3DS accelerometer on; polls speed; top: a friction
-        │   │   │                     circle, 1 g at the edge, ring at 0.5 g, ACCEL up,
+        │   │   │                     circle, 1 g at the edge, dashed ring at 0.5 g, ACCEL up,
         │   │   │                     BRAKE down, the ball; side / long / total g, peaks,
-        │   │   │                     forward guessed or learned, raw sensor values)
-        │   │   ├── [CALIBRATE]      measures gravity (about 1 s, averaged; hold still); refused while moving
-        │   │   ├── [RESET PEAKS]    clears the peaks; refused while moving
-        │   │   └── [BACK]           → TRACK (accelerometer off, stops polling)   [B]
-        │   ├── SHIFT LIGHT          (polls RPM, speed every second; top: a row of 10 LEDs,
+        │   │   │                     forward guessed or learned, or the calibration state)
+        │   │   ├── [Calibrate]      measures gravity (about 1 s, averaged; hold still); refused while moving
+        │   │   ├── [Reset Peaks]    clears the peaks; refused while moving
+        │   │   └── [B Back]         → TRACK (accelerometer off, stops polling)   [B]
+        │   ├── SHIFT LIGHT          (polls RPM, speed every second; top: 10 round LEDs,
         │   │   │                     green / amber / red, filling from 60 % of the shift
-        │   │   │                     point and flashing at it with SHIFT!, RPM in big digits)
-        │   │   ├── [-100] [+100]    shift point (shown between them, saved to config.ini);
-        │   │   │                     refused while moving ("Set the shift point while parked.")
-        │   │   └── [BACK]           → TRACK (stops polling)                      [B]
-        │   └── TIME ATTACK          (polls speed alone; top: run, speed readings a second,
-        │       │                     state in big text: stop the car / 3 2 1 / GO! / time /
-        │       │                     result with NEW RECORD!, speed, this car's best)
-        │       ├── [0-60] [60-0] [1/4 MILE]   pick the run (0-100 / 100-0 in metric);
-        │       │                     green = picked; refused while moving ("Pick a run
-        │       │                     while parked."); starts and re-arms by itself
-        │       └── [BACK]           → TRACK (stops polling)                      [B]
+        │   │   │                     point and flashing red at it with SHIFT!, RPM in LCD digits)
+        │   │   ├── [-] [+]          shift point by 100 rpm (shown between them, saved to
+        │   │   │                     config.ini); refused while moving
+        │   │   └── [B Back]         → TRACK (stops polling)                      [B]
+        │   └── TIME ATTACK          (polls speed alone; top: each run's best and last time)
+        │       ├── [0-60 mph] [60-0 mph] [1/4 Mile]   (0-100 / 100-0 in metric) → the run
+        │       │   │                (top: the run, its time in LCD digits with NEW RECORD!,
+        │       │   │                 countdown / GO! / what to do, speed, best and last)
+        │       │   ├── [Stop | Start] Start arms the timer (refused while moving: "Start a
+        │       │   │                 run while parked."); it starts and re-arms by itself;
+        │       │   │                 Stop disarms (the chosen half is red)
+        │       │   └── [B Back]     → the run list (stops timing)                [B]
+        │       └── [B Back]         → TRACK (stops polling)                      [B]
         ├── [LOG]                    → LOG (lists the drives on the SD card)
         ├── [SETUP]                  → SETUP
         └── [START Close bar]        → closes Gauge Boy            [START]

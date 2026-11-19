@@ -11,7 +11,7 @@ BUILD   := build
 SRCS    := $(wildcard *.c) $(wildcard ../source/elm327/*.c) $(wildcard ../source/obd/*.c) \
            $(wildcard ../source/data/*.c) $(wildcard ../source/fun/*.c) ../source/transport/tcp_transport.c \
            ../source/transport/conntest.c ../source/spike_actions.c \
-           ../source/ui/home_layout.c ../source/ui/home_top.c ../source/ui/live_ui.c ../source/ui/diag_ui.c ../source/ui/trim_ui.c
+           ../source/ui/home_layout.c ../source/ui/home_top.c ../source/ui/live_ui.c ../source/ui/diag_ui.c ../source/ui/trim_ui.c ../source/ui/track_ui.c
 HDRS    := $(wildcard *.h) $(wildcard ../source/*.h) $(wildcard ../source/elm327/*.h) $(wildcard ../source/obd/*.h) \
            $(wildcard ../source/data/*.h) $(wildcard ../source/fun/*.h) ../source/transport/tcp_transport.h \
            ../source/transport/conntest.h ../source/spike_actions.h

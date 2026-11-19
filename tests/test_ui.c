@@ -6,6 +6,7 @@
 #include "ui/home_top.h"
 #include "ui/diag_ui.h"
 #include "ui/live_ui.h"
+#include "ui/track_ui.h"
 #include "ui/trim_ui.h"
 
 static bool overlap(home_rect_t a, home_rect_t b)
@@ -531,8 +532,60 @@ static void test_trim_bars(void)
     CHECK(trim_hit(160, 30, false) == TRIM_HIT_NONE);
 }
 
+static bool trk_overlap(track_rect_t a, track_rect_t b)
+{
+    return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+static void test_track_layout(void)
+{
+    static const int fixed[] = { TRK_HIT_BACK, TRK_HIT_INFO, TRK_HIT_STOP, TRK_HIT_START };
+    for (int k = 0; k < TRK_KIND_COUNT; k++) {
+        /* Every control fits the screen, is at least 40 px each way, and none overlap;
+         * a touch in a control's middle finds it. */
+        int ids[16], n = 0;
+        for (unsigned f = 0; f < 4; f++) {
+            if (track_rect((track_kind_t)k, fixed[f]).w > 0) {
+                ids[n++] = fixed[f];
+            }
+        }
+        for (int i = 0; i < track_button_count((track_kind_t)k); i++) {
+            ids[n++] = TRK_HIT_BUTTON + i;
+        }
+        CHECK(n >= 1);   /* Back, at least */
+        for (int a = 0; a < n; a++) {
+            track_rect_t r = track_rect((track_kind_t)k, ids[a]);
+            CHECK(r.x >= 0 && r.y >= 0 && r.x + r.w <= TRACK_SCREEN_W && r.y + r.h <= TRACK_SCREEN_H);
+            CHECK(r.w >= 40 && r.h >= 38);
+            CHECK_EQ_INT(track_hit((track_kind_t)k, r.x + r.w / 2, r.y + r.h / 2), ids[a]);
+            for (int b = a + 1; b < n; b++) {
+                CHECK(!trk_overlap(r, track_rect((track_kind_t)k, ids[b])));
+            }
+            if (ids[a] >= TRK_HIT_BUTTON) {
+                CHECK(r.y + r.h <= TRACK_LIST_H);   /* clear of the tabs */
+            }
+        }
+        if (k != TRK_INFO) {
+            CHECK(track_info_text((track_kind_t)k)[0] != '\0');
+        }
+    }
+    /* Info pages and the notice have Back only; the notice has no Info. */
+    CHECK(track_rect(TRK_INFO, TRK_HIT_INFO).w == 0);
+    CHECK(track_rect(TRK_NOTICE, TRK_HIT_INFO).w == 0);
+    CHECK_EQ_INT(track_hit(TRK_MENU, 310, 230), TRK_HIT_INFO);
+    CHECK_EQ_INT(track_hit(TRK_INFO, 310, 230), TRK_HIT_NONE);
+    CHECK_EQ_INT(track_hit(TRK_MENU, 160, 5), TRK_HIT_NONE);   /* between the buttons */
+    CHECK_EQ_STR(track_menu_label(5), "Achievements");
+    CHECK_EQ_STR(track_ta_label(0, true), "0-100 km/h");
+    CHECK_EQ_STR(track_ta_label(1, false), "60-0 mph");
+    /* Time Attack's three run buttons are centred above the tabs. */
+    track_rect_t t0 = track_rect(TRK_TA_LIST, TRK_HIT_BUTTON), t2 = track_rect(TRK_TA_LIST, TRK_HIT_BUTTON + 2);
+    CHECK_EQ_INT(t0.y, TRACK_LIST_H - (t2.y + t2.h));
+}
+
 void suite_ui(void)
 {
+    RUN_TEST(test_track_layout);
     RUN_TEST(test_trim_bars);
     RUN_TEST(test_diag_layout);
     RUN_TEST(test_diag_text);
