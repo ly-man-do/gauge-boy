@@ -49,6 +49,8 @@
 #include "transport/tcp_transport.h"
 #include "ui/graph_draw.h"
 #include "ui/home_draw.h"
+#include "icons.h"
+#include "ui/diag_draw.h"
 #include "ui/live_draw.h"
 #include "obd/dtc.h"
 #include "obd/obd_diag.h"
@@ -171,6 +173,7 @@
 #define BTN_MILES_EDIT    (-156) /* UI: MILEAGE: edit the selected entry */
 #define BTN_MILES_PREV    (-157) /* UI: MILEAGE: list page before / after */
 #define BTN_MILES_NEXT    (-158)
+#define BTN_DIAG_PAGE     (-170) /* UI: DIAG (graphics): a page (-170 - diag_tab_t) */
 #define BTN_MILES_ROW     (-160) /* UI: MILEAGE: list row (-160 - slot) */
 #define BTN_TRIP_SAVE     120    /* worker: trip.csv for shared.trip_key = shared.trip_km */
 #define BTN_MILES_ADD     121    /* worker: add shared.miles_new for shared.miles_key */
@@ -324,7 +327,8 @@ typedef enum {
     SCREEN_GARAGE,             /* TRACK > GARAGE: a card per car */
     SCREEN_ACHIEVE,            /* TRACK > ACHIEVEMENTS */
     SCREEN_TRIP,               /* GARAGE > TRIP METER */
-    SCREEN_MILEAGE             /* GARAGE > MILEAGE LOG */
+    SCREEN_MILEAGE,            /* GARAGE > MILEAGE LOG */
+    SCREEN_DIAG_PAGE           /* DIAG (graphics): Stored, Pending, Permanent or Readiness */
 } screen_t;
 
 /* TRACK: one button per mode built so far, then BACK. */
@@ -2694,6 +2698,11 @@ typedef struct {
     int live_grip_grab;        /* ... where on the grip it holds, px from its top */
     int live_held;             /* LIVE view (graphics): the control held (live_hit_t) */
     bool live_held_in;         /* ... and the finger is still on it */
+    int diag_scroll;           /* DIAG page (graphics): its list scrolled by, px */
+    int diag_held;             /* DIAG (graphics): the button or tab held (diag_hit_t) */
+    bool diag_held_in;         /* ... and the finger is still on it */
+    int dialog_held;           /* clear question (graphics): 1 Cancel, 2 Clear Codes held */
+    bool dialog_held_in;
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
@@ -4675,6 +4684,60 @@ static void draw_live_view_top(int view, bool connected)
     live_draw_view_top(title, rows, n, connected, &s);
 }
 
+/* DIAG (graphics): the shown page's list rows. */
+static diag_row_t diag_rows[DIAG_ITEMS_MAX];
+static int diag_rows_n;
+
+static void diag_rows_refresh(diag_tab_t tab)
+{
+    LightLock_Lock(&shared.lock);
+    diag_rows_n = diag_page_rows(&shared.diag, tab, diag_rows, DIAG_ITEMS_MAX);
+    LightLock_Unlock(&shared.lock);
+}
+
+/* DIAG's top screen (citro2d): what each button holds, a page's summary, the
+ * code tapped, or what clearing does. */
+static void draw_diag_gfx_top(const ui_state_t *ui, bool connected)
+{
+    static obd_diag_t d;
+    static garage_car_t card;
+    char key[32], title[48], status[64] = "";
+    bool have_card = false;
+    LightLock_Lock(&shared.lock);
+    d = shared.diag;
+    home_car(key, sizeof key, title, sizeof title, &card, &have_card);
+    if (shared.scanning) {
+        snprintf(status, sizeof status, "Scanning: %s...", obd_diag_step_str(shared.scan_step));
+    } else {
+        snprintf(status, sizeof status, "%s", shared.diag_msg);
+    }
+    LightLock_Unlock(&shared.lock);
+    kit_status_t s;
+    status_now(&s, connected);
+    if (ui->clear_dialog) {
+        diag_draw_clear_top(&s);
+        return;
+    }
+    obd_units_t units = app_cfg->metric ? OBD_UNITS_METRIC : OBD_UNITS_US;
+    int icon = d.have_readiness && d.readiness.mil_on ? icons_diag_cel_idx : icons_diag_idx;
+    diag_fact_t f[DIAG_FACTS_MAX];
+    char note[160];
+    if (ui->screen == SCREEN_DIAG) {
+        int n = diag_home_facts(&d, have_card ? card.nickname : "", units, f, DIAG_FACTS_MAX, note,
+                                sizeof note);
+        diag_draw_facts_top(icon, "DIAG", f, n, note, status, &s);
+        return;
+    }
+    static diag_code_t c;
+    if (ui->tab != DIAG_TAB_READINESS && ui->selected >= 0 &&
+        diag_code_detail(&d, ui->tab, ui->selected, units, &c)) {
+        diag_draw_code_top(&c, &s);
+        return;
+    }
+    int n = diag_page_facts(&d, ui->tab, f, DIAG_FACTS_MAX, note, sizeof note);
+    diag_draw_facts_top(icon, diag_page_title(ui->tab), f, n, note, status, &s);
+}
+
 /* HOME top screen (citro2d). */
 static void draw_home_top(bool connected)
 {
@@ -4952,6 +5015,11 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         cleared_after_confirm = false;
         return;
     }
+    if (ui->clear_dialog && home_gfx) {
+        diag_draw_dialog_bottom(ui->dialog_held_in ? ui->dialog_held : 0);
+        cleared_after_confirm = false;
+        return;
+    }
     if (ui->clear_dialog) {
         draw_clear_dialog();
         cleared_after_confirm = false;
@@ -5007,6 +5075,36 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         }
         live_draw_list(names, LIVE_VIEW_COUNT, ui->live_scroll, held, ui->live_touching && ui->live_grip,
                        flashing(BTN_BACK, now));
+        return;
+    }
+    if (ui->screen == SCREEN_DIAG && home_gfx) {
+        diag_hit_t p = ui->diag_held_in ? (diag_hit_t)ui->diag_held : DIAG_HIT_NONE;
+        if (flashing(BTN_DIAG_SCAN, now)) {
+            p = DIAG_HIT_RIGHT;   /* X */
+        }
+        diag_draw_home_bottom(p, ui->notice);
+        return;
+    }
+    if (ui->screen == SCREEN_DIAG_PAGE) {
+        diag_rows_refresh(ui->tab);
+        diag_page_view_t v;
+        memset(&v, 0, sizeof v);
+        v.rows = diag_rows;
+        v.n = diag_rows_n;
+        v.scroll = diag_list_clamp(ui->diag_scroll, diag_rows_n);
+        v.selected = ui->selected < diag_rows_n ? ui->selected : -1;
+        v.pressed_row = ui->live_touching && !ui->live_dragged ? ui->live_row_held : -1;
+        v.grip_pressed = ui->live_touching && ui->live_grip;
+        v.pressed_tab = ui->diag_held_in ? (diag_hit_t)ui->diag_held : DIAG_HIT_NONE;
+        if (flashing(BTN_CLEAR_ASK, now)) {
+            v.pressed_tab = DIAG_HIT_RIGHT;   /* X */
+        }
+        v.right_tab = ui->tab != DIAG_TAB_READINESS;
+        LightLock_Lock(&shared.lock);
+        v.empty = diag_empty_text(&shared.diag, ui->tab);
+        LightLock_Unlock(&shared.lock);
+        v.notice = ui->notice;
+        diag_draw_page_bottom(&v);
         return;
     }
     if (ui->screen == SCREEN_LIVE && home_gfx) {
@@ -5832,7 +5930,7 @@ void spike_ui_run(void)
     ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false, -1, SCREEN_SETUP,
                       false, LIVE_VIEW_ENGINE, SCREEN_HOME, false, 0, 0.0, 0.0, 0.0,
                       false, false, TA_RUN_LAUNCH, SCREEN_HOME, 0, 0, -1, 0, false, false, 0, 0,
-                      -1, false, 0, LIVE_HIT_NONE, false };
+                      -1, false, 0, LIVE_HIT_NONE, false, 0, DIAG_HIT_NONE, false, 0, false };
     gm_vec_t gm_raw = { 0, 0, 0 };   /* G-METER: the latest sensor reading */
     live_menu_count();
     uint64_t notice_until = 0;
@@ -5903,7 +6001,7 @@ void spike_ui_run(void)
         LightLock_Unlock(&shared.lock);
         if (perm_hidden != ui.permanent_hidden) {
             ui.permanent_hidden = perm_hidden;
-            if (perm_hidden && ui.tab == DIAG_TAB_PERMANENT) {
+            if (perm_hidden && ui.tab == DIAG_TAB_PERMANENT && ui.screen != SCREEN_DIAG_PAGE) {
                 ui.tab = DIAG_TAB_STORED;
             }
             bottom_dirty = bottom_full = top_dirty = true;
@@ -5944,6 +6042,13 @@ void spike_ui_run(void)
                 }
                 bottom_full = true;
             }
+        } else if ((down & KEY_TOUCH) && ui.clear_dialog && home_gfx) {
+            /* Pressed while held; acts when the finger lifts on it. */
+            touchPosition tp;
+            hidTouchRead(&tp);
+            ui.dialog_held = diag_dialog_hit(tp.px, tp.py);
+            ui.dialog_held_in = ui.dialog_held != 0;
+            bottom_dirty = true;
         } else if ((down & KEY_TOUCH) && ui.clear_dialog) {
             touchPosition tp;
             hidTouchRead(&tp);
@@ -6012,12 +6117,41 @@ void spike_ui_run(void)
             case SCREEN_TRIP:      list = trip_buttons;      count = TRIP_BUTTON_COUNT;      break;
             case SCREEN_MILEAGE:   list = miles_buttons;     count = MILES_BUTTON_COUNT;     break;
             case SCREEN_TEST:  break;
+            case SCREEN_DIAG_PAGE: break;
             }
             bool gfx_touch = home_gfx && (ui.screen == SCREEN_HOME || ui.screen == SCREEN_LIVE_MENU ||
-                                          ui.screen == SCREEN_LIVE);
+                                          ui.screen == SCREEN_LIVE || ui.screen == SCREEN_DIAG ||
+                                          ui.screen == SCREEN_DIAG_PAGE);
             int i = gfx_touch ? -1 : button_at(list, count, tp.px, tp.py);
             int item = ui.screen == SCREEN_HOME && home_gfx ? home_hit(tp.px, tp.py) : -1;
-            if (gfx_touch && ui.screen == SCREEN_LIVE_MENU) {
+            diag_hit_t dhit = !gfx_touch                     ? DIAG_HIT_NONE
+                            : ui.screen == SCREEN_DIAG      ? diag_home_hit(tp.px, tp.py)
+                            : ui.screen == SCREEN_DIAG_PAGE ? diag_page_tab_hit(tp.px, tp.py,
+                                                                  ui.tab != DIAG_TAB_READINESS)
+                                                            : DIAG_HIT_NONE;
+            if (dhit != DIAG_HIT_NONE || (gfx_touch && ui.screen == SCREEN_DIAG)) {
+                /* DIAG's buttons and tabs: pressed while held, act on lifting. */
+                ui.diag_held = dhit;
+                ui.diag_held_in = dhit != DIAG_HIT_NONE;
+                bottom_dirty = true;
+            } else if (gfx_touch && ui.screen == SCREEN_DIAG_PAGE) {
+                int n = diag_rows_n;
+                if (diag_list_bar_hit(tp.px, tp.py) && diag_list_max_scroll(n) > 0) {
+                    ui.live_touching = ui.live_grip = ui.live_dragged = true;
+                    ui.live_row_held = -1;
+                    ui.live_grip_grab = diag_list_grip_grab(tp.py, ui.diag_scroll, n);
+                    ui.diag_scroll = diag_list_scroll_for_grip(tp.py - ui.live_grip_grab, n);
+                } else {
+                    ui.live_touching = true;
+                    ui.live_grip = ui.live_dragged = false;
+                    ui.live_touch_y0 = tp.py;
+                    ui.live_scroll0 = ui.diag_scroll;
+                    /* Codes can be tapped; the readiness rows only scroll. */
+                    ui.live_row_held = ui.tab == DIAG_TAB_READINESS
+                                           ? -1 : diag_list_hit(tp.px, tp.py, ui.diag_scroll, n);
+                }
+                bottom_dirty = true;
+            } else if (gfx_touch && ui.screen == SCREEN_LIVE_MENU) {
                 if (live_back_hit(tp.px, tp.py)) {
                     action = BTN_BACK;
                     tapped = true;
@@ -6116,8 +6250,107 @@ void spike_ui_run(void)
             }
         }
 
+        /* DIAG's buttons and tabs (graphics): the same. */
+        if (ui.diag_held != DIAG_HIT_NONE) {
+            bool page = ui.screen == SCREEN_DIAG_PAGE;
+            if ((ui.screen != SCREEN_DIAG && !page) || confirming || ui.clear_dialog) {
+                ui.diag_held = DIAG_HIT_NONE;
+                ui.diag_held_in = false;
+            } else if (hidKeysHeld() & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                diag_hit_t h = page ? diag_page_tab_hit(tp.px, tp.py, ui.tab != DIAG_TAB_READINESS)
+                                    : diag_home_hit(tp.px, tp.py);
+                bool in = (int)h == ui.diag_held;
+                if (in != ui.diag_held_in) {
+                    ui.diag_held_in = in;
+                    bottom_dirty = true;
+                }
+            } else {
+                if (ui.diag_held_in && !tapped) {
+                    if (ui.diag_held == DIAG_HIT_BACK) {
+                        action = BTN_BACK;
+                    } else if (ui.diag_held == DIAG_HIT_RIGHT) {
+                        action = page ? BTN_CLEAR_ASK : BTN_DIAG_SCAN;
+                    } else {
+                        action = BTN_DIAG_PAGE - (ui.diag_held - DIAG_HIT_STORED);
+                    }
+                    tapped = lifted = true;
+                }
+                ui.diag_held = DIAG_HIT_NONE;
+                ui.diag_held_in = false;
+                bottom_dirty = true;
+            }
+        }
+
+        /* The clear question (graphics): Cancel or Clear Codes when the finger lifts. */
+        if (ui.dialog_held != 0) {
+            if (!ui.clear_dialog) {
+                ui.dialog_held = 0;
+                ui.dialog_held_in = false;
+            } else if (hidKeysHeld() & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                bool in = diag_dialog_hit(tp.px, tp.py) == ui.dialog_held;
+                if (in != ui.dialog_held_in) {
+                    ui.dialog_held_in = in;
+                    bottom_dirty = true;
+                }
+            } else {
+                if (ui.dialog_held_in) {
+                    if (ui.dialog_held == 2 && worker != NULL) {
+                        enqueue(BTN_CLEAR_CODES);
+                    }
+                    ui.clear_dialog = false;
+                    bottom_full = top_dirty = true;
+                }
+                ui.dialog_held = 0;
+                ui.dialog_held_in = false;
+                bottom_dirty = true;
+            }
+        }
+
+        /* A DIAG page's list (graphics): drag to scroll, lift on a code to show it. */
+        if (ui.live_touching && ui.screen == SCREEN_DIAG_PAGE) {
+            int n = diag_rows_n;
+            if (confirming || ui.clear_dialog) {
+                ui.live_touching = ui.live_grip = false;
+            } else if ((hidKeysHeld() & KEY_TOUCH) && ui.live_grip) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                int sc = diag_list_scroll_for_grip(tp.py - ui.live_grip_grab, n);
+                if (sc != ui.diag_scroll) {
+                    ui.diag_scroll = sc;
+                    bottom_dirty = true;
+                }
+            } else if (hidKeysHeld() & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                int dy = tp.py - ui.live_touch_y0;
+                if (!ui.live_dragged && (dy > 6 || dy < -6)) {
+                    ui.live_dragged = true;
+                    bottom_dirty = true;
+                }
+                if (ui.live_dragged) {
+                    int sc = diag_list_clamp(ui.live_scroll0 - dy, n);
+                    if (sc != ui.diag_scroll) {
+                        ui.diag_scroll = sc;
+                        bottom_dirty = true;
+                    }
+                }
+            } else {
+                ui.live_touching = ui.live_grip = false;
+                if (!ui.live_dragged && ui.live_row_held >= 0 && ui.live_row_held < n) {
+                    ui.selected = ui.live_row_held;
+                    top_dirty = true;
+                }
+                ui.live_row_held = -1;
+                bottom_dirty = true;
+            }
+        }
+
         /* LIVE's view list (graphics): drag to scroll, lift to pick. */
-        if (ui.live_touching) {
+        if (ui.live_touching && ui.screen != SCREEN_DIAG_PAGE) {
             if (ui.screen != SCREEN_LIVE_MENU || confirming) {
                 ui.live_touching = ui.live_grip = false;
             } else if ((hidKeysHeld() & KEY_TOUCH) && ui.live_grip) {
@@ -6160,7 +6393,7 @@ void spike_ui_run(void)
             bottom_full = true;
         } else if (ui.clear_dialog && (down & KEY_B)) {
             ui.clear_dialog = false;   /* B cancels; there is no button shortcut to clear */
-            bottom_full = true;
+            bottom_full = top_dirty = true;
         } else if (ui.delete_dialog && (down & KEY_B)) {
             ui.delete_dialog = false;
             bottom_full = true;
@@ -6168,6 +6401,7 @@ void spike_ui_run(void)
                    !ui.ta_dialog) {
             if ((down & KEY_B) && ui.screen != SCREEN_HOME) { action = BTN_BACK; tapped = true; }
             else if ((down & KEY_X) && ui.screen == SCREEN_DIAG) { action = BTN_DIAG_SCAN; tapped = true; }
+            else if ((down & KEY_X) && ui.screen == SCREEN_DIAG_PAGE && ui.tab != DIAG_TAB_READINESS) { action = BTN_CLEAR_ASK; tapped = true; }
             else if ((down & KEY_L) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE || ui.screen == SCREEN_LIVE || ui.screen == SCREEN_LIVE_EDIT || ui.screen == SCREEN_LOG || ui.screen == SCREEN_GRAPH)) { action = BTN_PAGE_PREV; tapped = true; }
             else if ((down & KEY_R) && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_GUIDE || ui.screen == SCREEN_MAKE || ui.screen == SCREEN_LIVE || ui.screen == SCREEN_LIVE_EDIT || ui.screen == SCREEN_LOG || ui.screen == SCREEN_GRAPH)) { action = BTN_PAGE_NEXT; tapped = true; }
         }
@@ -6761,6 +6995,12 @@ void spike_ui_run(void)
                 bottom_full = top_dirty = true;
                 break;
             case BTN_BACK:
+                if (ui.screen == SCREEN_DIAG_PAGE) {
+                    ui.screen = SCREEN_DIAG;
+                    ui.selected = -1;
+                    bottom_full = top_dirty = true;
+                    break;
+                }
                 if (ui.screen == SCREEN_ACHIEVE) {
                     ui.screen = SCREEN_TRACK;
                     bottom_full = top_dirty = true;
@@ -6881,9 +7121,9 @@ void spike_ui_run(void)
                 LightLock_Unlock(&shared.lock);
                 if (scanned) {
                     ui.clear_dialog = true;
-                    bottom_full = true;
+                    bottom_full = top_dirty = true;
                 } else {
-                    ui.notice = "CLEAR: tap SCAN first";
+                    ui.notice = home_gfx ? "Tap Scan on DIAG first." : "CLEAR: tap SCAN first";
                     notice_until = now + 3000;
                 }
                 break;
@@ -6929,6 +7169,13 @@ void spike_ui_run(void)
                         ui.page = 0;
                         bottom_full = top_dirty = true;
                     }
+                } else if (action <= BTN_DIAG_PAGE && action > BTN_DIAG_PAGE - DIAG_TAB_COUNT) {
+                    ui.tab = (diag_tab_t)(BTN_DIAG_PAGE - action);
+                    ui.screen = SCREEN_DIAG_PAGE;
+                    ui.selected = -1;
+                    ui.diag_scroll = 0;
+                    diag_rows_refresh(ui.tab);
+                    bottom_full = top_dirty = true;
                 } else if (action <= BTN_LIST_ROW && action > BTN_LIST_ROW - LIST_PAGE_ROWS) {
                     int k = ui.page * LIST_PAGE_ROWS + (BTN_LIST_ROW - action);
                     if (k < n) {
@@ -7083,7 +7330,8 @@ void spike_ui_run(void)
              * the text screens don't print: clear it all once on leaving. */
             static bool gfx_top_shown;
             bool live_gfx = home_gfx && (ui.screen == SCREEN_LIVE_MENU || ui.screen == SCREEN_LIVE);
-            bool gfx_top_now = (ui.screen == SCREEN_HOME && home_gfx) || live_gfx;
+            bool diag_gfx = home_gfx && (ui.screen == SCREEN_DIAG || ui.screen == SCREEN_DIAG_PAGE);
+            bool gfx_top_now = (ui.screen == SCREEN_HOME && home_gfx) || live_gfx || diag_gfx;
             if (gfx_top_shown && !gfx_top_now && ui.screen != SCREEN_GRAPH) {
                 consoleSelect(&top_console);
                 printf("\x1b[0m\x1b[2J");
@@ -7119,6 +7367,8 @@ void spike_ui_run(void)
                 draw_trim_top(busy, connected);
                 drawn_live_version = live_version;
                 live_drawn_at = now;
+            } else if (diag_gfx) {
+                draw_diag_gfx_top(&ui, connected);
             } else if (live_gfx && ui.screen == SCREEN_LIVE_MENU) {
                 draw_live_dash_top(connected);
                 drawn_live_version = live_version;

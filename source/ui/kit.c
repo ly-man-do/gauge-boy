@@ -23,6 +23,7 @@ static C2D_Font font_small;   /* Nunito Bold 8 pt: GRAPH's font */
 static C2D_Font ui_font;      /* NULL = the system font */
 static C2D_SpriteSheet sysui, icons;
 static C2D_TextBuf text_buf;
+static C2D_TextBuf measure_buf;   /* widths: cleared on each measure, so measuring never fills text_buf */
 static bool romfs_ok, gpu_on, c2d_on;
 static float z;               /* rising depth: later shapes draw on top */
 
@@ -63,9 +64,10 @@ bool kit_init(void)
     sysui = C2D_SpriteSheetLoadFromMem(sysui_t3x, sysui_t3x_size);
     icons = C2D_SpriteSheetLoadFromMem(icons_t3x, icons_t3x_size);
     text_buf = C2D_TextBufNew(1536);
+    measure_buf = C2D_TextBufNew(256);
     bottom_target = C3D_RenderTargetCreate(240, 320, GPU_RB_RGBA8, GPU_RB_DEPTH16);
     top_target = C3D_RenderTargetCreate(240, 400, GPU_RB_RGBA8, GPU_RB_DEPTH16);
-    if (font_small == NULL || sysui == NULL || icons == NULL || text_buf == NULL ||
+    if (font_small == NULL || sysui == NULL || icons == NULL || text_buf == NULL || measure_buf == NULL ||
         bottom_target == NULL || top_target == NULL) {
         kit_exit();
         return false;
@@ -88,6 +90,10 @@ void kit_exit(void)
     if (text_buf != NULL) {
         C2D_TextBufDelete(text_buf);
         text_buf = NULL;
+    }
+    if (measure_buf != NULL) {
+        C2D_TextBufDelete(measure_buf);
+        measure_buf = NULL;
     }
     if (sysui != NULL) {
         C2D_SpriteSheetFree(sysui);
@@ -267,6 +273,7 @@ size_t kit_pressed(size_t idx)
     case sysui_toggle_right_idx:  return sysui_toggle_right_dn_idx;
     case sysui_scroll_grip_idx:   return sysui_scroll_grip_dn_idx;
     case sysui_tab_left_idx:      return sysui_tab_left_dn_idx;
+    case sysui_tab_right_idx:     return sysui_tab_right_dn_idx;
     default:                      return idx;
     }
 }
@@ -291,7 +298,12 @@ float kit_text_width(const char *s, float scale)
 {
     C2D_Text t;
     float w = 0, h = 0;
-    parse(&t, s);
+    C2D_TextBufClear(measure_buf);
+    if (ui_font == NULL) {
+        C2D_TextParse(&t, measure_buf, s);
+    } else {
+        C2D_TextFontParse(&t, ui_font, measure_buf, s);
+    }
     C2D_TextGetDimensions(&t, scale, scale, &w, &h);
     return w;
 }
@@ -536,6 +548,14 @@ void kit_back_tab(bool pressed)
     C2D_Image tab = kit_sysui(pressed ? sysui_tab_left_dn_idx : sysui_tab_left_idx);
     kit_image(tab, 0, KIT_H - tab.subtex->height);
     kit_key_label("B", "Back", 59, KIT_H - 15 + (pressed ? 1 : 0));
+}
+
+void kit_right_tab(const char *key, const char *label, bool pressed)
+{
+    /* System Settings' right tab, the mirror of the Back tab. */
+    C2D_Image tab = kit_sysui(pressed ? sysui_tab_right_dn_idx : sysui_tab_right_idx);
+    kit_image(tab, KIT_BOTTOM_W - tab.subtex->width, KIT_H - tab.subtex->height);
+    kit_key_label(key, label, KIT_BOTTOM_W - 59, KIT_H - 15 + (pressed ? 1 : 0));
 }
 
 void *kit_top_target(void)

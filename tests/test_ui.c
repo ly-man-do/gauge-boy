@@ -4,6 +4,7 @@
 #include "harness.h"
 #include "ui/home_layout.h"
 #include "ui/home_top.h"
+#include "ui/diag_ui.h"
 #include "ui/live_ui.h"
 
 static bool overlap(home_rect_t a, home_rect_t b)
@@ -296,8 +297,170 @@ static void test_live_dash_values(void)
     CHECK_EQ_STR(d.odo_unit, "km");
 }
 
+static bool diag_overlap(diag_rect_t a, diag_rect_t b)
+{
+    return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+static void test_diag_layout(void)
+{
+    /* DIAG's four buttons: centred in the space above the tabs, 40 px tall touch
+     * zones that don't overlap. */
+    diag_rect_t first = diag_home_button(0), last = diag_home_button(DIAG_HOME_BUTTONS - 1);
+    CHECK_EQ_INT(first.y, DIAG_LIST_H - (last.y + last.h));
+    CHECK_EQ_INT(first.x, DIAG_SCREEN_W - (first.x + first.w));
+    for (int i = 0; i < DIAG_HOME_BUTTONS; i++) {
+        diag_rect_t r = diag_home_button(i);
+        CHECK(r.y + r.h <= diag_tab(false).y);
+        CHECK((int)diag_home_hit(r.x + r.w / 2, r.y + r.h / 2) == (int)DIAG_HIT_STORED + i);
+    }
+    CHECK(!diag_overlap(diag_tab(false), diag_tab(true)));
+    CHECK(diag_home_hit(10, 230) == DIAG_HIT_BACK);
+    CHECK(diag_home_hit(310, 230) == DIAG_HIT_RIGHT);
+    CHECK(diag_home_hit(160, 230) == DIAG_HIT_NONE);
+    CHECK(diag_page_tab_hit(310, 230, false) == DIAG_HIT_NONE);   /* Readiness: Back only */
+    CHECK(diag_page_tab_hit(310, 230, true) == DIAG_HIT_RIGHT);
+    CHECK_EQ_STR(diag_home_label(2), "Permanent");
+
+    /* A page's list: 5 rows fit; 8 scroll; the grip follows the scroll. */
+    CHECK_EQ_INT(diag_list_max_scroll(5), 0);
+    int max = diag_list_max_scroll(8);
+    CHECK(max > 0);
+    CHECK_EQ_INT(diag_list_clamp(-5, 8), 0);
+    CHECK_EQ_INT(diag_list_clamp(9999, 8), max);
+    diag_rect_t r1 = diag_list_row(1, 0);
+    CHECK_EQ_INT(diag_list_hit(r1.x + 5, r1.y + 5, 0, 8), 1);
+    CHECK_EQ_INT(diag_list_hit(r1.x + 5, r1.y + 5, 36, 8), 2);
+    CHECK_EQ_INT(diag_list_hit(r1.x + 5, 230, 0, 8), -1);          /* the tabs */
+    CHECK(diag_list_bar_hit(305, 50) && !diag_list_bar_hit(200, 50));
+    diag_rect_t t = diag_list_track();
+    CHECK_EQ_INT(diag_list_grip_y(0, 8), t.y);
+    CHECK_EQ_INT(diag_list_grip_y(max, 8), t.y + t.h - DIAG_GRIP_H);
+    CHECK_EQ_INT(diag_list_scroll_for_grip(t.y + t.h, 8), max);
+    CHECK_EQ_INT(diag_list_scroll_for_grip(diag_list_grip_y(20, 8), 8), 20);
+
+    /* The clear question's buttons. */
+    diag_rect_t c = diag_dialog_button(false), y = diag_dialog_button(true);
+    CHECK(!diag_overlap(c, y) && c.w >= 40 && c.h >= 40);
+    CHECK_EQ_INT(diag_dialog_hit(c.x + 2, c.y + 2), 1);
+    CHECK_EQ_INT(diag_dialog_hit(y.x + 2, y.y + 2), 2);
+    CHECK_EQ_INT(diag_dialog_hit(5, 5), 0);
+}
+
+static void diag_sample(obd_diag_t *d)
+{
+    memset(d, 0, sizeof *d);
+    d->link.protocol = 3;   /* ISO 9141-2 */
+    d->result = OBD_LINK_OK;
+    d->stopped_at = OBD_DIAG_STEP_DONE;
+    d->make = -1;
+    d->model_year = 2008;
+    d->have_readiness = true;
+    d->readiness.valid = true;
+    d->readiness.mil_on = true;
+    d->readiness.dtc_count = 2;
+    static const char *const names[] = { "Misfire", "Fuel system", "Catalyst", "Evaporative system" };
+    for (int i = 0; i < 4; i++) {
+        d->readiness.monitor[i].name = names[i];
+        d->readiness.monitor[i].state = i < 2 ? OBD_MONITOR_COMPLETE : OBD_MONITOR_INCOMPLETE;
+    }
+    d->have_mil_km = true;
+    d->mil_km = 502;   /* 312 mi */
+    d->have_stored = d->have_pending = d->have_permanent = true;
+    d->stored.count = 2;
+    snprintf(d->stored.code[0].code, sizeof d->stored.code[0].code, "P0171");
+    snprintf(d->stored.code[1].code, sizeof d->stored.code[1].code, "P0174");
+    d->permanent.count = 1;
+    snprintf(d->permanent.code[0].code, sizeof d->permanent.code[0].code, "P0171");
+    d->freeze.have = true;
+    snprintf(d->freeze.code, sizeof d->freeze.code, "P0171");
+    d->freeze.count = 2;
+    d->freeze.pid[0] = 0x0C;
+    d->freeze.value[0] = 742.0f;
+    d->freeze.pid[1] = 0x0D;
+    d->freeze.value[1] = 0.0f;
+}
+
+static void test_diag_text(void)
+{
+    static obd_diag_t d;
+    diag_fact_t f[DIAG_FACTS_MAX];
+    char note[96];
+
+    /* Not scanned: the car unknown and a hint. */
+    memset(&d, 0, sizeof d);
+    int n = diag_home_facts(&d, "", OBD_UNITS_US, f, DIAG_FACTS_MAX, note, sizeof note);
+    CHECK_EQ_INT(n, 1);
+    CHECK_EQ_STR(f[0].value, "Not scanned yet");
+    CHECK_EQ_STR(note, "Tap Scan with the engine running.");
+
+    diag_sample(&d);
+    n = diag_home_facts(&d, "Big Red", OBD_UNITS_US, f, DIAG_FACTS_MAX, note, sizeof note);
+    CHECK_EQ_INT(n, 6);   /* Car, CEL, Stored, Pending, Permanent, Readiness */
+    CHECK_EQ_STR(f[0].value, "Big Red");
+    CHECK_EQ_STR(f[1].value, "On");
+    CHECK(f[1].cel_icon && f[1].ink == DIAG_INK_AMBER);
+    CHECK_EQ_STR(f[1].detail, "for 312 mi");
+    CHECK_EQ_STR(f[2].value, "2 codes");
+    CHECK_EQ_STR(f[2].detail, "P0171, P0174");
+    CHECK(f[2].ink == DIAG_INK_RED);
+    CHECK_EQ_STR(f[3].value, "None");
+    CHECK_EQ_STR(f[4].value, "1 code");
+    CHECK_EQ_STR(f[5].value, "2 of 4");
+    CHECK_EQ_STR(f[5].detail, "Catalyst, Evap not ready");
+    CHECK_EQ_STR(note, "");
+
+    d.permanent_unsupported = true;
+    diag_home_facts(&d, "", OBD_UNITS_US, f, DIAG_FACTS_MAX, note, sizeof note);
+    CHECK_EQ_STR(f[4].value, "Not supported");
+
+    /* A code page: a summary, rows and the code tapped. */
+    n = diag_page_facts(&d, DIAG_TAB_STORED, f, DIAG_FACTS_MAX, note, sizeof note);
+    CHECK_EQ_STR(f[0].value, "2 codes");
+    CHECK_EQ_STR(f[n - 1].tag, "Freeze frame");
+    CHECK_EQ_STR(note, "Tap a code for its description and freeze frame.");
+    diag_row_t rows[8];
+    CHECK_EQ_INT(diag_page_rows(&d, DIAG_TAB_STORED, rows, 8), 2);
+    CHECK_EQ_STR(rows[1].name, "P0174");
+    CHECK(rows[1].code && rows[1].right[0] != '\0');
+    CHECK_EQ_INT(diag_page_rows(&d, DIAG_TAB_PENDING, rows, 8), 0);
+    CHECK_EQ_INT(diag_page_rows(&d, DIAG_TAB_PERMANENT, rows, 8), 0);   /* unsupported */
+    diag_page_facts(&d, DIAG_TAB_PENDING, f, DIAG_FACTS_MAX, note, sizeof note);
+    CHECK_EQ_STR(f[0].value, "None");
+
+    diag_code_t c;
+    CHECK(diag_code_detail(&d, DIAG_TAB_STORED, 0, OBD_UNITS_US, &c));
+    CHECK_EQ_STR(c.code, "P0171");
+    CHECK_EQ_STR(c.kind, "Stored");
+    CHECK(c.have_freeze && c.freeze_count == 2);
+    CHECK_EQ_STR(c.freeze_value[0], "742 rpm");
+    CHECK(diag_code_detail(&d, DIAG_TAB_STORED, 1, OBD_UNITS_US, &c) && !c.have_freeze);
+    CHECK(!diag_code_detail(&d, DIAG_TAB_STORED, 2, OBD_UNITS_US, &c));
+
+    /* Readiness: rows and the inspection guess. */
+    CHECK_EQ_INT(diag_page_rows(&d, DIAG_TAB_READINESS, rows, 8), 4);
+    CHECK_EQ_STR(rows[3].name, "Evap");
+    CHECK_EQ_STR(rows[3].right, "Not ready");
+    CHECK(rows[0].ink == DIAG_INK_GREEN && rows[3].ink == DIAG_INK_AMBER);
+    char why[64];
+    CHECK(!diag_inspection(&d, why, sizeof why));
+    CHECK_EQ_STR(why, "the CEL is on");
+    d.readiness.mil_on = false;
+    CHECK(!diag_inspection(&d, why, sizeof why));      /* 2 not ready, 1 allowed */
+    d.model_year = 1999;
+    CHECK(diag_inspection(&d, why, sizeof why));       /* 1996-2000: 2 allowed */
+    n = diag_page_facts(&d, DIAG_TAB_READINESS, f, DIAG_FACTS_MAX, note, sizeof note);
+    CHECK_EQ_INT(n, 3);
+    CHECK_EQ_STR(f[0].value, "2 of 4");
+    CHECK_EQ_STR(f[1].value, "Catalyst, Evap");
+    CHECK_EQ_STR(f[2].value, "Likely to pass");
+    CHECK_EQ_STR(diag_page_title(DIAG_TAB_PERMANENT), "PERMANENT CODES");
+}
+
 void suite_ui(void)
 {
+    RUN_TEST(test_diag_layout);
+    RUN_TEST(test_diag_text);
     RUN_TEST(test_live_dash_values);
     RUN_TEST(test_live_list_grip);
     RUN_TEST(test_live_list);

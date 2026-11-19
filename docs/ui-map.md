@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-19, LIVE v5 fixes: edge half circles, (B) Back and START caps (gauge-boy-82l.17)
+**As of:** 2026-11-19, DIAG redesign: four buttons, a page each, Back / Clear tabs (gauge-boy-82l.18)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -130,20 +130,30 @@ Gauge Boy
         │   │                        to drives/; red while recording; tap again to stop
         │   └── [START / STOP]       pauses or resumes polling (STOP also ends a recording)
         │
-        ├── DIAG                     (top: car facts or the selected code's text; a stored
-        │                            code with a freeze frame adds its values; facts list the
-        │                            modules that answered; a code's text says which set it)
-        │   ├── [STORED] [PENDING] [PERM] [READY]   tabs (PERM hidden if unsupported)
-        │   ├── [list rows]          3 per page, tap → full description on top
-        │   ├── [BACK]               → HOME                                       [B]
-        │   ├── [<] page n/m [>]                                                  [L/R]
-        │   ├── [TRIM]               → TRIM (only when P0171 / P0172 / P0174 / P0175 is
-        │   │                        stored or pending; the bottom row narrows to fit it)
-        │   ├── [CLEAR]              → Clear codes dialog (needs a scan first)
-        │   │   ├── [CANCEL]         → DIAG                                       [B]
-        │   │   └── [CLEAR CODES]    clears (refused if moving), then rescans
-        │   └── [SCAN]               reads CEL, readiness, codes, the freeze frame (with stored
+        ├── DIAG                     (top: car, CEL, and what each button holds: stored,
+        │   │                        pending and permanent codes, readiness; scan progress
+        │   │                        under the panel)
+        │   ├── [Stored]             → Stored codes page (top: count, modules, freeze frame)
+        │   │   ├── [code rows]      scroll (drag, or the scroll bar's grip); tap → the code
+        │   │   │                    on top: its text, module and freeze frame (red outline)
+        │   │   ├── [B Back]         → DIAG                                       [B]
+        │   │   └── [X Clear]        → Clear codes question (needs a scan first)  [X]
+        │   │       ├── (top: what clearing does: CEL off, codes and freeze frame
+        │   │       │    erased, readiness reset, the fault not fixed)
+        │   │       ├── [Cancel]     → back to the page                           [B]
+        │   │       └── [Clear Codes] clears (refused if moving), then rescans
+        │   ├── [Pending]            → Pending codes page (same as Stored, no freeze frame)
+        │   ├── [Permanent]          → Permanent codes page (same; "Not supported" before 2010)
+        │   ├── [Readiness]          → Readiness page (top: ready n of m, not ready, likely to
+        │   │   │                    pass inspection)
+        │   │   ├── [monitor rows]   ✓ Complete (green) / Not ready (amber); scroll
+        │   │   └── [B Back]         → DIAG                                       [B]
+        │   ├── [B Back]             → HOME                                       [B]
+        │   └── [X Scan]             reads CEL, readiness, codes, the freeze frame (with stored
         │                            codes), VIN (and model)                        [X]
+        │                            (if graphics fail to start, DIAG falls back to the text
+        │                            layout: STORED / PENDING / PERM / READY tabs, paged
+        │                            rows, BACK < > TRIM CLEAR SCAN)
         │
         ├── LOG                      (top: the selected drive's details: date, car, VIN,
         │   │                        protocol, length, size, values; else what LOG is)

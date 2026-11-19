@@ -36,6 +36,7 @@
 #define KIT_RED_HI    KIT_RGB(255, 90, 78)
 #define KIT_ORANGE    KIT_RGB(255, 138, 43)
 #define KIT_AMBER     KIT_RGB(242, 165, 43)
+#define KIT_GREEN     KIT_RGB(79, 203, 98)
 #define KIT_AMBER_GLOW KIT_RGBA(242, 165, 43, 0x60)
 #define KIT_PRESS     KIT_RGBA(0, 0, 0, 0x50)   /* over a held button */
 #define KIT_SHADOW    KIT_RGB(20, 20, 20)       /* label shadows on the grey bars */
@@ -126,6 +127,8 @@ void kit_key_label(const char *key, const char *label, float cx, float mid);
 
 /* System Settings' Back tab in the bottom-left corner ("(B) Back"). */
 void kit_back_tab(bool pressed);
+/* System Settings' right tab in the bottom-right corner ("(X) Scan"). */
+void kit_right_tab(const char *key, const char *label, bool pressed);
 
 /* For screens with their own citro2d code (GRAPH). */
 void *kit_top_target(void);

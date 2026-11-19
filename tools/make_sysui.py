@@ -266,7 +266,7 @@ def main():
         sprites.update(home_settings_pieces(Archive(os.path.join(home, 'petit_LZ.bin'))))
     # The pressed look of each touchable piece: the same art, darker (the shape stays exact).
     for n in ('button_large', 'button_medium', 'side_left', 'side_right', 'toggle_left',
-              'toggle_right', 'scroll_grip', 'tab_left'):
+              'toggle_right', 'scroll_grip', 'tab_left', 'tab_right'):
         sprites[n + '_dn'] = pressed(sprites[n])
     names = sorted(sprites)
     for n in names:
