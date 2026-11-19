@@ -16,8 +16,10 @@
 /* Top: the Dashboard (tach, speed, coolant and battery, CEL, odometer). */
 void live_draw_dash(const live_dash_t *d, bool cel_known, bool cel_on, const kit_status_t *s);
 
-/* Bottom: the view list scrolled by scroll px; pressed = the row held (-1 none). */
-void live_draw_list(const char *const *names, int n, int scroll, int pressed, bool back_pressed);
+/* Bottom: the view list scrolled by scroll px; pressed = the row held (-1 none);
+ * grip_pressed = the scroll bar's grip is held. */
+void live_draw_list(const char *const *names, int n, int scroll, int pressed, bool grip_pressed,
+                    bool back_pressed);
 
 /* Top: a PID view's title ("ENGINE") and rows (n 0 = waiting for the first values). */
 void live_draw_view_top(const char *title, const live_row_t *rows, int n, bool connected,

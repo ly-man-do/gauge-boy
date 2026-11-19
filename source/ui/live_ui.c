@@ -65,6 +65,27 @@ int live_list_grip_y(int scroll, int n)
     return TRACK_Y + (max > 0 ? (live_list_clamp(scroll, n) * travel + max / 2) / max : 0);
 }
 
+bool live_list_bar_hit(int px, int py)
+{
+    return px >= ROW_X + ROW_W + 8 && px < LIVE_SCREEN_W && py >= 0 && py < LIVE_LIST_H;
+}
+
+int live_list_grip_grab(int py, int scroll, int n)
+{
+    int top = live_list_grip_y(scroll, n);
+    return py >= top && py < top + LIVE_GRIP_H ? py - top : LIVE_GRIP_H / 2;
+}
+
+int live_list_scroll_for_grip(int grip_top, int n)
+{
+    int max = live_list_max_scroll(n), travel = TRACK_H - LIVE_GRIP_H;
+    if (max <= 0 || travel <= 0) {
+        return 0;
+    }
+    int pos = grip_top - TRACK_Y;
+    return live_list_clamp((pos * max + travel / 2) / travel, n);
+}
+
 live_rect_t live_view_rect(live_hit_t what)
 {
     live_rect_t r = { 0, 0, 0, 0 };

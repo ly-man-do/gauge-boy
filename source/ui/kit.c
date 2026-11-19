@@ -153,9 +153,24 @@ void kit_rect(float x, float y, float w, float h, u32 c)
     C2D_DrawRectSolid(x, y, next_z(), w, h, c);
 }
 
+/* A pie slice of a circle from angle a0 to a1 (radians), as a triangle fan. citro2d's
+ * own circles are drawn by a shader trick that Azahar renders lopsided at small sizes. */
+static void fan(float cx, float cy, float r, float a0, float a1, u32 c, float d)
+{
+    int n = (int)(fabsf(a1 - a0) * (r < 4 ? 2.0f : r / 2.0f + 2.0f)) + 2;
+    float step = (a1 - a0) / n;
+    for (int i = 0; i < n; i++) {
+        float t0 = a0 + step * i, t1 = t0 + step;
+        C2D_DrawTriangle(cx, cy, c, cx + r * cosf(t0), cy + r * sinf(t0), c,
+                         cx + r * cosf(t1), cy + r * sinf(t1), c, d);
+    }
+}
+
+#define PI_F 3.14159265f
+
 void kit_circle(float x, float y, float r, u32 c)
 {
-    C2D_DrawCircleSolid(x, y, next_z(), r, c);
+    fan(x, y, r, 0, 2 * PI_F, c, next_z());
 }
 
 void kit_rrect(float x, float y, float w, float h, float r, u32 c)
@@ -164,10 +179,10 @@ void kit_rrect(float x, float y, float w, float h, float r, u32 c)
     C2D_DrawRectSolid(x + r, y, d, w - 2 * r, h, c);
     C2D_DrawRectSolid(x, y + r, d, r, h - 2 * r, c);
     C2D_DrawRectSolid(x + w - r, y + r, d, r, h - 2 * r, c);
-    C2D_DrawCircleSolid(x + r, y + r, d, r, c);
-    C2D_DrawCircleSolid(x + w - r, y + r, d, r, c);
-    C2D_DrawCircleSolid(x + r, y + h - r, d, r, c);
-    C2D_DrawCircleSolid(x + w - r, y + h - r, d, r, c);
+    fan(x + r, y + r, r, PI_F, 1.5f * PI_F, c, d);              /* top left */
+    fan(x + w - r, y + r, r, 1.5f * PI_F, 2 * PI_F, c, d);      /* top right */
+    fan(x + r, y + h - r, r, 0.5f * PI_F, PI_F, c, d);          /* bottom left */
+    fan(x + w - r, y + h - r, r, 0, 0.5f * PI_F, c, d);         /* bottom right */
 }
 
 void kit_ring(float x, float y, float w, float h, float r, float width, u32 c)
@@ -241,13 +256,24 @@ void kit_nine(C2D_Image img, float x, float y, float w, float h, float c)
     }
 }
 
+size_t kit_pressed(size_t idx)
+{
+    switch (idx) {
+    case sysui_button_large_idx:  return sysui_button_large_dn_idx;
+    case sysui_button_medium_idx: return sysui_button_medium_dn_idx;
+    case sysui_side_left_idx:     return sysui_side_left_dn_idx;
+    case sysui_side_right_idx:    return sysui_side_right_dn_idx;
+    case sysui_toggle_left_idx:   return sysui_toggle_left_dn_idx;
+    case sysui_toggle_right_idx:  return sysui_toggle_right_dn_idx;
+    case sysui_scroll_grip_idx:   return sysui_scroll_grip_dn_idx;
+    case sysui_tab_left_idx:      return sysui_tab_left_dn_idx;
+    default:                      return idx;
+    }
+}
+
 void kit_button(size_t idx, float x, float y, float w, float h, bool pressed)
 {
-    y += pressed ? 1 : 0;
-    kit_nine(kit_sysui(idx), x - 1, y - 1, w + 2, h + 2, 16);
-    if (pressed) {
-        kit_rrect(x + 3, y + 3, w - 6, h - 6, 8, KIT_PRESS);
-    }
+    kit_nine(kit_sysui(pressed ? kit_pressed(idx) : idx), x - 1, y - 1 + (pressed ? 1 : 0), w + 2, h + 2, 16);
 }
 
 /* ---------- text ---------- */
@@ -409,12 +435,9 @@ void kit_back_tab(bool pressed)
 {
     /* System Settings' left tab: a "B" button cap and "Back", centred in the
      * 30 px above the bottom edge like the bar's "START Close". */
-    C2D_Image tab = kit_sysui(sysui_tab_left_idx);
+    C2D_Image tab = kit_sysui(pressed ? sysui_tab_left_dn_idx : sysui_tab_left_idx);
     float y = KIT_H - tab.subtex->height;
     kit_image(tab, 0, y);
-    if (pressed) {
-        kit_rect(4, y + 10, 112, KIT_H - y - 10, KIT_PRESS);
-    }
     float ls = 0.75f, bs = 0.42f, dy = pressed ? 1 : 0;
     float ly = KIT_H - 15 - 30 * ls / 2 + dy;
     float badge_w = kit_text_width("B", bs) + 10, badge_h = 15;

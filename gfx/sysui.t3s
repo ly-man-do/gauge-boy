@@ -2,7 +2,9 @@
 
 sysui/bar.png
 sysui/button_large.png
+sysui/button_large_dn.png
 sysui/button_medium.png
+sysui/button_medium_dn.png
 sysui/sb_battery.png
 sysui/sb_cells.png
 sysui/sb_cells_low.png
@@ -11,11 +13,17 @@ sysui/sb_pill_on.png
 sysui/sb_signal_off.png
 sysui/sb_signal_on.png
 sysui/scroll_grip.png
+sysui/scroll_grip_dn.png
 sysui/scroll_track.png
 sysui/side_left.png
+sysui/side_left_dn.png
 sysui/side_right.png
+sysui/side_right_dn.png
 sysui/tab_left.png
+sysui/tab_left_dn.png
 sysui/tab_right.png
 sysui/toggle.png
 sysui/toggle_left.png
+sysui/toggle_left_dn.png
 sysui/toggle_right.png
+sysui/toggle_right_dn.png

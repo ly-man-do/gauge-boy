@@ -230,6 +230,28 @@ static void test_live_dash_math(void)
     CHECK(live_rec_pulse(2400) > 0.99f);
 }
 
+static void test_live_list_grip(void)
+{
+    int n = 9, max = live_list_max_scroll(n);
+    CHECK(max > 0);
+    /* The strip right of the rows is the bar; the rows and the Back tab aren't. */
+    CHECK(live_list_bar_hit(300, 50));
+    CHECK(live_list_bar_hit(290, 0));
+    CHECK(!live_list_bar_hit(200, 50));
+    CHECK(!live_list_bar_hit(300, 210));
+    /* On the grip the grab keeps the finger's place; off it the grip centres on it. */
+    int top = live_list_grip_y(0, n);
+    CHECK_EQ_INT(live_list_grip_grab(top + 5, 0, n), 5);
+    CHECK_EQ_INT(live_list_grip_grab(150, 0, n), LIVE_GRIP_H / 2);
+    /* Grip position and scroll map both ways, clamped at the ends. */
+    CHECK_EQ_INT(live_list_scroll_for_grip(live_list_grip_y(0, n), n), 0);
+    CHECK_EQ_INT(live_list_scroll_for_grip(live_list_grip_y(max, n), n), max);
+    CHECK_EQ_INT(live_list_scroll_for_grip(-50, n), 0);
+    CHECK_EQ_INT(live_list_scroll_for_grip(500, n), max);
+    int mid = live_list_scroll_for_grip(live_list_grip_y(max / 2, n), n);
+    CHECK(mid >= max / 2 - 2 && mid <= max / 2 + 2);
+}
+
 static void test_live_dash_values(void)
 {
     live_dash_t d;
@@ -277,6 +299,7 @@ static void test_live_dash_values(void)
 void suite_ui(void)
 {
     RUN_TEST(test_live_dash_values);
+    RUN_TEST(test_live_list_grip);
     RUN_TEST(test_live_list);
     RUN_TEST(test_live_view_hits);
     RUN_TEST(test_live_dash_math);

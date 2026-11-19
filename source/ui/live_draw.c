@@ -75,7 +75,7 @@ static void tach(float rpm)
         tach_point(t, TACH_BAND + 22, &x, &y);
         kit_text(num, x, y - 30 * KIT_PX(18) / 2, KIT_PX(18), red ? LIT_RED : LIT, 0, true);
     }
-    text_at("x1000 r/min", 90, 206, 10, LABEL, -1);   /* between the CEL and the odometer */
+    text_at("x1000 r/min", 86, 230, 10, LABEL, -1);   /* left of the odometer */
 }
 
 /* A small arc gauge (coolant, battery) centred on (gx, gy). */
@@ -98,8 +98,8 @@ void live_draw_dash(const live_dash_t *d, bool cel_known, bool cel_on, const kit
     tach(d->have_rpm ? d->rpm : 0);
 
     /* Speed: big LCD digits, the unit beside them. */
-    kit_lcd(d->speed, 148, 116, 56, LIT);
-    text_at(d->speed_unit, 286, 170, 14, KIT_INK3, -1);
+    kit_lcd(d->speed, 148, 124, 56, LIT);
+    text_at(d->speed_unit, 286, 178, 14, KIT_INK3, -1);
 
     /* Coolant, C to H. */
     mini(360, 132, d->have_coolant ? live_coolant_lit(d->coolant_c) : 0, LIVE_COOLANT_RED);
@@ -116,10 +116,13 @@ void live_draw_dash(const live_dash_t *d, bool cel_known, bool cel_on, const kit
     /* The CEL: the engine icon, dim when off (or unknown), amber when on. */
     kit_image(kit_icon(cel_known && cel_on ? icons_cel_on_idx : icons_cel_off_idx), 94, 168);
 
-    /* The odometer, centred at the bottom. */
+    /* The odometer at the bottom, right of the tach's label. */
     float oh = 20, uw = kit_text_width(d->odo_unit, KIT_PX(11));
     float ow = kit_lcd_width(d->odo, oh);
-    float ox = (KIT_TOP_W - (ow + 4 + uw)) / 2;
+    float ox = 226 - (ow + 4 + uw) / 2;
+    if (ox < 158) {
+        ox = 158;
+    }
     kit_lcd(d->odo, ox, 212, oh, LIT);
     text_at(d->odo_unit, ox + ow + 4, 231, 11, KIT_INK3, -1);
 
@@ -128,7 +131,8 @@ void live_draw_dash(const live_dash_t *d, bool cel_known, bool cel_on, const kit
 
 /* ---------- the view list ---------- */
 
-void live_draw_list(const char *const *names, int n, int scroll, int pressed, bool back_pressed)
+void live_draw_list(const char *const *names, int n, int scroll, int pressed, bool grip_pressed,
+                    bool back_pressed)
 {
     kit_begin(false, 0);
     for (int i = 0; i < n; i++) {
@@ -150,7 +154,8 @@ void live_draw_list(const char *const *names, int n, int scroll, int pressed, bo
     kit_image_part(track, 0, 0, track.subtex->width, track.subtex->height, t.x, t.y, t.w, t.h);
     if (live_list_max_scroll(n) > 0) {
         float gx = t.x + t.w / 2.0f - LIVE_GRIP_W / 2.0f;
-        kit_image(kit_sysui(sysui_scroll_grip_idx), gx, live_list_grip_y(scroll, n));
+        kit_image(kit_sysui(grip_pressed ? sysui_scroll_grip_dn_idx : sysui_scroll_grip_idx), gx,
+                  live_list_grip_y(scroll, n));
     }
     kit_back_tab(back_pressed);
     kit_end();
@@ -213,13 +218,9 @@ void live_draw_view_bottom(const live_controls_t *c)
 
     /* System Settings' half-circle arrows at the edges: the previous / next view. */
     live_rect_t l = live_view_rect(LIVE_HIT_PREV), r = live_view_rect(LIVE_HIT_NEXT);
-    kit_image(kit_sysui(sysui_side_left_idx), l.x, l.y + (c->pressed == LIVE_HIT_PREV ? 1 : 0));
-    kit_image(kit_sysui(sysui_side_right_idx), r.x, r.y + (c->pressed == LIVE_HIT_NEXT ? 1 : 0));
-    if (c->pressed == LIVE_HIT_PREV) {
-        kit_rect(l.x, l.y + 1, l.w - 4, l.h, KIT_PRESS);
-    } else if (c->pressed == LIVE_HIT_NEXT) {
-        kit_rect(r.x + 4, r.y + 1, r.w - 4, r.h, KIT_PRESS);
-    }
+    bool pl = c->pressed == LIVE_HIT_PREV, pr = c->pressed == LIVE_HIT_NEXT;
+    kit_image(kit_sysui(pl ? sysui_side_left_dn_idx : sysui_side_left_idx), l.x, l.y + (pl ? 1 : 0));
+    kit_image(kit_sysui(pr ? sysui_side_right_dn_idx : sysui_side_right_idx), r.x, r.y + (pr ? 1 : 0));
 
     /* "● REC m:ss" above the toggle while recording, the dot pulsing slowly. */
     if (c->recording) {
@@ -236,11 +237,12 @@ void live_draw_view_bottom(const live_controls_t *c)
 
     /* HOME Menu Settings' OFF / ON toggle as Stop | Record: the chosen half red with its notch. */
     live_rect_t st = live_view_rect(LIVE_HIT_STOP), rc = live_view_rect(LIVE_HIT_RECORD);
-    kit_image(kit_sysui(c->recording ? sysui_toggle_right_idx : sysui_toggle_left_idx), st.x, st.y);
-    if (c->pressed == LIVE_HIT_STOP) {
-        kit_rrect(st.x + 3, st.y + 3, st.w - 3, st.h - 6, 6, KIT_PRESS);
-    } else if (c->pressed == LIVE_HIT_RECORD) {
-        kit_rrect(rc.x, rc.y + 3, rc.w - 3, rc.h - 6, 6, KIT_PRESS);
+    size_t tog = c->recording ? sysui_toggle_right_idx : sysui_toggle_left_idx;
+    kit_image(kit_sysui(tog), st.x, st.y);
+    /* The held half: the same half of the darker toggle over it. */
+    if (c->pressed == LIVE_HIT_STOP || c->pressed == LIVE_HIT_RECORD) {
+        live_rect_t h = c->pressed == LIVE_HIT_STOP ? st : rc;
+        kit_image_part(kit_sysui(kit_pressed(tog)), h.x - st.x, 0, h.w, h.h, h.x, h.y, h.w, h.h);
     }
     float ls = KIT_PX(16);
     kit_text("Stop", st.x + st.w / 2.0f, st.y + st.h / 2.0f - 30 * ls / 2, ls, KIT_INK, 0, true);

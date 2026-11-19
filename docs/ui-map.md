@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, LIVE v5: Dashboard, scrolling view list, Stop | Record toggle (gauge-boy-82l.15)
+**As of:** 2026-11-19, LIVE v5 fixes: draggable scroll grip, press-and-lift controls, Transmission (gauge-boy-82l.16)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -102,13 +102,15 @@ Gauge Boy
         │   │                        C-H, battery 10-16 V, CEL engine icon, odometer;
         │   │                        polls RPM, speed, coolant and the odometer)
         │   ├── [Engine] [Warm-up] [Drive] [Air/Fuel] [Idle/Vacuum]
-        │   ├── [O2 Sensors] [Trans] [Custom] [All]
-        │   │                        a list that scrolls by dragging (scroll bar at the right);
-        │   │                        tap a view → LIVE view (starts polling). Trans polls the
+        │   ├── [O2 Sensors] [Transmission] [Custom] [All]
+        │   │                        a list that scrolls by dragging it or the scroll bar's grip
+        │   │                        (a touch on the bar moves the grip there); tap a view →
+        │   │                        LIVE view (starts polling). Transmission polls the
         │   │                        transmission module alone (CAN cars)
         │   ├── [B Back]             → HOME, stops polling                        [B]
         │   └── LIVE view            (top: the view's name and its values, one or two columns)
-        │       │                    (bottom: "n PIDs, r a second" at the top)
+        │       │                    (bottom: "n PIDs, r a second" at the top; its controls
+        │       │                    look pressed while held and act when the finger lifts)
         │       ├── [<] [>]          half circles at the edges: previous / next view  [L/R]
         │       ├── ● REC m:ss       above the toggle while recording (the dot pulses)
         │       ├── [Stop | Record]  a toggle: Record records this view to

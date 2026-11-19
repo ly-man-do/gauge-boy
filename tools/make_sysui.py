@@ -16,8 +16,9 @@ What it makes, all for the night theme:
   edges (B_ArrowL, B_ArrowR), rendered from their layouts and recolored to neutral night
   greys (tools/sysui/layout.py; the arrows lose their gold too)
 - HOME Menu Settings' OFF / ON toggle (PtBtnT_Abl_00: plain, left half chosen, right half
-  chosen, the chosen half red instead of green) and its scroll bar (PtSlideBar: track and
-  grip)
+  chosen, the chosen half and its notch red instead of green) and its scroll bar
+  (PtSlideBar: track and grip)
+- a pressed ("_dn") version of each touchable piece: the same art, darker
 
 Standard library only, plus ctrtool (3DSGuy/Project_CTR, MIT) to unpack the dumps.
 """
@@ -186,7 +187,8 @@ def lerp_tex(tex, black, white):
 
 def notch(toggle, petit, left):
     """The chosen half with the HOME Menu's notch (BtnTgl_03, a small down arrow) on its top
-    edge, centred, light as on the 3DS."""
+    edge, centred. On the 3DS it is part of the chosen face (P_On_00 maps it with the face's
+    own textures), so it takes the face's color: red here."""
     out = [list(map(list, row)) for row in toggle]
     tri = petit.texture('BtnTgl_03')
     half = len(out[0]) // 2
@@ -197,7 +199,8 @@ def notch(toggle, petit, left):
             a = p[3] / 255
             if a <= 0:
                 continue
-            c = [242 * p[0] / 255 + 40 * (1 - p[0] / 255)] * 3
+            k = p[0] / 255
+            c = [RED_DARK[i] + (RED_LIGHT[i] - RED_DARK[i]) * k for i in range(3)]
             d = out[y][x0 + x]
             out[y][x0 + x] = [c[i] * a + d[i] * (1 - a) for i in range(3)] + [max(d[3], p[3])]
     return out
@@ -229,6 +232,11 @@ def grip(petit, w=20, h=34):
     return out
 
 
+def pressed(img, k=0.68):
+    """A piece as it looks held down: its colors darkened, alpha kept."""
+    return [[[p[0] * k, p[1] * k, p[2] * k, p[3]] for p in row] for row in img]
+
+
 def home_settings_pieces(petit):
     """HOME Menu Settings (the petit archive): the OFF / ON toggle (PtBtnT_Abl_00) and the
     scroll bar (PtSlideBar), for the night theme."""
@@ -256,6 +264,10 @@ def main():
         sprites.update(settings_pieces(Archive(os.path.join(settings, 'base_LZ.bin')),
                                        Archive(os.path.join(settings, 'button_LZ.bin'))))
         sprites.update(home_settings_pieces(Archive(os.path.join(home, 'petit_LZ.bin'))))
+    # The pressed look of each touchable piece: the same art, darker (the shape stays exact).
+    for n in ('button_large', 'button_medium', 'side_left', 'side_right', 'toggle_left',
+              'toggle_right', 'scroll_grip', 'tab_left'):
+        sprites[n + '_dn'] = pressed(sprites[n])
     names = sorted(sprites)
     for n in names:
         formats.write_png(os.path.join(OUT, n + '.png'), sprites[n])

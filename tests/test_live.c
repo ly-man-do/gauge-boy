@@ -781,7 +781,7 @@ static void test_live_views(void)
     CHECK_EQ_STR(live_view_name(LIVE_VIEW_IDLE), "Idle/Vacuum");
     CHECK_EQ_INT(LIVE_VIEW_WARMUP, 1);   /* the list order */
     CHECK_EQ_INT(LIVE_VIEW_ALL, LIVE_VIEW_COUNT - 1);
-    CHECK_EQ_STR(live_view_name(LIVE_VIEW_TRANS), "Trans");
+    CHECK_EQ_STR(live_view_name(LIVE_VIEW_TRANS), "Transmission");
     {
         uint8_t dp[8];
         uint32_t dq[8];

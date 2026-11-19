@@ -2690,6 +2690,10 @@ typedef struct {
     bool live_dragged;         /* ... and moved: a scroll, not a tap */
     int live_touch_y0, live_scroll0;
     int live_row_held;         /* ... the row under it, -1 = none */
+    bool live_grip;            /* ... it began on the scroll bar: the grip follows it */
+    int live_grip_grab;        /* ... where on the grip it holds, px from its top */
+    int live_held;             /* LIVE view (graphics): the control held (live_hit_t) */
+    bool live_held_in;         /* ... and the finger is still on it */
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
@@ -5001,7 +5005,8 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
                 held = i;
             }
         }
-        live_draw_list(names, LIVE_VIEW_COUNT, ui->live_scroll, held, flashing(BTN_BACK, now));
+        live_draw_list(names, LIVE_VIEW_COUNT, ui->live_scroll, held, ui->live_touching && ui->live_grip,
+                       flashing(BTN_BACK, now));
         return;
     }
     if (ui->screen == SCREEN_LIVE && home_gfx) {
@@ -5024,6 +5029,9 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
             if (flashing(press[i].action, now)) {
                 c.pressed = press[i].hit;
             }
+        }
+        if (ui->live_held != LIVE_HIT_NONE) {
+            c.pressed = ui->live_held_in ? (live_hit_t)ui->live_held : LIVE_HIT_NONE;
         }
         live_draw_view_bottom(&c);
         return;
@@ -5824,7 +5832,7 @@ void spike_ui_run(void)
     ui_state_t ui = { SCREEN_HOME, DIAG_TAB_STORED, -1, 0, NULL, false, false, -1, SCREEN_SETUP,
                       false, LIVE_VIEW_ENGINE, SCREEN_HOME, false, 0, 0.0, 0.0, 0.0,
                       false, false, TA_RUN_LAUNCH, SCREEN_HOME, 0, 0, -1, 0, false, false, 0, 0,
-                      -1 };
+                      -1, false, 0, LIVE_HIT_NONE, false };
     gm_vec_t gm_raw = { 0, 0, 0 };   /* G-METER: the latest sensor reading */
     live_menu_count();
     uint64_t notice_until = 0;
@@ -6013,9 +6021,18 @@ void spike_ui_run(void)
                 if (live_back_hit(tp.px, tp.py)) {
                     action = BTN_BACK;
                     tapped = true;
+                } else if (live_list_bar_hit(tp.px, tp.py) &&
+                           live_list_max_scroll(LIVE_VIEW_COUNT) > 0) {
+                    /* The scroll bar: the grip jumps under the finger and follows it. */
+                    ui.live_touching = ui.live_grip = ui.live_dragged = true;
+                    ui.live_row_held = -1;
+                    ui.live_grip_grab = live_list_grip_grab(tp.py, ui.live_scroll, LIVE_VIEW_COUNT);
+                    ui.live_scroll = live_list_scroll_for_grip(tp.py - ui.live_grip_grab, LIVE_VIEW_COUNT);
+                    bottom_dirty = true;
                 } else {
                     /* A tap picks a row when the finger lifts; a drag scrolls. */
                     ui.live_touching = true;
+                    ui.live_grip = false;
                     ui.live_dragged = false;
                     ui.live_touch_y0 = tp.py;
                     ui.live_scroll0 = ui.live_scroll;
@@ -6023,15 +6040,11 @@ void spike_ui_run(void)
                     bottom_dirty = true;
                 }
             } else if (gfx_touch && ui.screen == SCREEN_LIVE) {
-                switch (live_view_hit(tp.px, tp.py, ui.live_view == LIVE_VIEW_CUSTOM)) {
-                case LIVE_HIT_BACK:   action = BTN_BACK;        tapped = true; break;
-                case LIVE_HIT_PREV:   action = BTN_PAGE_PREV;   tapped = true; break;
-                case LIVE_HIT_NEXT:   action = BTN_PAGE_NEXT;   tapped = true; break;
-                case LIVE_HIT_STOP:   action = BTN_LIVE_STOP;   tapped = true; break;
-                case LIVE_HIT_RECORD: action = BTN_LIVE_RECORD; tapped = true; break;
-                case LIVE_HIT_EDIT:   action = BTN_LIVE_EDIT;   tapped = true; break;
-                default: break;
-                }
+                /* As on the 3DS: held = pressed; the control acts when the finger
+                 * lifts while still on it. */
+                ui.live_held = live_view_hit(tp.px, tp.py, ui.live_view == LIVE_VIEW_CUSTOM);
+                ui.live_held_in = ui.live_held != LIVE_HIT_NONE;
+                bottom_dirty = true;
             } else if (item >= 0) {
                 action = home_item_action(item);
                 if (item != HOME_CLOSE) {
@@ -6071,10 +6084,50 @@ void spike_ui_run(void)
             }
         }
 
+        /* A LIVE view's control (graphics): pressed while held, acts on lifting. */
+        bool lifted = false;   /* the action came from a lift: it was shown pressed already */
+        if (ui.live_held != LIVE_HIT_NONE) {
+            if (ui.screen != SCREEN_LIVE || confirming) {
+                ui.live_held = LIVE_HIT_NONE;
+            } else if (hidKeysHeld() & KEY_TOUCH) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                bool in = live_view_hit(tp.px, tp.py, ui.live_view == LIVE_VIEW_CUSTOM) == ui.live_held;
+                if (in != ui.live_held_in) {
+                    ui.live_held_in = in;
+                    bottom_dirty = true;
+                }
+            } else {
+                if (ui.live_held_in && !tapped) {
+                    switch (ui.live_held) {
+                    case LIVE_HIT_BACK:   action = BTN_BACK;        tapped = true; break;
+                    case LIVE_HIT_PREV:   action = BTN_PAGE_PREV;   tapped = true; break;
+                    case LIVE_HIT_NEXT:   action = BTN_PAGE_NEXT;   tapped = true; break;
+                    case LIVE_HIT_STOP:   action = BTN_LIVE_STOP;   tapped = true; break;
+                    case LIVE_HIT_RECORD: action = BTN_LIVE_RECORD; tapped = true; break;
+                    case LIVE_HIT_EDIT:   action = BTN_LIVE_EDIT;   tapped = true; break;
+                    default: break;
+                    }
+                    lifted = tapped;
+                }
+                ui.live_held = LIVE_HIT_NONE;
+                ui.live_held_in = false;
+                bottom_dirty = true;
+            }
+        }
+
         /* LIVE's view list (graphics): drag to scroll, lift to pick. */
         if (ui.live_touching) {
             if (ui.screen != SCREEN_LIVE_MENU || confirming) {
-                ui.live_touching = false;
+                ui.live_touching = ui.live_grip = false;
+            } else if ((hidKeysHeld() & KEY_TOUCH) && ui.live_grip) {
+                touchPosition tp;
+                hidTouchRead(&tp);
+                int sc = live_list_scroll_for_grip(tp.py - ui.live_grip_grab, LIVE_VIEW_COUNT);
+                if (sc != ui.live_scroll) {
+                    ui.live_scroll = sc;
+                    bottom_dirty = true;
+                }
             } else if (hidKeysHeld() & KEY_TOUCH) {
                 touchPosition tp;
                 hidTouchRead(&tp);
@@ -6091,10 +6144,10 @@ void spike_ui_run(void)
                     }
                 }
             } else {
-                ui.live_touching = false;
+                ui.live_touching = ui.live_grip = false;
                 if (!ui.live_dragged && ui.live_row_held >= 0 && !tapped) {
                     action = BTN_LIVE_VIEW - ui.live_row_held;
-                    tapped = true;
+                    tapped = lifted = true;
                 }
                 ui.live_row_held = -1;
                 bottom_dirty = true;
@@ -6120,7 +6173,9 @@ void spike_ui_run(void)
         }
 
         if (tapped) {
-            flash(action, now);
+            if (!lifted) {
+                flash(action, now);
+            }
             bottom_dirty = true;
             int n = ui.screen == SCREEN_DIAG ? diag_item_count(ui.tab) : 0;
             if (ui.screen == SCREEN_LOG) {

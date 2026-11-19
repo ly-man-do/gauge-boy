@@ -82,8 +82,11 @@ void kit_image_part(C2D_Image img, float sx, float sy, float sw, float sh, float
 /* A sprite stretched to (x, y, w, h): corners of size c kept, edges stretched. */
 void kit_nine(C2D_Image img, float x, float y, float w, float h, float c);
 
+/* The pressed ("_dn") version of a touchable system piece (the piece itself if none). */
+size_t kit_pressed(size_t idx);
+
 /* A System Settings button (sysui_button_large_idx / _medium_idx) at (x, y, w, h);
- * pressed = darker and 1 px lower. */
+ * pressed = its darker version, 1 px lower. */
 void kit_button(size_t idx, float x, float y, float w, float h, bool pressed);
 
 /* ---------- text (the system font) ---------- */

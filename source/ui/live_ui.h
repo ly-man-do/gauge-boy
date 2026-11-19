@@ -45,6 +45,14 @@ int live_list_grip_y(int scroll, int n);
 #define LIVE_GRIP_W 20
 #define LIVE_GRIP_H 34
 
+/* The scroll bar's touch zone: the strip at the right edge beside the rows. */
+bool live_list_bar_hit(int px, int py);
+/* Where to grab the grip for a touch at py: its offset from the grip's top (the touch
+ * point if it's on the grip, else the grip's middle, so the grip jumps under the finger). */
+int live_list_grip_grab(int py, int scroll, int n);
+/* The scroll that puts the grip's top at grip_top (clamped). */
+int live_list_scroll_for_grip(int grip_top, int n);
+
 /* ---------- a PID view ---------- */
 
 typedef enum {

@@ -73,7 +73,7 @@ static const view_def_t views[LIVE_VIEW_COUNT] = {
     [LIVE_VIEW_DRIVE]    = { "Drive", "drive", "Load, fuel rate, economy", drive, N(drive) },
     [LIVE_VIEW_ALL]      = { "All", "all", "Every PID the car supports", NULL, 0 },
     [LIVE_VIEW_CUSTOM]   = { "Custom", "custom", "Your own pick (EDIT)", NULL, 0 },
-    [LIVE_VIEW_TRANS]    = { "Trans", "trans", "The transmission module (CAN cars)", NULL, 0 },
+    [LIVE_VIEW_TRANS]    = { "Transmission", "trans", "The transmission module (CAN cars)", NULL, 0 },
 };
 
 int live_dash_request(uint8_t *pids, uint32_t *periods, int max)
