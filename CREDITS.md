@@ -10,7 +10,8 @@ Every asset and borrowed file in Gauge Boy, with its source and license. Gauge B
 | `meta/banner.png` | HOME menu banner | Original, drawn by `tools/make_meta_assets.py`; lettering is an original block font defined in that script | Gauge Boy (this project) |
 | `meta/banner.wav` | Banner chime | Original, synthesized by `tools/make_meta_assets.py` | Gauge Boy (this project) |
 | `assets/fonts/Nunito-Bold.ttf` | HOME screen font (Nunito, Bold weight cut from the variable font with fonttools); converted at build time to `romfs/fonts/nunito-13.bcfnt` and `nunito-8.bcfnt` (ASCII only) | [google/fonts](https://github.com/google/fonts/tree/main/ofl/nunito) `ofl/nunito/Nunito[wght].ttf` (upstream [googlefonts/nunito](https://github.com/googlefonts/nunito)). Copyright 2014 The Nunito Project Authors. | SIL OFL 1.1 ([license text](assets/fonts/OFL.txt)) |
-| HOME screen icons | Gauge, magnifier, sliders, flag, document, gear, lamp and Wi-Fi icons | Original, drawn in code in `source/ui/home_draw.c` | Gauge Boy (this project) |
+| `gfx/icons/*.png` | HOME menu icons (gauge, engine, sliders, checkered flag, chart, gear, garage, Wi-Fi, app gauge) | Original, drawn by `tools/make_icons.py` | Gauge Boy (this project) |
+| `gfx/sysui/*.png` | 3DS system UI pieces: the status bar's signal, connection pill and battery (dark version), the grey bottom bar, its Back / OK tabs, and the large and medium buttons, recolored to the night theme's neutral greys | Nintendo's own art, from the HOME Menu (`0004003000008F02` v30.0.0, `hud` archive, layout `HudMenu_00`) and System Settings (`0004001000021000` v11.0.1, `base` and `button` archives, layouts `TopBase_D_00`, `Base_D_01`, `B_L`, `B_M`), extracted from the owner's own console by `tools/make_sysui.py`. Copyright Nintendo. Used by the owner's decision (brief 1.22.0), who accepts the risk. | Nintendo (no license) |
 
 ## Data
 
@@ -35,6 +36,8 @@ These run at build time only; nothing from them is included in Gauge Boy's sourc
 | mkbcfnt (font conversion) | 2.3.0, in the devkitPro image | [devkitPro/3dstools](https://github.com/devkitPro/3dstools) | GPL-3.0 (the tool only; its output is the font's) |
 | fonttools (used once to make `Nunito-Bold.ttf`) | 4.62.1 | [fonttools/fonttools](https://github.com/fonttools/fonttools) | MIT |
 | makerom | v0.18.4 | [3DSGuy/Project_CTR](https://github.com/3DSGuy/Project_CTR) | MIT |
+| ctrtool (unpacks the owner's HOME Menu and System Settings dumps for `tools/make_sysui.py`) | v1.3.0 | [3DSGuy/Project_CTR](https://github.com/3DSGuy/Project_CTR) | MIT |
+| tex3ds (sprite sheets from `gfx/*.t3s`) | 2.3.0, in the devkitPro image | [devkitPro/tex3ds](https://github.com/devkitPro/tex3ds) | GPL-3.0 (the tool only; its output is the images') |
 | bannertool | v1.2.2 | [Epicpkmn11/bannertool](https://github.com/Epicpkmn11/bannertool) | MIT |
 | segno (release QR codes) | 1.6.6 | [heuer/segno](https://github.com/heuer/segno) | BSD-3-Clause |
 | ELM327-emulator (dev only) | 4.0.0 | [Ircama/ELM327-emulator](https://github.com/Ircama/ELM327-emulator) | CC BY-NC-SA 4.0 |

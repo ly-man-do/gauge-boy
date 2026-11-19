@@ -11,14 +11,14 @@
  *   [ TRACK ] [ LOG ] [ SETUP ]
  *   ======= START Close =======        bar: tap to close, like START
  *
- * Mockup v4 (docs/mockups/home-v4.html), owner-approved 2026-11-18.
+ * Mockup v7 (docs/mockups/home-v7.html), owner-approved 2026-11-18.
  */
 
 #include <stdbool.h>
 
 #define HOME_SCREEN_W 320
 #define HOME_SCREEN_H 240
-#define HOME_BAR_Y    208   /* 32 px bar, as in the preview (owner decision) */
+#define HOME_BAR_Y    202   /* System Settings' 38 px bottom bar (brief 1.22.0) */
 
 typedef enum {
     HOME_GARAGE = 0,
@@ -45,7 +45,8 @@ typedef struct {
     int selected;        /* last tapped item (red outline), -1 = none */
     int pressed;         /* item flashing after a tap, -1 = none */
     const char *notice;  /* shown in the bar instead of "START Close", or NULL */
-    const char *car;     /* Garage's second line: nickname or model, NULL = "No car yet" */
+    const char *car;     /* NULL when no car is known yet (the Garage icon dims) */
+    int codes;           /* stored codes for the DIAG badge, -1 if not read */
 } home_view_t;
 
 /* The button as drawn. */

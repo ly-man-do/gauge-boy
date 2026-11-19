@@ -1,0 +1,14 @@
+--atlas -f rgba8888 -z auto --border=edge
+
+icons/adapter_off.png
+icons/adapter_on.png
+icons/app.png
+icons/diag.png
+icons/diag_cel.png
+icons/garage.png
+icons/garage_dim.png
+icons/live.png
+icons/log.png
+icons/setup.png
+icons/track.png
+icons/trim.png

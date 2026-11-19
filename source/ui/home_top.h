@@ -5,17 +5,18 @@
  * HOME top screen (400x240): what it says. Platform-free so the text is
  * unit-tested; drawing is in home_draw.c (citro2d).
  *
- *   [signal] [Adapter connected]          11/18 (Wed) 21:12 [battery]
- *               GAUGE BOY: OBD-II DELUXE
- *   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
- *   | My Ridgeline                         [CEL off] [0 codes]       |
- *   | 2008 Honda Ridgeline                 ISO 9141-2 - ELM327 v2.3  |
- *   | ODOMETER            |  | LAST DRIVE                            |
- *   |  123,456 mi         |  |  12.4 mi today                        |
- *   |                     |  |  17.8 mpg average                     |
- *            Not for use by the driver while driving
+ *   [signal] (Connected)                    11/18 (Wed)  21:12 [battery]
+ *                 (o) GAUGE BOY: OBD-II DELUXE
+ *   . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+ *   | [Car       ] Big Red   2008 Honda Ridgeline                      |
+ *   | [CEL       ] o Off                                               |
+ *   | [Codes     ] None stored                                         |
+ *   | [Odometer  ] 123,456 mi            (LCD digits)                  |
+ *   | [Last drive] 12.4 mi   today                                     |
+ *   | [Economy   ] 14.1 mpg  average                                   |
+ *   | [Adapter   ] ELM327 v2.3   ISO 9141-2                            |
  *
- * Mockup v4 (docs/mockups/home-v4.html), owner-approved 2026-11-18.
+ * Mockup v7 (docs/mockups/home-v7.html), owner-approved 2026-11-18.
  */
 
 #include <stdbool.h>
@@ -27,7 +28,10 @@ typedef struct {
     const char *nickname;      /* "" if none */
     const char *title;         /* "2008 Honda Ridgeline" */
     bool cel_known, cel_on;
+    bool have_mil_km;          /* distance driven with the CEL on */
+    int mil_km;
     int codes;                 /* stored codes, -1 if not read */
+    const char *code_list;     /* "P0171, P0174" (stored codes), "" if none */
     int protocol;              /* ELM327 protocol 1-12, 0 if unknown */
     const char *adapter_id;    /* "ELM327 V2.3", "" if unknown */
     const char *adapter_host;  /* "192.168.0.10", shown when not connected */
@@ -42,36 +46,32 @@ typedef struct {
     double economy;            /* mpg (US) or L/100 km (metric) */
 } home_top_t;
 
-/* The car card's two lines: nickname / title, title / "", or the no-car
- * text. */
-void home_top_car(const home_top_t *t, char *line1, size_t len1, char *line2, size_t len2);
+typedef enum {
+    HOME_TONE_NORMAL = 0,      /* white */
+    HOME_TONE_DIM,             /* not known yet: grey */
+    HOME_TONE_RED,             /* not connected */
+    HOME_TONE_AMBER,           /* the CEL is on */
+    HOME_TONE_ECONOMY,         /* the economy value (light red) */
+} home_tone_t;
 
-/* "CEL off", "CEL ON", "CEL --". */
-const char *home_top_cel(const home_top_t *t);
+#define HOME_ROWS 7
+#define HOME_ROW_TEXT 48
 
-/* "0 codes", "1 code", "3 codes", "-- codes". */
-void home_top_codes(const home_top_t *t, char *out, size_t len);
+typedef struct {
+    const char *tag;                /* "Car", "CEL" ... */
+    char value[HOME_ROW_TEXT];      /* "Big Red"; for an LCD row the digits ("123,456") */
+    char detail[HOME_ROW_TEXT];     /* "2008 Honda Ridgeline", "mi", "" */
+    home_tone_t tone;
+    bool lcd;                       /* value in LCD digits */
+    bool lamp;                      /* a CEL lamp before the value */
+} home_row_t;
 
-/* "ISO 9141-2 - ELM327 v2.3" when connected (either part may be missing),
- * else "Adapter 192.168.0.10". */
-void home_top_detail(const home_top_t *t, char *out, size_t len);
+/* The info panel's seven rows: Car, CEL, Codes, Odometer, Last drive,
+ * Economy, Adapter. */
+void home_top_rows(const home_top_t *t, home_row_t rows[HOME_ROWS]);
 
 /* Short protocol name for ELM327 protocol numbers 1-12, "" otherwise. */
 const char *home_protocol_name(int protocol);
-
-/* The odometer in the display unit as "123,456" (rounded down, groups of
- * three), "" if none. */
-void home_top_odometer(const home_top_t *t, char *out, size_t len);
-
-/* "mi" or "km". */
-const char *home_top_dist_unit(const home_top_t *t);
-
-/* The last drive's distance "12.4" (one decimal, at most 999.9) and when:
- * "today" or "11/16". Both "" if none. */
-void home_top_last(const home_top_t *t, char *dist, size_t dlen, char *when, size_t wlen);
-
-/* "17.8" and "mpg average" / "L/100 km average"; "" and "" if none. */
-void home_top_economy(const home_top_t *t, char *value, size_t vlen, char *label, size_t llen);
 
 /* Digits with thousands commas: 123456 -> "123,456". */
 void home_group_digits(long v, char *out, size_t len);

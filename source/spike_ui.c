@@ -4610,6 +4610,13 @@ static void draw_home_top(bool connected)
     bool cel_known = shared.diag.have_readiness;
     bool cel = cel_known && shared.diag.readiness.mil_on;
     int codes = shared.diag.have_stored ? shared.diag.stored.count : -1;
+    char code_list[40] = "";
+    for (int i = 0; codes > 0 && i < shared.diag.stored.count && i < 3; i++) {
+        size_t n = strlen(code_list);
+        snprintf(code_list + n, sizeof code_list - n, "%s%s", i ? ", " : "", shared.diag.stored.code[i].code);
+    }
+    bool have_mil_km = shared.diag.have_mil_km;
+    int mil_km = shared.diag.mil_km;
     int protocol = shared.diag.link.protocol;
     snprintf(adapter, sizeof adapter, "%s", shared.diag.link.adapter_id);
     memcpy(miles_text, shared.miles_text, sizeof miles_text);
@@ -4629,6 +4636,9 @@ static void draw_home_top(bool connected)
     t.cel_known = cel_known;
     t.cel_on = cel;
     t.codes = codes;
+    t.code_list = code_list;
+    t.have_mil_km = have_mil_km;
+    t.mil_km = mil_km;
     t.protocol = protocol;
     t.adapter_id = adapter;
     t.adapter_host = app_cfg->adapter_host;
@@ -4909,6 +4919,7 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         LightLock_Lock(&shared.lock);
         v.cel_known = shared.diag.have_readiness;
         v.connected = shared.connected;
+        v.codes = shared.diag.have_stored ? shared.diag.stored.count : -1;
         LightLock_Unlock(&shared.lock);
         v.cel_on = cel_on;
         v.selected = ui->home_selected;

@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gauge Boy HOME mockup v7</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/dseg@0.46.0/css/dseg.css">
+<style>
+  @font-face { font-family: "Rodin"; src: local("FOT-Rodin ProN DB"), local("RodinProN-DB"); }
+  :root {
+    --bg: #000; --panel: #121212; --panel-edge: #2C2C2C; --recess: #0B0B0B;
+    --ink: #F2F4F5; --ink2: #C8C8C8; --ink3: #9C9C9C; --dot: #555;
+    --tag: #2E2E2E; --tag-ink: #D6D6D6;
+    --red: #E2302A; --red-hi: #FF5A4E; --orange: #FF8A2B; --yellow: #F5D04A; --blue: #5AA8F5;
+    --grey: #A8A8A8; --green: #4FCB62; --amber: #F2A52B;
+    --font: "Rodin", ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+  }
+  body { margin: 0; padding: 20px; background: #202020; font-family: var(--font); color: #ddd; }
+  h1 { font-size: 17px; margin: 0 0 4px; font-weight: 600; }
+  p.note { margin: 0 0 10px; color: #aaa; font-size: 12.5px; max-width: 860px; line-height: 1.5; }
+  .zoom { margin: 0 0 16px; display: flex; gap: 6px; }
+  .zoom button { background: #333; color: #ddd; border: 1px solid #555; border-radius: 6px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .zoom button.on { background: #E2302A; border-color: #E2302A; color: #fff; }
+  #wrap { transform-origin: top left; }
+  .states { display: flex; gap: 40px; }
+  .ds { display: flex; flex-direction: column; align-items: center; gap: 22px; width: 400px; padding: 0 0 12px; }
+  .state-lbl { align-self: flex-start; font-size: 11px; color: #bbb; font-weight: 600; margin-bottom: -10px; font-family: system-ui; }
+  .scr { position: relative; overflow: hidden; background: var(--bg); box-shadow: 0 0 0 5px #0d0d0d, 0 0 0 6px #3a3a3a; color: var(--ink); font-weight: 700; }
+  .top { width: 400px; height: 240px; }
+  .bot { width: 320px; height: 240px; }
+  svg.i { display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  canvas.sbc { position: absolute; left: 0; top: 0; width: 400px; height: 20px; image-rendering: pixelated; }
+  /* (old drawn status bar, unused) */
+  .sb { position: absolute; left: 0; top: 0; right: 0; height: 17px; display: flex; align-items: center; gap: 5px; padding: 0 4px 0 3px;
+        background: transparent; color: #E8EAEB; font-size: 11.5px; letter-spacing: .2px; }
+  .bars { display: flex; align-items: flex-end; gap: 1px; height: 11px; width: 19px; }
+  .bars i { display: block; width: 3.5px; border-radius: .5px; background: linear-gradient(#7FC6F5, #2F8EDB); }
+  .bars i.off { background: #4A4A4A; }
+  .pill { height: 13px; padding: 0 10px; border-radius: 4px; font-size: 10px; line-height: 13px; color: #fff; margin-left: 2px;
+          background: linear-gradient(#9AD6FA 0%, #5DB5F0 45%, #3A97E0 55%, #2F86D2 100%);
+          box-shadow: inset 0 0 0 1px #2471B8, inset 0 1.5px 0 0 rgba(255,255,255,.55); text-shadow: 0 1px 0 rgba(20,80,140,.6); }
+  .pill.off { background: linear-gradient(#8A8A8A 0%, #6E6E6E 50%, #5A5A5A 100%); box-shadow: inset 0 0 0 1px #3E3E3E, inset 0 1.5px 0 0 rgba(255,255,255,.3); text-shadow: none; color: #E8E8E8; }
+  .sb .sp { flex: 1; }
+  .batt { width: 22px; height: 11px; border-radius: 2.5px; position: relative; display: flex; gap: 1px; padding: 2px; box-sizing: border-box; box-shadow: inset 0 0 0 1.5px #E8EAEB; margin-left: 5px; }
+  .batt b { flex: 1; background: linear-gradient(#7FC6F5, #2F8EDB); border-radius: .5px; }
+  .batt b.e { background: transparent; }
+  .batt:after { content: ""; position: absolute; right: -3px; top: 3.5px; width: 2px; height: 4px; background: #E8EAEB; border-radius: 0 1px 1px 0; }
+
+  /* title row, divider, info panel */
+  .title { position: absolute; left: 0; right: 0; top: 23px; height: 28px; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 20px; letter-spacing: .2px; }
+  .title .o { color: var(--orange); }
+  .dots { position: absolute; left: 18px; right: 18px; top: 57px; height: 3px;
+          background: radial-gradient(circle, var(--dot) 1.2px, transparent 1.5px) 0 50% / 8px 3px repeat-x; }
+  .panel { position: absolute; left: 17px; top: 67px; width: 366px; height: 158px; border-radius: 6px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--panel-edge); box-sizing: border-box; padding: 8px 10px; }
+  .row { display: flex; align-items: center; height: 20.5px; gap: 8px; white-space: nowrap; }
+  .tag { width: 74px; flex: none; height: 15px; line-height: 15px; border-radius: 4px; background: var(--tag); color: var(--tag-ink); font-size: 10.5px; padding-left: 6px; box-sizing: border-box; }
+  .v { font-size: 15px; color: var(--ink); }
+  .v2 { font-size: 12px; color: var(--ink3); margin-left: 5px; }
+  .none { color: var(--ink3); }
+  .lamp { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: -0.5px; }
+  .lcd { font-family: "DSEG7-Classic", monospace; font-weight: 400; font-size: 14px; letter-spacing: 1px; position: relative; }
+  .lcd .g { position: absolute; left: 0; color: rgba(255,255,255,.07); }
+  .comma { font-family: var(--font); font-weight: 700; font-size: 14px; margin: 0 -1px 0 -5px; }
+
+  /* bottom: bars, tiles, close bar */
+  .btn { position: absolute; box-sizing: border-box; border-radius: 9px; color: var(--ink); z-index: 0; isolation: isolate; }
+  .btn > svg, .btn > span { position: relative; }
+  .bar { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; }
+  .tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; font-size: 14px; letter-spacing: .5px; border-radius: 10px; }
+  .ring { position: absolute; border-radius: 13px; box-shadow: 0 0 0 3px var(--red), 0 0 0 4.5px rgba(255,120,110,.45), 0 0 10px 3px rgba(226,48,42,.45); pointer-events: none; }
+  .badge { position: absolute; right: -4px; top: -5px; height: 14px; min-width: 14px; padding: 0 4px; border-radius: 7px; font-size: 9px; line-height: 14px; text-align: center; color: #fff; box-sizing: border-box; box-shadow: 0 0 0 1.5px #000; }
+  .close { position: absolute; left: 4px; right: 4px; bottom: 0; height: 31px; border-radius: 14px 14px 0 0; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 17px;
+           background: linear-gradient(#787878, #5E5E5E); box-shadow: inset 0 2px 0 #B8B8B8; color: #fff; }
+  .close .cap { font-size: 8.5px; padding: 1px 4px; border-radius: 3px; background: #fff; color: #555; letter-spacing: .5px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-garage" viewBox="0 0 24 24"><path d="M3 10.5 12 4l9 6.5V20H3z"/><path d="M7 20v-7h10v7"/><path d="M7 15.5h10M7 18h10"/></symbol>
+    <symbol id="i-adapter" viewBox="0 0 24 24"><path d="M2.5 9.5a14 14 0 0 1 19 0"/><path d="M5.5 13a9.5 9.5 0 0 1 13 0"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor"/></symbol>
+    <symbol id="i-live" viewBox="0 0 24 24"><path d="M4.2 17.5a9 9 0 1 1 15.6 0"/><path d="M12 13.5l4-5"/><circle cx="12" cy="13.5" r="1.6" fill="currentColor"/><path d="M6.5 12.5h1.3M16.2 12.5h1.3M12 6.8v1.3"/></symbol>
+    <symbol id="i-diag" viewBox="0 0 24 24"><path d="M7 8h9v2.5h2.5V8.5H21V17h-2.5v-2H16v3H9.5L7 15.5z"/><path d="M10 5h5M12.5 5v3"/><path d="M3 10.5v6M3 13.5h4"/></symbol>
+    <symbol id="i-trim" viewBox="0 0 24 24"><path d="M3.5 6.5h17M3.5 12h17M3.5 17.5h17"/><circle cx="9" cy="6.5" r="2.2" fill="#1d1d1d"/><circle cx="15.5" cy="12" r="2.2" fill="#1d1d1d"/><circle cx="7.5" cy="17.5" r="2.2" fill="#1d1d1d"/></symbol>
+    <symbol id="i-track" viewBox="0 0 24 24"><path d="M5 21V3.5"/><path d="M5 4h14v10H5" fill="#1d1d1d"/><path d="M5 4h4.7v5H5zM14.3 4H19v5h-4.7zM9.7 9h4.6v5H9.7z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-log" viewBox="0 0 24 24"><path d="M3.5 20.5h17"/><path d="M4 16l4.5-6 4 3.5 3.5-6 4 4"/></symbol>
+    <symbol id="i-setup" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8l1.6 2.6 3-.6.6 3 2.6 1.6-1.4 2.6 1.4 2.6-2.6 1.6-.6 3-3-.6L12 21.2l-1.6-2.6-3 .6-.6-3-2.6-1.6L5.6 12 4.2 9.4l2.6-1.6.6-3 3 .6z"/></symbol>
+    <symbol id="i-app" viewBox="0 0 24 24"><path d="M3.8 17.5a9 9 0 1 1 16.4 0z" fill="#2A2A2A"/><path d="M12 13.5l4.6-5.2" stroke="#FF5A4E"/><circle cx="12" cy="13.5" r="1.8" fill="currentColor"/></symbol>
+  </defs>
+</svg>
+
+<h1>Gauge Boy HOME, mockup v7 (night)</h1>
+<p class="note">Clearer layout, written for Gauge Boy (no 3dsDL code, icons or text). Top screen shows, bottom screen does: one info panel of fact rows with label tags; bigger, brighter text; 30 px icons; one focus ring (red) where the A button goes. New 3DS XL proportions: top 400x240, bottom 320x240, same scale. Icons are our own SVGs, the source for the app's icon atlas. The status bar uses the HOME Menu's own HUD textures and layout, in its dark variant; the bottom bar is System Settings' own grey bar (TopBase_D_00); the tiles and the Garage / Adapter bars are System Settings' own buttons (B_L, B_M), recolored to neutral night greys. Values are sample data.</p>
+<div class="zoom"><button data-z="1">1x (about actual size)</button><button data-z="2" class="on">2x</button><button data-z="3">3x</button></div>
+
+<div id="wrap"><div class="states">
+
+<!-- ======================= CONNECTED ======================= -->
+<div class="ds">
+<div class="state-lbl">Connected</div>
+<div class="scr top">
+  <canvas class="sbc" data-state="on"></canvas>
+  <div class="title"><svg class="i" width="24" height="24" style="color:#F2F4F5"><use href="#i-app"/></svg>GAUGE BOY: <span class="o">OBD-II DELUXE</span></div>
+  <div class="dots"></div>
+  <div class="panel">
+    <div class="row"><span class="tag">Car</span><span class="v">Big Red</span><span class="v2">2008 Honda Ridgeline</span></div>
+    <div class="row"><span class="tag">CEL</span><span class="v"><span class="lamp" style="background:#3E3E3E; box-shadow: inset 0 0 0 1px #5a5a5a"></span>Off</span></div>
+    <div class="row"><span class="tag">Codes</span><span class="v">None stored</span></div>
+    <div class="row"><span class="tag">Odometer</span><span class="v lcd"><span class="g">888</span>123</span><span class="comma">,</span><span class="v lcd"><span class="g">888</span>456</span><span class="v2" style="margin-left:4px">mi</span></div>
+    <div class="row"><span class="tag">Last drive</span><span class="v">12.4 mi</span><span class="v2">today</span></div>
+    <div class="row"><span class="tag">Economy</span><span class="v" style="color:var(--red-hi)">14.1 mpg</span><span class="v2">average</span></div>
+    <div class="row"><span class="tag">Adapter</span><span class="v">ELM327 v2.3</span><span class="v2">ISO 9141-2</span></div>
+  </div>
+</div>
+
+<div class="scr bot">
+  <div class="btn bar" style="left:8px; top:6px; width:148px; height:34px"><svg class="i" width="22" height="22"><use href="#i-garage"/></svg>Garage</div>
+  <div class="btn bar" style="left:164px; top:6px; width:148px; height:34px"><svg class="i" width="22" height="22" style="color:var(--green)"><use href="#i-adapter"/></svg>Adapter</div>
+
+  <div class="ring" style="left:5px; top:42px; width:104px; height:80px"></div>
+  <div class="btn tile" style="left:8px;   top:45px;  width:98px;  height:74px"><svg class="i" width="30" height="30" style="color:var(--red-hi)"><use href="#i-live"/></svg>LIVE</div>
+  <div class="btn tile" style="left:111px; top:45px;  width:98px;  height:74px"><svg class="i" width="30" height="30" style="color:var(--orange)"><use href="#i-diag"/></svg>DIAG</div>
+  <div class="btn tile" style="left:214px; top:45px;  width:98px;  height:74px"><svg class="i" width="30" height="30" style="color:var(--yellow)"><use href="#i-trim"/></svg>TRIM</div>
+  <div class="btn tile" style="left:8px;   top:122px; width:98px;  height:74px"><svg class="i" width="30" height="30"><use href="#i-track"/></svg>TRACK</div>
+  <div class="btn tile" style="left:111px; top:122px; width:98px;  height:74px"><svg class="i" width="30" height="30" style="color:var(--blue)"><use href="#i-log"/></svg>LOG</div>
+  <div class="btn tile" style="left:214px; top:122px; width:98px;  height:74px"><svg class="i" width="30" height="30" style="color:var(--grey)"><use href="#i-setup"/></svg>SETUP</div>
+
+  <canvas class="cbar" data-label="Close" data-key="START" style="position:absolute;left:0;bottom:0;width:320px;height:38px;image-rendering:pixelated"></canvas>
+</div>
+</div>
+
+<!-- ======================= NOT CONNECTED ======================= -->
+<div class="ds">
+<div class="state-lbl">Not connected, no car yet (first start)</div>
+<div class="scr top">
+  <canvas class="sbc" data-state="off"></canvas>
+  <div class="title"><svg class="i" width="24" height="24" style="color:#F2F4F5"><use href="#i-app"/></svg>GAUGE BOY: <span class="o">OBD-II DELUXE</span></div>
+  <div class="dots"></div>
+  <div class="panel">
+    <div class="row"><span class="tag">Car</span><span class="v none">No car yet</span></div>
+    <div class="row"><span class="tag">CEL</span><span class="v none">--</span></div>
+    <div class="row"><span class="tag">Codes</span><span class="v none">--</span></div>
+    <div class="row"><span class="tag">Odometer</span><span class="v lcd none"><span class="g">888</span>---</span><span class="comma none">,</span><span class="v lcd none"><span class="g">888</span>---</span><span class="v2" style="margin-left:4px">mi</span></div>
+    <div class="row"><span class="tag">Last drive</span><span class="v none">None yet</span></div>
+    <div class="row"><span class="tag">Economy</span><span class="v none">--</span></div>
+    <div class="row"><span class="tag">Adapter</span><span class="v" style="color:var(--red-hi)">Not connected</span><span class="v2">192.168.0.10</span></div>
+  </div>
+</div>
+
+<div class="scr bot">
+  <div class="btn bar" style="left:8px; top:6px; width:148px; height:34px"><svg class="i" width="22" height="22" style="color:var(--ink3)"><use href="#i-garage"/></svg>Garage</div>
+  <div class="ring" style="left:161px; top:3px; width:154px; height:40px"></div>
+  <div class="btn bar" style="left:164px; top:6px; width:148px; height:34px"><svg class="i" width="22" height="22" style="color:var(--red-hi)"><use href="#i-adapter"/></svg>Adapter<span class="badge" style="background:var(--red)">!</span></div>
+
+  <div class="btn tile" style="left:8px;   top:45px;  width:98px;  height:74px"><svg class="i" width="30" height="30" style="color:var(--red-hi)"><use href="#i-live"/></svg>LIVE</div>
+  <div class="btn tile" style="left:111px; top:45px;  width:98px;  height:74px"><svg class="i" width="30" height="30" style="color:var(--orange)"><use href="#i-diag"/></svg>DIAG</div>
+  <div class="btn tile" style="left:214px; top:45px;  width:98px;  height:74px"><svg class="i" width="30" height="30" style="color:var(--yellow)"><use href="#i-trim"/></svg>TRIM</div>
+  <div class="btn tile" style="left:8px;   top:122px; width:98px;  height:74px"><svg class="i" width="30" height="30"><use href="#i-track"/></svg>TRACK</div>
+  <div class="btn tile" style="left:111px; top:122px; width:98px;  height:74px"><svg class="i" width="30" height="30" style="color:var(--blue)"><use href="#i-log"/></svg>LOG</div>
+  <div class="btn tile" style="left:214px; top:122px; width:98px;  height:74px"><svg class="i" width="30" height="30" style="color:var(--grey)"><use href="#i-setup"/></svg>SETUP</div>
+
+  <canvas class="cbar" data-label="Close" data-key="START" style="position:absolute;left:0;bottom:0;width:320px;height:38px;image-rendering:pixelated"></canvas>
+</div>
+</div>
+
+</div></div>
+
+<p class="note" style="margin-top:18px">Variations: a CEL that is on (top-screen row and the DIAG tile turn amber, with a count badge), and a button held down (darker, 1 px lower; it acts when the stylus lifts).</p>
+<div style="display:flex; gap:24px; align-items:center; background:#000; padding:14px; width:max-content; border-radius:4px">
+  <div class="panel" style="position:relative; left:0; top:0; width:240px; height:auto; padding:6px 10px">
+    <div class="row"><span class="tag">CEL</span><span class="v" style="color:var(--amber)"><span class="lamp" style="background:var(--amber); box-shadow:0 0 5px var(--amber)"></span>ON</span><span class="v2">for 7 mi</span></div>
+    <div class="row"><span class="tag">Codes</span><span class="v">2 stored</span><span class="v2">P0171, P0174</span></div>
+  </div>
+  <div style="position:relative; width:98px; height:76px">
+    <div class="btn tile" style="left:0; top:0; width:98px; height:76px; box-shadow: inset 0 0 0 1.5px var(--amber), inset 0 1.5px 0 0 rgba(255,255,255,.16), 0 2px 0 #000"><svg class="i" width="30" height="30" style="color:var(--amber)"><use href="#i-diag"/></svg><span style="color:var(--amber)">DIAG</span><span class="badge" style="background:#E69614; right:-5px">2</span></div>
+  </div>
+  <div style="position:relative; width:98px; height:77px">
+    <div class="btn tile" style="left:0; top:1px; width:98px; height:76px; background:linear-gradient(#262626, #0C0C0C); box-shadow: inset 0 0 0 1px #3C3C3C, 0 1px 0 #000"><svg class="i" width="30" height="30" style="color:var(--yellow)"><use href="#i-trim"/></svg>TRIM</div>
+  </div>
+</div>
+
+<script>
+  const wrap = document.getElementById('wrap');
+  function setZ(z) {
+    wrap.style.transform = 'scale(' + z + ')';
+    wrap.style.height = (540 * z) + 'px';
+    wrap.style.width = (840 * z) + 'px';
+    document.querySelectorAll('.zoom button').forEach(b => b.classList.toggle('on', b.dataset.z == z));
+  }
+  document.querySelectorAll('.zoom button').forEach(b => b.onclick = () => setZ(+b.dataset.z));
+  setZ(2);
+</script>
+
+<script>
+/* Status bar: the HOME Menu's own HUD textures (HudMenu_00), placed and colored as its
+   layout does, in its dark ("WhiteBlack") variant. Night background. */
+const HUD = {"HudNetAtnL_10": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAQCAYAAAArij59AAAAMElEQVR42mP4//8/AxLe/R8CdsPEsEn+R1aErAAbIM0Egm7AitEFyqEmlI8qIFEBAOeqpJ28TBENAAAAAElFTkSuQmCC", "HudNetAtnR_10": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAJUlEQVR42mP4//8/AyWYVA3oYNQAAgZgKB41AL8BRCkeNQC7GAAJ93S2MftX7AAAAABJRU5ErkJggg==", "HudNetModeL_00": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAQCAYAAAArij59AAAA/klEQVR42nXRMWqEQAAF0GnEzsJGbCzsjCDBFGJnJyKCnYh4BE8gtrY2nkEksI2I7AFEvIN4gFQWKZZUP84kGwg7O/BkYL4684eQn2FKkvSu6/qnYRgwTROWZTFEEIQXz/M+iqJAXddomgZt2/4h51uXqqrQdR3GccQ0Tf8Q3/dvfd9jWRas6/qA5HnOFrdtw77vDwj9N50cx8FFyrJkk2eDxHGMYRgwzzMX7YA+IIoiFwucJUFRFC4W0DQNtEEeFqDVuq7LRQNfjuMgDEMuGhjoF4IgQJIkSNOUybKMoYHXc5OHbds4a0cURaBHv/u9bfJ23upVluXbffeqqjLfJ1sRCxCSMxYAAAAASUVORK5CYII=", "HudBatBase_01": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAQCAYAAAB3AH1ZAAAAYUlEQVR42mNgGAWjYBQMQiAIxLuB+D8N8W6oPVjBbkFBwf+0Au/evfsPMh/qCKwArnjmzJlUxzBHQEMCtwNAimkR/DBH4HKAy0A64B1I0MXFZcAcAI4b5PinuwOQwYhxAACWM7mZsJoMZAAAAABJRU5ErkJggg==", "HudBat_02": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAICAYAAADwdn+XAAAAFUlEQVR42mP4jwkYSBFjGDVgOBgAAIKm5ihk9voLAAAAAElFTkSuQmCC"};
+const S = 4;   /* drawn at 4x, nearest-neighbour, so it stays sharp when zoomed */
+function load(src) { return new Promise(r => { const i = new Image(); i.onload = () => r(i); i.src = src; }); }
+function tinted(img, rgb, mode) {
+  const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height), p = d.data;
+  for (let i = 0; i < p.length; i += 4) {
+    const L = p[i] / 255;
+    for (let k = 0; k < 3; k++) {
+      p[i + k] = mode === 'gloss' ? Math.round(rgb[k] + (255 - rgb[k]) * L * 0.55) : Math.round(rgb[k] * L);
+    }
+  }
+  g.putImageData(d, 0, 0); return c;
+}
+function blit(g, img, sx, sy, sw, sh, dx, dy, dw, dh, flipY, flipX) {
+  g.save(); g.imageSmoothingEnabled = false;
+  g.translate((dx + (flipX ? dw : 0)) * S, (dy + (flipY ? dh : 0)) * S);
+  g.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+  g.drawImage(img, sx, sy, sw, sh, 0, 0, dw * S, dh * S); g.restore();
+}
+async function statusBars() {
+  const t = {}; for (const k in HUD) t[k] = await load(HUD[k]);
+  await document.fonts.ready;
+  const hex = h => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  document.querySelectorAll('canvas.sbc').forEach(cv => {
+    const on = cv.dataset.state === 'on';
+    cv.width = 400 * S; cv.height = 20 * S;
+    const g = cv.getContext('2d');
+    const blue = hex('28b4f0'), grey = hex('5a5a5a'), text = 'rgb(205,205,205)';
+    /* antenna: mast (6x16 at x1,y2) and bars (16x16 at x7,y2) */
+    blit(g, tinted(t.HudNetAtnL_10, on ? blue : grey), 1, 0, 6, 16, 1, 2, 6, 16);
+    blit(g, tinted(t.HudNetAtnR_10, on ? blue : grey), 0, 0, 16, 16, 7, 2, 16, 16);
+    /* connection pill: 108x16 at (26,2) inside a black 110x18 base; caps from HudNetModeL */
+    const cap = tinted(t.HudNetModeL_00, on ? hex('51bbed') : hex('7a7a7a'), 'gloss');
+    blit(g, cap, 0, 0, 8, 16, 26, 2, 8, 16);
+    blit(g, cap, 7, 0, 1, 16, 34, 2, 92, 16);
+    blit(g, cap, 0, 0, 8, 16, 126, 2, 8, 16, false, true);
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = (12.5 * S) + 'px Rodin, ui-rounded, system-ui';
+    g.fillText(on ? 'Connected' : 'Not Connected', 80 * S, 10.5 * S);
+    /* date and clock, the dark variant's light grey */
+    g.fillStyle = text; g.textAlign = 'left';
+    g.font = (14 * S) + 'px Rodin, ui-rounded, system-ui';
+    g.fillText('11/18 (Wed)', 218 * S, 10.5 * S);
+    g.textAlign = 'right'; g.fillText('21:12', 363 * S, 10.5 * S);
+    /* battery: top half of HudBatBase mirrored below, nub on the left; cells 19x10 at (376,5) */
+    const base = tinted(t.HudBatBase_01, hex('cdcdcd'));
+    blit(g, base, 0, 6, 32, 10, 368, 0, 32, 10);
+    blit(g, base, 0, 6, 32, 10, 368, 10, 32, 10, true);
+    const cells = tinted(t.HudBat_02, hex('23aae6'));
+    blit(g, cells, 0, 0, 16, 8, 380, 6, 16, 8);
+  });
+}
+statusBars();
+</script>
+
+<script>
+/* Bottom bar: System Settings' own TopBase_D_00 (BaseBtnL caps, a stretched middle, the
+   BaseBtnLShdw shadow and the BaseBtnLgt top highlight), #787878 grey, 38 px, full width. */
+const SYS = {"BaseBtnL": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACYAAAAmCAYAAACoPemuAAABVElEQVR42u3UrU7DUBjG8YYFlpDgkENNYLiLGQxXgcDhSBAEi+AOkHUEwbXgSdN0S9f0Y+v6saafD68YAsM563reTfRJfrLJvzk91QBoh0jrw/qwPqwP++OCXJN78rlRYA8hA3JJHsg3/hlX0Dl5ISEkpzrojDyixVQFnZBbkqLlVESNiY0d13XU5PdWHUrY0eamdbYuooZER8fbNeqYfEDBdjq+pmneCFRoHUYP39V1DVXaRl1VVQWV2oSdlmVpE6i0dRi9zVNRFFBt2yMc5XkODluF0QN6lmXgIB1FN2W0Xq/BRTqM3uI1SRJwkf22hlEUFQRcZL+tyWq1AiepsDiO9eVyCU4yxzhYLBZhEATgJAyjn93Y931wE4alaXrjui64CcPCMHx2HAfchGGe573btg1uwrD5fP41m83ATRg2nU5dy7LATRhmmib2QRhmGAb24Qc3oUaLABqL0wAAAABJRU5ErkJggg==", "BaseBtnLShdw": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACYAAAAmCAYAAACoPemuAAAEj0lEQVR42sWYaWxVVRSFsVAobSkpFOwgAoogFkUUIaAiowgxCo0D4hASjamiUUOwEENA4xDjwDwEByAaHNAwBFRQERRBBKOAgEUhKEIpoEUBGVp6XTv5TnK8oa/29d32Jd/vu7L2Ouvs8xoEQdCgHjmvKupDQJJoCI1EMjT2qQsxSZ4I+2gTkSJSRZpIF81EhmjuqCsxKYhoxodbiCxxvsgWuSJPXOCISlAyzqQiJhMh2Xy4rbhYdBSXistEvugiLjeiEOTcMWdaIqaNuEh04uPdxDWil7hO9BF9RT/R36itqLBDTlAW42mHK+ZCd3EtHx8sbhbDxG3iDjFCjBR3G7UV5TLUlPCaQzkIshFdiSvmwlBRIO4So8SDYrR4TIwRY0WRGCfGxzu68NgyCXJbxtUNdwaJW3HiAfEoAiaIZ8WL4lUxVcwQM8VsI97R+S5lcaI6iCtwyAQNF/eKhxAzCSHTxFwxXywU74sPxWKxRCwVy+IdXSpZao1LncmQ5ecWcY94mNGYM1PEa+JtRCwXq8Rq8aVYJ9aLDeIbsbGmopp4o8vhpFmwe4ubxJ1kZyyCzJ03ccXEfI6Ib8X3YpvYIX4SxeJn+KWmotIpRztxl5ClG3DpPoI8UUwWb4hF4mOxFjFbxE77sNgrfhcHxEFRKg454hGVRwVczWmzk3Y/Lr0g5oh3xAoEbRbbEfObKBGHxZ/iqPhbHBPHxQlHdcJc0NNCoixPA+mfQvGUeEXMI8Q2so3iR7EbZ8yJMoTYx0+K0+KMKIcKR3VuJRP0TMbnRA2iEEczumkEewUZ+oGs7EPQURw56Qk5Kyo9/vOrboQpnL5s6uAqnLKQPyKepnveFStxaQf5OYhDJugUgio8QTF/sUboctWKJu9KHdxOFVgvzeLEfUaWihnbEUb2D+P634KqEhYeYQu2gXwu22HUwQSa+j3y9B2jO0ConUvlNRUUS5hzK4MRWi304K4bxV02hdb+1BNVwuhOxOtSVcJ8t9K4atwI+3P5PsG1soB+sm7ahVNljM5lqTJeUUEVbrnA57Ih9GaEhYR9LvfZespyf0jU2doIOpewsFvtafYbuYyLGKHl6guxVfwq/mB8CRMVVONWZwJfQF89R4F+JDbR5KW09mlvfEEihcVyy+7A8WK6+IBtYDu1UEZputMXJFKYC707iTletobj1vPsT59wCvdw3x1P9AjDwhqy+FlvXchJHMBeVcSVs8hzaz/XzKlEjzAszI2xNVdPDx4LVqbPsMK4bO3GLT/wQRTCktggMrzQX8/r5XHxMmvMaha7fWQrMrd8YSlsEG3Y290Yx3FJL6a3irmcj0XplhPm8tWS02gL4BCWP7uoX2eMmwn9Eco0MrecsEZc2K3IV09W5UJO41vciVvYQN0YI3PLF5bOu7ATNVHAG/Al8rWGbdRO418UamXUwpL54yPnHMGfTE18xb1Ywp51pi6F5fKvSx821DH0l70Dv+aJ5YJfHkT8c8JcVeTzr8sIXj3TQyeylLavE2Guw/L4i6gvu9eTVMUSXsi7PGEV9SGsXwxhh2j8yIX9Cw621N5eRTPKAAAAAElFTkSuQmCC", "BaseBtnLgt": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACYAAAAmCAYAAACoPemuAAABiklEQVR42u3XyytEYRyH8XOcMQ1jZsIwjUtuJeS+QMYlxUZKkUspSuxYkEssXBYUG/mLx/PWdzEWpOOcM2+cxWc9T+/ld95xyuWyYyMnDovD4rA47JNeLGEbF/KG96hDajGELdzhFS94xiNucYmzqIIK2MUDnnCPK5zgEDtYxTwmTXzYQTms4QbXZiVwjE0sYAQ9KKIZDUiiJqyglM7OeUXMBkoYUEhWW+tGdfg7cITTiqAZdCkm8VVMmGFmNfZxoO0q6eblfhoUdFgNprGnq7+MQTR9t11hh5nDuqhbZ7ZtTttWr+CqDNiEzs+6bt8U2nT43WpNfvPDw1jR1o2j1e/WBRlmbt+s5tEo8kFF/SYsgzGFmaiWIKP8hnnoxoTiiroAbrVfF2a1+vQ56QzioAcR5uks9WtwZsKI8htW0IrlNS6seCiakHbNqrqwVstPWEphjVo9a57WaQ3RUFfLT1hGTxfPtj8jWX2cXdvC0hqm1v19S0axjX7HhWtrmBOH/YUwz9Yw99+HfQBeOvqjMaSKrQAAAABJRU5ErkJggg=="};
+async function sysBars() {
+  const t = {}; for (const k in SYS) t[k] = await load(SYS[k]);
+  await document.fonts.ready;
+  const col = (img, rgb, a) => {
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height), p = d.data;
+    for (let i = 0; i < p.length; i += 4) {
+      const L = p[i] / 255;
+      p[i] = rgb[0] * L; p[i + 1] = rgb[1] * L; p[i + 2] = rgb[2] * L; p[i + 3] = p[i + 3] * (a ?? 1);
+    }
+    g.putImageData(d, 0, 0); return c;
+  };
+  document.querySelectorAll('canvas.cbar').forEach(cv => {
+    cv.width = 320 * S; cv.height = 38 * S;
+    const g = cv.getContext('2d');
+    const piece = (img) => {
+      blit(g, img, 0, 0, 38, 38, -6, 0, 38, 38);           /* left cap, partly off-screen */
+      blit(g, img, 37, 0, 1, 38, 32, 0, 256, 38);         /* middle: the cap's last column */
+      blit(g, img, 0, 0, 38, 38, 288, 0, 38, 38, false, true);   /* right cap, mirrored */
+    };
+    piece(col(t.BaseBtnLShdw, [0x52, 0x51, 0x46], 1));
+    const barGrey = LYT.darkColor([0x78, 0x78, 0x78, 255]).slice(0, 3);   /* night grey, as the kit */
+    piece(col(t.BaseBtnL, barGrey));
+    piece(col(t.BaseBtnLgt, [255, 255, 255]));
+    const label = cv.dataset.label, key = cv.dataset.key;
+    g.font = (16 * S) + 'px Rodin, ui-rounded, system-ui'; g.textBaseline = 'middle';
+    const lw = g.measureText(label).width / S;
+    g.font = (8.5 * S) + 'px Rodin, ui-rounded, system-ui';
+    const kw = key ? g.measureText(key).width / S + 8 : 0;
+    let x = 160 - (kw + (key ? 6 : 0) + lw) / 2;
+    const y = 22;
+    if (key) {
+      g.fillStyle = '#fff'; g.beginPath(); g.roundRect(x * S, (y - 6.5) * S, kw * S, 13 * S, 3 * S); g.fill();
+      g.fillStyle = `rgb(${barGrey})`; g.textAlign = 'center'; g.fillText(key, (x + kw / 2) * S, (y + 0.5) * S);
+      x += kw + 6;
+    }
+    g.font = (16 * S) + 'px Rodin, ui-rounded, system-ui'; g.textAlign = 'left';
+    g.fillStyle = '#141414'; g.fillText(label, x * S, (y + 1) * S);
+    g.fillStyle = '#fff'; g.fillText(label, x * S, y * S);
+  });
+}
+window.addEventListener('load', sysBars);
+</script>
+
+<script>/* Software renderer for exported 3DS layouts (bclyt2json.py). Draws pic, wnd and txt panes
+   like the layout engine: anchor points, scale (mirroring), UV wrap/mirror, vertex colors,
+   and the material's black/white color blend by texture luminance (alpha-only textures read
+   as black, as on the PICA GPU). */
+const LYT = {
+  async prepare(lyt) {
+    lyt.tex = {};
+    for (const [k, src] of Object.entries(lyt.textures)) {
+      const img = await new Promise(r => { const i = new Image(); i.onload = () => r(i); i.src = src; });
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      lyt.tex[k] = { w: img.width, h: img.height, d: g.getImageData(0, 0, img.width, img.height).data,
+                     alphaOnly: [1, 13].includes(lyt.formats[k]) };
+    }
+    return lyt;
+  },
+  wrap(x, n, mode) {
+    if (mode === 1) return ((x % n) + n) % n;
+    if (mode === 2) { const p = ((x % (2 * n)) + 2 * n) % (2 * n); return p < n ? p : 2 * n - 1 - p; }
+    return Math.max(0, Math.min(n - 1, x));
+  },
+  /* the material's main texture: the largest one (others are masks, lines and glints) */
+  primary(lyt, mat) {
+    let best = -1, area = -1;
+    mat.maps.forEach((mp, k) => { const t = lyt.tex[mp.tex]; if (t && t.w * t.h > area) { area = t.w * t.h; best = k; } });
+    return best;
+  },
+  sample(lyt, mat, u, v, k) {
+    const W = mat.white, B = mat.black;
+    if (k === undefined) k = LYT.primary(lyt, mat);
+    if (k < 0) return [W[0], W[1], W[2], W[3]];
+    const mp = mat.maps[k], t = lyt.tex[mp.tex];
+    const srt = mat.srt[k];
+    if (srt) { u = u * srt[3] + srt[0]; v = v * srt[4] - srt[1]; }
+    const x = LYT.wrap(Math.floor(u * t.w), t.w, mp.ws), y = LYT.wrap(Math.floor(v * t.h), t.h, mp.wt);
+    const i = (y * t.w + x) * 4;
+    const L = t.alphaOnly ? 0 : t.d[i] / 255, A = t.d[i + 3] / 255;
+    return [B[0] + (W[0] - B[0]) * L, B[1] + (W[1] - B[1]) * L, B[2] + (W[2] - B[2]) * L, B[3] + (W[3] - B[3]) * A];
+  },
+  /* Fills the rectangle (in screen px) mapped by the 4 corners of a quad. */
+  quad(buf, M, rect, fn) {
+    const pts = [[rect[0], rect[1]], [rect[2], rect[1]], [rect[0], rect[3]], [rect[2], rect[3]]].map(p => LYT.apply(M, p));
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    const x0 = Math.max(0, Math.floor(Math.min(...xs))), x1 = Math.min(buf.w, Math.ceil(Math.max(...xs)));
+    const y0 = Math.max(0, Math.floor(Math.min(...ys))), y1 = Math.min(buf.h, Math.ceil(Math.max(...ys)));
+    const inv = LYT.invert(M);
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+      const [lx, ly] = LYT.apply(inv, [x + 0.5, y + 0.5]);
+      const s = (lx - rect[0]) / (rect[2] - rect[0]), t = (ly - rect[1]) / (rect[3] - rect[1]);
+      if (s < 0 || s >= 1 || t < 0 || t >= 1) continue;
+      const c = fn(s, t);
+      if (!c || c[3] <= 0) continue;
+      const i = (y * buf.w + x) * 4, a = Math.min(1, c[3] / 255), d = buf.d;
+      const da = d[i + 3] / 255, oa = a + da * (1 - a);
+      for (let k = 0; k < 3; k++) d[i + k] = oa ? (c[k] * a + d[i + k] * da * (1 - a)) / oa : 0;
+      d[i + 3] = oa * 255;
+    }
+  },
+  /* 2x3 affine matrices [a b c d e f]: x' = a x + c y + e, y' = b x + d y + f */
+  mul(A, B) { return [A[0]*B[0]+A[2]*B[1], A[1]*B[0]+A[3]*B[1], A[0]*B[2]+A[2]*B[3], A[1]*B[2]+A[3]*B[3], A[0]*B[4]+A[2]*B[5]+A[4], A[1]*B[4]+A[3]*B[5]+A[5]]; },
+  apply(M, p) { return [M[0]*p[0] + M[2]*p[1] + M[4], M[1]*p[0] + M[3]*p[1] + M[5]]; },
+  invert(M) { const det = M[0]*M[3] - M[1]*M[2]; return [M[3]/det, -M[1]/det, -M[2]/det, M[0]/det, (M[2]*M[5]-M[3]*M[4])/det, (M[1]*M[4]-M[0]*M[5])/det]; },
+  bilerp(c, s, t) {
+    const o = [];
+    for (let k = 0; k < 4; k++) { const top = c[0][k] + (c[1][k] - c[0][k]) * s, bot = c[2][k] + (c[3][k] - c[2][k]) * s; o.push(top + (bot - top) * t); }
+    return o;
+  },
+  uvAt(uv, s, t) {
+    const tu = uv[0] + (uv[2] - uv[0]) * s, tv = uv[1] + (uv[3] - uv[1]) * s, bu = uv[4] + (uv[6] - uv[4]) * s, bv = uv[5] + (uv[7] - uv[5]) * s;
+    return [tu + (bu - tu) * t, tv + (bv - tv) * t];
+  },
+  /* local rect of a pane (y down): origin col 0 left 1 center 2 right, row 0 top 1 center 2 bottom */
+  rect(p) {
+    const [w, h] = p.size, col = p.origin % 3, row = Math.floor(p.origin / 3);
+    const x0 = col === 0 ? 0 : col === 1 ? -w / 2 : -w, y0 = row === 0 ? 0 : row === 1 ? -h / 2 : -h;
+    return [x0, y0, x0 + w, y0 + h];
+  },
+  /* Night recolor: the HOME Menu's own dark theme turns its cream buttons (#FFFEFA to #DFDBD7,
+     shade #77736F) into greys (#8D8882 to #57524C, shade #27221C) and its dark text light
+     (#FFFEFC). Same rule here for every low-saturation surface color; saturated accents (gold
+     strips, orange brackets, blue bars) keep their color; dark text turns light. */
+  darkColor(c, isText) {
+    const [r, g, b, a] = c, mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    const L = (0.299 * r + 0.587 * g + 0.114 * b) / 255, sat = mx ? (mx - mn) / mx : 0;
+    if (isText) return L < 0.5 ? [236, 236, 236, a] : [L * 255, L * 255, L * 255, a];
+    if (sat > 0.45 && L > 0.35) return c;      /* bright accents keep their color */
+    const v = 255 * 0.55 * Math.pow(L, 1.6);   /* neutral grey: no warm tint */
+    return [v, v, v, a];
+  },
+  darken(lyt) {
+    const textMats = new Set();
+    const walk = p => { if (p.type === 'txt' && !/Shdw/i.test(p.name)) textMats.add(p.mat); p.kids.forEach(walk); };
+    walk(lyt.root);
+    lyt.mats = lyt.mats.map((m, i) => ({ ...m, black: LYT.darkColor(m.black, textMats.has(i)), white: LYT.darkColor(m.white, textMats.has(i)) }));
+    /* corner shading (vertex colors) keeps its brightness but loses its warm tint */
+    const grey = c => { const [r, g, b, a] = c, mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      if (mx && (mx - mn) / mx > 0.45 && mx > 150) return c; const L = 0.299 * r + 0.587 * g + 0.114 * b; return [L, L, L, a]; };
+    const shade = p => { if (p.vtx) p.vtx = p.vtx.map(grey); p.kids.forEach(shade); };
+    shade(lyt.root);
+    return lyt;
+  },
+  render(lyt, opts = {}) {
+    if (opts.dark && !lyt.darkened) { LYT.darken(lyt); lyt.darkened = true; }
+    const W = lyt.root.size[0], H = lyt.root.size[1];
+    const buf = { w: W, h: H, d: new Float32Array(W * H * 4) };
+    const draw = (p, M, alpha) => {
+      if (/^bg_white|^Bg|^P_Bg/i.test(p.name)) return;
+      const vis = opts.vis && p.name in opts.vis ? opts.vis[p.name] : p.vis;
+      if (!vis || (opts.hide && opts.hide.test(p.name))) return;
+      const T = [1, 0, 0, 1, p.pos[0], -p.pos[1]];
+      if (opts.scale && p.name in opts.scale) p = { ...p, scale: opts.scale[p.name] };
+      const r = -p.rot[2] * Math.PI / 180;
+      const R = [Math.cos(r), Math.sin(r), -Math.sin(r), Math.cos(r), 0, 0];
+      const S = [p.scale[0], 0, 0, p.scale[1], 0, 0];
+      const Mp = LYT.mul(LYT.mul(LYT.mul(M, T), R), S);
+      const a = alpha * (opts.alpha && p.name in opts.alpha ? opts.alpha[p.name] : p.alpha) / 255;
+      const rect = LYT.rect(p);
+      const vcol = (v, s, t) => LYT.bilerp(v, s, t);
+      if (p.type === 'pic') {
+        const mat = lyt.mats[p.mat], k = LYT.primary(lyt, mat);
+        const uv = p.uv[Math.max(0, k)] || p.uv[0] || [0, 0, 1, 0, 0, 1, 1, 1];
+        LYT.quad(buf, Mp, rect, (s, t) => {
+          const [u, v] = LYT.uvAt(uv, s, t), c = LYT.sample(lyt, mat, u, v, k), vc = vcol(p.vtx, s, t);
+          return [c[0] * vc[0] / 255, c[1] * vc[1] / 255, c[2] * vc[2] / 255, c[3] * vc[3] / 255 * a];
+        });
+      } else if (p.type === 'wnd') {
+        const [x0, y0, x1, y1] = rect, inf = p.inflate;
+        const cm = lyt.mats[p.mat], uv = p.uv[0] || [0, 0, 1, 0, 0, 1, 1, 1];
+        const fsz = f => { const m = lyt.mats[f.mat], k = LYT.primary(lyt, m), t = k >= 0 && lyt.tex[m.maps[k].tex]; return t ? [t.w, t.h] : [0, 0]; };
+        const f0 = p.frames[0] ? fsz(p.frames[0]) : [0, 0];
+        LYT.quad(buf, Mp, [x0 - inf[0] + f0[0], y0 - inf[2] + f0[1], x1 + inf[1] - f0[0], y1 + inf[3] - f0[1]], (s, t) => {
+          const [u, v] = LYT.uvAt(uv, s, t), c = LYT.sample(lyt, cm, u, v), vc = vcol(p.vtx, s, t);
+          return [c[0] * vc[0] / 255, c[1] * vc[1] / 255, c[2] * vc[2] / 255, c[3] * vc[3] / 255 * a];
+        });
+        const frames = p.frames.length === 1 ? [0, 1, 2, 3].map(i => ({ mat: p.frames[0].mat, flip: [0, 1, 2, 4][i] })) : p.frames;
+        if (frames.length === 4) {
+          const tsz = f => { const s = fsz(f); return s[0] ? s : [8, 8]; };
+          const [lw, lh] = tsz(frames[0]), [rw, rh] = tsz(frames[1]), [bw, bh] = tsz(frames[2]), [qw, qh] = tsz(frames[3]);
+          /* pinwheel: LT spans the top, RT the right, RB the bottom, LB the left */
+          const regions = [[x0, y0, x1 - rw, y0 + lh, 0], [x1 - rw, y0, x1, y1 - qh, 1], [x0, y0 + lh, x0 + bw, y1, 2], [x0 + bw, y1 - qh, x1, y1, 3]];
+          regions.forEach(([a0, b0, a1, b1, i], k) => {
+            const f = frames[i], m = lyt.mats[f.mat], [tw, th] = tsz(f);
+            LYT.quad(buf, Mp, [a0, b0, a1, b1], (s, t) => {
+              let px = s * (a1 - a0), py = t * (b1 - b0);
+              /* corner pixels 1:1 from the outer corner, the rest stretched from the inner edge */
+              const fx = f.flip === 1 || f.flip === 4, fy = f.flip === 2 || f.flip === 4;
+              const outerRight = i === 1 || i === 3, outerBottom = i === 2 || i === 3;
+              let dx = outerRight ? (a1 - a0) - px : px, dy = outerBottom ? (b1 - b0) - py : py;
+              dx = Math.min(dx, tw - 0.5); dy = Math.min(dy, th - 0.5);
+              let u = dx / tw, v = dy / th;
+              if (fx !== outerRight) u = u; if (fx) u = u; 
+              const c = LYT.sample(lyt, m, u, v);
+              return [c[0], c[1], c[2], c[3] * a];
+            });
+          });
+        }
+      } else if (p.type === 'txt') {
+        const text = (opts.text && opts.text[p.name]) ?? p.text;
+        if (text) {
+          const mat = lyt.mats[p.mat], col = mat.white;
+          const fs = p.font[1] * (opts.fontScale || 0.85);
+          const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+          const g = cv.getContext('2d');
+          g.font = `${fs}px Rodin, ui-rounded, system-ui`; g.textBaseline = 'middle';
+          const hc = p.textpos % 3, vr = Math.floor(p.textpos / 3);
+          g.textAlign = ['left', 'center', 'right'][hc];
+          const tx = [rect[0], (rect[0] + rect[2]) / 2, rect[2]][hc], ty = [rect[1] + fs * 0.6, (rect[1] + rect[3]) / 2, rect[3] - fs * 0.6][vr];
+          g.setTransform(Mp[0], Mp[1], Mp[2], Mp[3], Mp[4], Mp[5]);
+          g.fillStyle = `rgba(${col[0] * p.top[0] / 255},${col[1] * p.top[1] / 255},${col[2] * p.top[2] / 255},${col[3] / 255 * a})`;
+          g.fillText(text, tx, ty);
+          const td = g.getImageData(0, 0, W, H).data, d = buf.d;
+          for (let i = 0; i < td.length; i += 4) {
+            const sa = td[i + 3] / 255; if (!sa) continue;
+            const da = d[i + 3] / 255, oa = sa + da * (1 - sa);
+            for (let k = 0; k < 3; k++) d[i + k] = (td[i + k] * sa + d[i + k] * da * (1 - sa)) / oa;
+            d[i + 3] = oa * 255;
+          }
+        }
+      }
+      for (const k of p.kids) draw(k, Mp, a);
+    };
+    draw(lyt.root, [1, 0, 0, 1, W / 2, H / 2], 1);
+    return buf;
+  },
+  /* Draws the buffer, cropped to what was drawn, into a canvas at `zoom` over `bg`. */
+  toCanvas(buf, zoom, bg, pad = 4) {
+    let x0 = buf.w, y0 = buf.h, x1 = 0, y1 = 0;
+    for (let y = 0; y < buf.h; y++) for (let x = 0; x < buf.w; x++) if (buf.d[(y * buf.w + x) * 4 + 3] > 2) {
+      x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+    if (x1 < x0) { x0 = y0 = 0; x1 = y1 = 1; }
+    x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(buf.w - 1, x1 + pad); y1 = Math.min(buf.h - 1, y1 + pad);
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d'), img = g.createImageData(w, h);
+    const bgc = bg || [0, 0, 0];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = ((y + y0) * buf.w + x + x0) * 4, o = (y * w + x) * 4, a = buf.d[i + 3] / 255;
+      for (let k = 0; k < 3; k++) img.data[o + k] = buf.d[i + k] * a + bgc[k] * (1 - a);
+      img.data[o + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    c.style.width = w * zoom + 'px'; c.style.height = h * zoom + 'px'; c.style.imageRendering = 'pixelated';
+    return c;
+  },
+};
+</script>
+<script>
+/* HOME tiles and bars: System Settings' own buttons (B_L for tiles, B_M for the two bars),
+   rendered from its layouts in the neutral night greys, then 9-sliced to each size. */
+const NBTN = {"tile": {"name": "B_L", "textures": {"B_LInvalid01": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAR0lEQVR42mP4//8/Aw5sDKLxSYJAGjZJQSDeDcTvQGxsCtKgukPRrRBEkpwJE4dJKkGNRZGEKSiHSryDGYuuwAVqtBI2HwEA/uHMmmXlzfQAAAAASUVORK5CYII=", "B_LInvalid03": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAECAYAAACHtL/sAAAAJklEQVR42mP4//8/AyUYm6AgAYzXgI7/hEEHPgOUgDiUAFZC1gMAmCvLvfEoXNgAAAAASUVORK5CYII=", "B_LL": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAABACAYAAAATffeWAAAE30lEQVR42pWUWU9WVxSG12Ubb02apkn/WO9606R/BJXBARBRZlAERRAHJkHmeVQBBURUZhnFCUSX+9npOtmefh98mDwqJOc573r32kdUVZLwh+MfR7XjQJP8SfTgr9+/f89zaCrEHz7tfjmf6sNe4P4yfvn27du8Q0+CHB4eGjlfv35VOJHAPQCn7WEn+h9HCg4ODuCv/f19NclJkM+fP8uXL19aETiR50SCT58+IdlDYJgoFaF8+PABgboUSQVHIe/fv5ePHz8qEgiTpIJsb2/L7u6uuiSRhDSpIltbW7K5ualOpC6NF1milAQbGxuyurqq7l8vIQ2ivb09LzNc2VHCEFlfX5elpSUNJTs7O14EiBLJDN4ub9680eXlZXUyZRwb6TgR8HZZWFjQxcVFXVlZ8RKSuG48JmIsGy0U8XYvCFO8e/fOpwglyUQ8LC9fvowEpEBAiuMkIPPz8zI7O6vxMUwSikKJdSNzc3MyMzOjr1690rdv3/oUa2trKUlAXrx4AeqSRGNwpKHEOolLQKanp0Hp4fXr19EYSBAcJ5HJyUmZmppSN0rUg6VIlMTGMeTJkydIlCKtBzbTUpgEEklkfHxcnj17ptaDjRGXxNNYuTIyMiJPnz7V58+f+x4YgxQ2ylESkMHBQZmYmFCKpAfGIIVJLIkRH0v6+/sZQynS9iEUmIQ08XK9oLe3V8bGxpQiwx7YieMkIN3d3TI6OqpWJD1YCpOE45jERpKOjg6KVCuSHkhhNzSU2BGbBKStrU2GhobUimQfEJACiSUJZZYG5NGjRzIwMKBhD4xhKYy4yLqR5uZmTsIL6MHGSCaJi6SxsVH6+vqUIq0HjtO6CMdJJJGHDx9ylEqR7l74HhDQRSgJ05gE5N69e9LT06NWJAtFDyYIxyFJmAbk7t277IK6lVY2kiJtDCRHiUBqa2ulq6tL7SSsSFIkkthYkaCmpkY6OzsjAT0whqUIJfE0ILdu3WIblaPkJBAwBmVairgoTCNVVVXy+PFj5SiHh4d9kYxBCiThOIkSSWVlJeus4UmwD5biOIlcv35dWltbIwEnYQIIkxihSCoqKrgPyklwlFYkY6QikbKyMu6DchIUyUbaGIDIZIlEUlxczH3Q9vZ2X6QJSJGKRIqKiqShoUHDIjlOk5golIQFS2FhIRdKKZKVZqFIQRcUmmwcSyPXrl2T+vp6bWlpiXqwFHCUCCQ/P1/q6uqUHlgoS4EESBPK4qPJlStXuA/64MGDKAVdkAQRRwvI2NS4UPLy8qS6uloZo6mpyadgJ5DwoeFkIC5EBpKbmys3btxQd619CpaKI0UCjATJhJKTkyMlJSWL7lb6FHTBiSABbiokEoJkZ2fTQwMp6MJ94vwoJGE3gLGSCeXSpUty4cKFv0tLS9VdbeVEkJCEUgEZkCwu5WHJzMz83e2DunuhFEofSFgwRCQC7kxc6gX/kW+Smzdv6u3bt30aekF2//59LwRWH5DL+fPnPS7FKdfH0tWrV9WVqu6aexGJkNHPnTt3fDrE7mvukaysrIhz58795mQLly9fVtK4i6Z0U15e7oXu46OU7b5iHl7Am38iPT39lBMVX7x4Ud0Rq1s0deuuJENaUFDwE5KRkRE9zP/t5zNnzvyZlpb279mzZ2tcOnXJ1PXkQQ7uBPUHbijKJ5hl5FsAAAAASUVORK5CYII=", "B_LShdw": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABJklEQVR42qXSsUsCcRjGcfM6UBNskqCGIHVrqMXATQqxP8GgtRqjCHS1pdEpBykaXIMKUVyEO/+v8/vCI/yQszMaPts97/ve+3tTURSl/iPpgy2k4cFHBjnkl5KCFsqigCIOcIgjlFBeF/bUbRf7qOAUNdTRQBOXceFt7KijBc/sQ1zhBvd4QhuduM4W3sMxLnCNRzyjhz4GeMO7WyCtsYsKW9c7dBUa4hM/GGGMidvd1z/b2Oe4xQs+8I0pZggQYm7c7lktrKqxuwqPnOB81bKAp6eqaPQHvOJL4TAu7Bbw9e8naGlhQ40drAu7BTI6kpqeqqeFzX4LuwVyurC63rmvbQebFsjrPBs6koGWF/6lQEnn2daRjJPCqwXKKtCxC7Mj2aTAAgfTXGxCIEkZAAAAAElFTkSuQmCC"}, "formats": {"B_LInvalid01": 13, "B_LInvalid03": 13, "B_LL": 3, "B_LShdw": 1}, "mats": [{"name": "TextBox_00", "black": [0, 0, 0, 0], "white": [117, 110, 96, 255], "maps": [], "srt": [], "flags": 0}, {"name": "Window_01C ", "black": [56, 40, 0, 195], "white": [56, 40, 0, 195], "maps": [{"tex": "B_LShdw", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "Window_01LT", "black": [56, 40, 0, 0], "white": [255, 255, 255, 255], "maps": [{"tex": "B_LShdw", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "I_User_L_00", "black": [78, 67, 2, 0], "white": [255, 253, 246, 255], "maps": [{"tex": "B_LL", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "I_User_L_01", "black": [78, 67, 2, 0], "white": [255, 253, 246, 255], "maps": [{"tex": "B_LL", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "I_User_C_00", "black": [78, 67, 2, 0], "white": [255, 253, 246, 255], "maps": [{"tex": "B_LL", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "I_User_L_02", "black": [78, 67, 2, 0], "white": [255, 253, 246, 255], "maps": [{"tex": "B_LL", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "I_User_C_01", "black": [78, 67, 2, 0], "white": [255, 253, 246, 255], "maps": [{"tex": "B_LL", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "I_User_L_03", "black": [78, 67, 2, 0], "white": [255, 253, 246, 255], "maps": [{"tex": "B_LL", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "B_LInvalid01_00", "black": [197, 183, 140, 0], "white": [255, 255, 255, 255], "maps": [{"tex": "B_LInvalid01", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "B_LInvalid01_01", "black": [197, 183, 140, 0], "white": [255, 255, 255, 255], "maps": [{"tex": "B_LInvalid01", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "B_LInvalid03_00", "black": [197, 183, 140, 0], "white": [255, 255, 255, 255], "maps": [{"tex": "B_LInvalid03", "ws": 1, "wt": 1}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "B_LInvalid01_02", "black": [197, 183, 140, 0], "white": [255, 255, 255, 255], "maps": [{"tex": "B_LInvalid01", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "B_LInvalid01_03", "black": [197, 183, 140, 0], "white": [255, 255, 255, 255], "maps": [{"tex": "B_LInvalid01", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "B_LInvalid03_01", "black": [197, 183, 140, 0], "white": [255, 255, 255, 255], "maps": [{"tex": "B_LInvalid03", "ws": 1, "wt": 1}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "B_LInvalid03_02", "black": [197, 183, 140, 0], "white": [255, 255, 255, 255], "maps": [{"tex": "B_LInvalid03", "ws": 1, "wt": 1}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "B_LInvalid03_03", "black": [197, 183, 140, 0], "white": [255, 255, 255, 255], "maps": [{"tex": "B_LInvalid03", "ws": 1, "wt": 1}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "Window_00C ", "black": [243, 239, 206, 195], "white": [243, 239, 206, 195], "maps": [{"tex": "B_LShdw", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "Window_00LT", "black": [243, 239, 206, 0], "white": [255, 255, 255, 255], "maps": [{"tex": "B_LShdw", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}], "root": {"type": "pan", "name": "RootPane", "vis": 1, "alpha": 255, "origin": 4, "pos": [0.0, 0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [320.0, 240.0], "kids": [{"type": "pan", "name": "Null_00", "vis": 1, "alpha": 255, "origin": 4, "pos": [0.0, 0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [30.0, 40.0], "kids": [{"type": "pan", "name": "N_Invalid", "vis": 0, "alpha": 255, "origin": 4, "pos": [-0.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [20.0, 90.0], "kids": [{"type": "pic", "name": "B_LInvalid01_00", "vis": 1, "alpha": 255, "origin": 4, "pos": [128.0, -28.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [8.0, 8.0], "kids": [], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 9, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]]}, {"type": "pic", "name": "B_LInvalid01_01", "vis": 1, "alpha": 255, "origin": 4, "pos": [-128.0, -28.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [-1.0, 1.0], "size": [8.0, 8.0], "kids": [], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 10, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]]}, {"type": "pic", "name": "B_LInvalid01_02", "vis": 1, "alpha": 255, "origin": 4, "pos": [128.0, 28.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, -1.0], "size": [8.0, 8.0], "kids": [], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 12, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]]}, {"type": "pic", "name": "B_LInvalid01_03", "vis": 1, "alpha": 255, "origin": 4, "pos": [-128.0, 28.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [-1.0, -1.0], "size": [8.0, 8.0], "kids": [], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 13, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]]}, {"type": "pic", "name": "B_LInvalid03_00", "vis": 1, "alpha": 255, "origin": 5, "pos": [122.0, -31.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [244.0, 4.0], "kids": [], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 11, "uv": [[0.0, 0.0, 15.0, 0.0, 0.0, 1.0, 15.0, 1.0]]}, {"type": "pic", "name": "B_LInvalid03_01", "vis": 1, "alpha": 255, "origin": 3, "pos": [122.0, 31.0, 0.0], "rot": [0.0, 0.0, 180.0], "scale": [1.0, 1.0], "size": [244.0, 4.0], "kids": [], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 14, "uv": [[0.0, 0.0, 15.0, 0.0, 0.0, 1.0, 15.0, 1.0]]}, {"type": "pic", "name": "B_LInvalid03_02", "vis": 1, "alpha": 255, "origin": 5, "pos": [132.0, -22.0, 0.0], "rot": [0.0, 0.0, -90.0], "scale": [1.0, 1.0], "size": [44.0, 4.0], "kids": [], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 15, "uv": [[0.0, 0.0, 3.0, 0.0, 0.0, 1.0, 3.0, 1.0]]}, {"type": "pic", "name": "B_LInvalid03_03", "vis": 1, "alpha": 255, "origin": 3, "pos": [-132.0, -22.0, 0.0], "rot": [0.0, 0.0, 90.0], "scale": [1.0, 1.0], "size": [44.0, 4.0], "kids": [], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 16, "uv": [[0.0, 0.0, 3.0, 0.0, 0.0, 1.0, 3.0, 1.0]]}, {"type": "wnd", "name": "Window_00", "vis": 1, "alpha": 255, "origin": 4, "pos": [-0.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [268.0, 68.0], "kids": [], "inflate": [0.0, 0.0, 0.0, 0.0], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 17, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]], "frames": [{"mat": 18, "flip": 0}]}]}, {"type": "pan", "name": "N_Picture", "vis": 1, "alpha": 255, "origin": 4, "pos": [-0.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [30.0, 40.0], "kids": [{"type": "wnd", "name": "Window_01", "vis": 1, "alpha": 255, "origin": 4, "pos": [-0.0, -2.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [270.0, 72.0], "kids": [], "inflate": [0.0, 0.0, 0.0, 0.0], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 1, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]], "frames": [{"mat": 2, "flip": 0}]}, {"type": "pic", "name": "I_User_L_02", "vis": 1, "alpha": 255, "origin": 5, "pos": [-117.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [16.0, 66.0], "kids": [], "vtx": [[229, 226, 215, 255], [229, 226, 215, 255], [197, 192, 158, 255], [197, 192, 158, 255]], "mat": 6, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]]}, {"type": "pic", "name": "I_User_L_03", "vis": 1, "alpha": 255, "origin": 5, "pos": [117.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [-1.0, 1.0], "size": [16.0, 66.0], "kids": [], "vtx": [[229, 226, 215, 255], [229, 226, 215, 255], [197, 192, 158, 255], [197, 192, 158, 255]], "mat": 8, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]]}, {"type": "pic", "name": "I_User_C_01", "vis": 1, "alpha": 255, "origin": 3, "pos": [-117.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [234.0, 66.0], "kids": [], "vtx": [[229, 226, 215, 255], [229, 226, 215, 255], [197, 192, 158, 255], [197, 192, 158, 255]], "mat": 7, "uv": [[1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0]]}, {"type": "pic", "name": "I_User_C_00", "vis": 1, "alpha": 255, "origin": 3, "pos": [-116.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [232.0, 64.0], "kids": [], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 5, "uv": [[1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0]]}, {"type": "pic", "name": "I_User_L_00", "vis": 1, "alpha": 255, "origin": 5, "pos": [-116.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [16.0, 64.0], "kids": [], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 3, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]]}, {"type": "pic", "name": "I_User_L_01", "vis": 1, "alpha": 255, "origin": 5, "pos": [116.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [-1.0, 1.0], "size": [16.0, 64.0], "kids": [], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 4, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]]}]}, {"type": "txt", "name": "TextBox_00", "vis": 1, "alpha": 255, "origin": 4, "pos": [-0.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [258.0, 60.0], "kids": [], "mat": 0, "textpos": 4, "align": 0, "text": "Push-Button Connection", "top": [255, 255, 255, 255], "bottom": [255, 255, 255, 255], "font": [21.25, 25.5]}]}, {"type": "bnd", "name": "Bounding_00", "vis": 1, "alpha": 255, "origin": 4, "pos": [0.0, 0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [264.0, 66.0], "kids": []}]}}, "bar": {"name": "B_M", "textures": {"B_LShdw": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABJklEQVR42qXSsUsCcRjGcfM6UBNskqCGIHVrqMXATQqxP8GgtRqjCHS1pdEpBykaXIMKUVyEO/+v8/vCI/yQszMaPts97/ve+3tTURSl/iPpgy2k4cFHBjnkl5KCFsqigCIOcIgjlFBeF/bUbRf7qOAUNdTRQBOXceFt7KijBc/sQ1zhBvd4QhuduM4W3sMxLnCNRzyjhz4GeMO7WyCtsYsKW9c7dBUa4hM/GGGMidvd1z/b2Oe4xQs+8I0pZggQYm7c7lktrKqxuwqPnOB81bKAp6eqaPQHvOJL4TAu7Bbw9e8naGlhQ40drAu7BTI6kpqeqqeFzX4LuwVyurC63rmvbQebFsjrPBs6koGWF/6lQEnn2daRjJPCqwXKKtCxC7Mj2aTAAgfTXGxCIEkZAAAAAElFTkSuQmCC", "B_ML": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAmCAYAAADN0BvRAAADdklEQVR42qWT50tbcRSGz8cWvwqlFPqP9Vu/FPqPqDhwonVF3EYj7h333nsboybuvY3j9LyH/i43qdYLDTxcCNwn7znvCd3f35Odh4cHJfL7t6Cbmxu6vb3Vp527u7svoVDox9PTk5uZQ/zGhy4vL+nq6kqff/goL2a+vLywE+js7Mzi/Pw8+vHx0Se/yobn5+d/QsfHx4YPMrtPBAzee9ESHBwcKBI9XQRsBE6hYDBIu7u70bI0hsAge3AEbW9v0/7+/jdpgkGk6D3I5/PRycmJ9/r6mqU+SyIdO4LW1tbQwJXsgI0EQOIEWlxcpNPTU5YKGRK5CRVFYsSR0Pz8PCpkSCRJmMgJNDU1hRb48PAwTHJxceEIGhsbo62tLQ4EAixt8NHREctSVeQEGhoaovX1dbZL5LBUBDAegPQ1qL+/n5aXl3ljY8OSYCSIDBBiRGCXAurq6sIieWVlJUxiRHt7e4pdZoe8Xi/NzMyw1MlyE7y5uamSnZ0dS2RkkckAtba20uTkJNtT+P1+lhNXIDIy+d9YIpOMGhsbaXR0lKenp3lpaUlTyHlrEojsMiM0MkB1dXVogpFibm6OsVBIkAQiYEQYDdiFVF1djSZY7oHNLowE9QKTyKQyIkCVlZXU09PDw8PDVgqMAsnq6qpiZCaVXUbl5eXU2dnJAwMDmgK7wEKRxKTBcu0iezIqKSmhtrY2NinGx8dVMjs7q2kgW1hYUBmSGZmBioqK0ATLPXBfX58lkT+ZirAXAJldaKRUUFBAtbW1LPfAcpU6CiQYB0BmhK9JKS8vj6qqqrihoYHb29t1FLSCaiEaGRlRcCt24cTEhEI5OTlUWloaqKmp4aamJu7o6LAkAIkAhJFSQFlZWUjR7Ha7GaM0NzerBONA1Nvba4EdGfHg4KBCmZmZlJ6e/r24uJjlJlguUyUYB/UCyEB3d/dfUrxMqampn/Pz8xkS7ANJ0ExLSwujYsgAkqEtYMSUlpamiOSXjKKSiooKlhPXNPX19SrDfpAMUjRmoJSUFCUpKSlK0gRlqSzVshyYipDI4/GoEIsGSAg5oOTkZIuEhIRP8vTLXhgil8vFhYWFmgpCaYvLyspYzt8CvxxGfHx8lOCSkTgjI4OlJc7OzlYhyM3NDYMSExNfJTY29mtMTMzPuLg4j4hZkikyLkNuQOz/4je/8OE3AmVYbgAAAABJRU5ErkJggg=="}, "formats": {"B_LShdw": 1, "B_ML": 3}, "mats": [{"name": "TextBox_00", "black": [0, 0, 0, 0], "white": [117, 110, 96, 255], "maps": [], "srt": [], "flags": 0}, {"name": "Window_01C ", "black": [56, 40, 0, 195], "white": [56, 40, 0, 195], "maps": [{"tex": "B_LShdw", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "Window_01LT", "black": [56, 40, 0, 0], "white": [255, 255, 255, 255], "maps": [{"tex": "B_LShdw", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "I_User_L_00", "black": [78, 67, 2, 0], "white": [255, 253, 246, 255], "maps": [{"tex": "B_ML", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "I_User_L_01", "black": [78, 67, 2, 0], "white": [255, 253, 246, 255], "maps": [{"tex": "B_ML", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "I_User_C_00", "black": [78, 67, 2, 0], "white": [255, 253, 246, 255], "maps": [{"tex": "B_ML", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "I_User_L_02", "black": [78, 67, 2, 0], "white": [255, 253, 246, 255], "maps": [{"tex": "B_ML", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "I_User_C_01", "black": [78, 67, 2, 0], "white": [255, 253, 246, 255], "maps": [{"tex": "B_ML", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}, {"name": "I_User_L_03", "black": [78, 67, 2, 0], "white": [255, 253, 246, 255], "maps": [{"tex": "B_ML", "ws": 0, "wt": 0}], "srt": [[0.0, 0.0, 0.0, 1.0, 1.0]], "flags": 21}], "root": {"type": "pan", "name": "RootPane", "vis": 1, "alpha": 255, "origin": 4, "pos": [0.0, 0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [320.0, 240.0], "kids": [{"type": "pan", "name": "Null_00", "vis": 1, "alpha": 255, "origin": 4, "pos": [0.0, 0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [30.0, 40.0], "kids": [{"type": "pan", "name": "N_Picture", "vis": 1, "alpha": 255, "origin": 4, "pos": [-0.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [30.0, 40.0], "kids": [{"type": "wnd", "name": "Window_01", "vis": 1, "alpha": 255, "origin": 4, "pos": [-0.0, -2.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [270.0, 44.0], "kids": [], "inflate": [0.0, 0.0, 0.0, 0.0], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 1, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]], "frames": [{"mat": 2, "flip": 0}]}, {"type": "pic", "name": "I_User_L_02", "vis": 1, "alpha": 255, "origin": 5, "pos": [-117.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [16.0, 40.0], "kids": [], "vtx": [[229, 226, 215, 255], [229, 226, 215, 255], [197, 192, 158, 255], [197, 192, 158, 255]], "mat": 6, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]]}, {"type": "pic", "name": "I_User_L_03", "vis": 1, "alpha": 255, "origin": 5, "pos": [117.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [-1.0, 1.0], "size": [16.0, 40.0], "kids": [], "vtx": [[229, 226, 215, 255], [229, 226, 215, 255], [197, 192, 158, 255], [197, 192, 158, 255]], "mat": 8, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]]}, {"type": "pic", "name": "I_User_C_01", "vis": 1, "alpha": 255, "origin": 3, "pos": [-117.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [234.0, 40.0], "kids": [], "vtx": [[229, 226, 215, 255], [229, 226, 215, 255], [197, 192, 158, 255], [197, 192, 158, 255]], "mat": 7, "uv": [[1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0]]}, {"type": "pic", "name": "I_User_C_00", "vis": 1, "alpha": 255, "origin": 3, "pos": [-116.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [232.0, 38.0], "kids": [], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 5, "uv": [[1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 1.0]]}, {"type": "pic", "name": "I_User_L_00", "vis": 1, "alpha": 255, "origin": 5, "pos": [-116.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [16.0, 38.0], "kids": [], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 3, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]]}, {"type": "pic", "name": "I_User_L_01", "vis": 1, "alpha": 255, "origin": 5, "pos": [116.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [-1.0, 1.0], "size": [16.0, 38.0], "kids": [], "vtx": [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]], "mat": 4, "uv": [[0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]]}]}, {"type": "txt", "name": "TextBox_00", "vis": 1, "alpha": 255, "origin": 4, "pos": [-0.0, -0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [254.0, 34.0], "kids": [], "mat": 0, "textpos": 4, "align": 0, "text": "\u4e2d\u304f\u3089\u3044\u306e\u30dc\u30bf\u30f3\u3067\u3059\u3002", "top": [255, 255, 255, 255], "bottom": [255, 255, 255, 255], "font": [21.25, 25.5]}]}, {"type": "bnd", "name": "Bounding_00", "vis": 1, "alpha": 255, "origin": 4, "pos": [0.0, 0.0, 0.0], "rot": [0.0, 0.0, 0.0], "scale": [1.0, 1.0], "size": [264.0, 38.0], "kids": []}]}}};
+async function nintendoButtons() {
+  const src = {};
+  for (const [k, l] of Object.entries(NBTN)) {
+    await LYT.prepare(l);
+    const buf = LYT.render(l, { dark: true, hide: /^TextBox/ });
+    src[k] = LYT.toCanvas(buf, 1, null, 0);
+    /* toCanvas paints black under it: rebuild with alpha */
+    const c = document.createElement('canvas'); c.width = src[k].width; c.height = src[k].height;
+    let x0 = buf.w, y0 = buf.h, x1 = 0, y1 = 0;
+    for (let y = 0; y < buf.h; y++) for (let x = 0; x < buf.w; x++) if (buf.d[(y * buf.w + x) * 4 + 3] > 2) {
+      x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+    c.width = x1 - x0 + 1; c.height = y1 - y0 + 1;
+    const g = c.getContext('2d'), img = g.createImageData(c.width, c.height);
+    for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+      const i = ((y + y0) * buf.w + x + x0) * 4, o = (y * c.width + x) * 4;
+      for (let q = 0; q < 4; q++) img.data[o + q] = buf.d[i + q];
+    }
+    g.putImageData(img, 0, 0); src[k] = c;
+  }
+  const M = 1, C = 16;   /* the shadow stays inside each tile so the gaps show; corner slice */
+  document.querySelectorAll('.btn').forEach(el => {
+    const s = el.classList.contains('tile') ? src.tile : src.bar;
+    const w = el.offsetWidth + 2 * M, h = el.offsetHeight + 2 * M;
+    const cv = document.createElement('canvas'); cv.width = w * S; cv.height = h * S;
+    cv.className = 'nbtn'; cv.style.cssText = `position:absolute;left:${-M}px;top:${-M}px;width:${w}px;height:${h}px;z-index:-1;image-rendering:pixelated`;
+    const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+    const sw = s.width, sh = s.height, cs = [0, C, sw - C, sw], rs = [0, C, sh - C, sh], cd = [0, C, w - C, w], rd = [0, C, h - C, h];
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++)
+      g.drawImage(s, cs[i], rs[j], cs[i + 1] - cs[i], rs[j + 1] - rs[j], cd[i] * S, rd[j] * S, (cd[i + 1] - cd[i]) * S, (rd[j + 1] - rd[j]) * S);
+    el.appendChild(cv);
+  });
+}
+nintendoButtons();
+</script>
+</body>
+</html>

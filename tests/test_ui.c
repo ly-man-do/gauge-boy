@@ -46,12 +46,12 @@ static void test_home_hit(void)
     CHECK_EQ_INT(home_hit(300, 39), HOME_ADAPTER);
     CHECK_EQ_INT(home_hit(3, 100), -1);              /* margin */
     CHECK_EQ_INT(home_hit(107, 100), -1);            /* gap */
-    CHECK_EQ_INT(home_hit(160, 125), -1);            /* gap between the rows */
+    CHECK_EQ_INT(home_hit(160, 120), -1);            /* gap between the rows */
     CHECK_EQ_INT(home_hit(160, 225), HOME_CLOSE);    /* bar: closes the app */
     CHECK_EQ_INT(home_hit(0, HOME_SCREEN_H - 1), HOME_CLOSE);
     CHECK_EQ_INT(home_hit(5, HOME_BAR_Y - 1), -1);    /* margin above the bar */
     home_rect_t bar = home_item_touch(HOME_CLOSE);
-    CHECK_EQ_INT(bar.h, 32);   /* owner's exception to the 40 px rule */
+    CHECK_EQ_INT(bar.h, 38);   /* System Settings' bar: owner's exception to the 40 px rule */
     CHECK_EQ_INT(bar.y + bar.h, HOME_SCREEN_H);
 }
 
@@ -76,65 +76,105 @@ static void test_home_text(void)
     CHECK_EQ_STR(home_adapter_text(&v), "Connected");
 }
 
-static void test_home_top_car_and_chips(void)
+static void test_home_top_rows_no_car(void)
 {
     home_top_t t;
     memset(&t, 0, sizeof t);
-    char a[48], b[48];
     t.codes = -1;
     t.adapter_host = "192.168.0.10";
-    home_top_car(&t, a, sizeof a, b, sizeof b);
-    CHECK_EQ_STR(a, "No car yet");
-    CHECK_EQ_STR(b, "Connect the adapter to read it");
-    CHECK_EQ_STR(home_top_cel(&t), "CEL --");
-    home_top_codes(&t, a, sizeof a);
-    CHECK_EQ_STR(a, "-- codes");
-    home_top_detail(&t, a, sizeof a);
-    CHECK_EQ_STR(a, "Adapter 192.168.0.10");
-
-    t.connected = true;
-    home_top_car(&t, a, sizeof a, b, sizeof b);
-    CHECK_EQ_STR(b, "Tap DIAG, then SCAN to read it");
-    t.have_car = true;
-    t.title = "2008 Honda Ridgeline";
-    t.nickname = "";
-    home_top_car(&t, a, sizeof a, b, sizeof b);
-    CHECK_EQ_STR(a, "2008 Honda Ridgeline");
-    CHECK_EQ_STR(b, "");
-    t.nickname = "Big Red";
-    home_top_car(&t, a, sizeof a, b, sizeof b);
-    CHECK_EQ_STR(a, "Big Red");
-    CHECK_EQ_STR(b, "2008 Honda Ridgeline");
-
-    t.cel_known = true;
-    CHECK_EQ_STR(home_top_cel(&t), "CEL off");
-    t.cel_on = true;
-    CHECK_EQ_STR(home_top_cel(&t), "CEL ON");
-    t.codes = 1;
-    home_top_codes(&t, a, sizeof a);
-    CHECK_EQ_STR(a, "1 code");
-    t.codes = 0;
-    home_top_codes(&t, a, sizeof a);
-    CHECK_EQ_STR(a, "0 codes");
-
-    t.protocol = 3;
-    t.adapter_id = "ELM327 V2.3";
-    home_top_detail(&t, a, sizeof a);
-    CHECK_EQ_STR(a, "ISO 9141-2 - ELM327 V2.3");
-    t.adapter_id = "";
-    home_top_detail(&t, a, sizeof a);
-    CHECK_EQ_STR(a, "ISO 9141-2");
-    t.protocol = 0;
-    t.adapter_id = "ELM327 V2.3";
-    home_top_detail(&t, a, sizeof a);
-    CHECK_EQ_STR(a, "ELM327 V2.3");
-    CHECK_EQ_STR(home_protocol_name(6), "CAN 11/500");
-    CHECK_EQ_STR(home_protocol_name(13), "");
+    home_row_t r[HOME_ROWS];
+    home_top_rows(&t, r);
+    CHECK_EQ_STR(r[0].tag, "Car");
+    CHECK_EQ_STR(r[0].value, "No car yet");
+    CHECK_EQ_INT(r[0].tone, HOME_TONE_DIM);
+    CHECK_EQ_STR(r[1].value, "--");
+    CHECK(!r[1].lamp);
+    CHECK_EQ_STR(r[2].value, "--");
+    CHECK_EQ_STR(r[3].tag, "Odometer");
+    CHECK(r[3].lcd);
+    CHECK_EQ_STR(r[3].value, "---,---");
+    CHECK_EQ_STR(r[3].detail, "mi");
+    CHECK_EQ_STR(r[4].value, "None yet");
+    CHECK_EQ_STR(r[5].value, "--");
+    CHECK_EQ_STR(r[6].tag, "Adapter");
+    CHECK_EQ_STR(r[6].value, "Not connected");
+    CHECK_EQ_STR(r[6].detail, "192.168.0.10");
+    CHECK_EQ_INT(r[6].tone, HOME_TONE_RED);
 }
 
-static void test_home_top_numbers(void)
+static void test_home_top_rows_connected(void)
 {
-    char a[24], b[24];
+    home_top_t t;
+    memset(&t, 0, sizeof t);
+    t.connected = true;
+    t.have_car = true;
+    t.title = "2008 Honda Ridgeline";
+    t.nickname = "Big Red";
+    t.cel_known = true;
+    t.codes = 0;
+    t.code_list = "";
+    t.protocol = 3;
+    t.adapter_id = "ELM327 V2.3";
+    t.have_odo = true;
+    t.odo_km = 123456.5 * 1.609344;
+    t.have_last = true;
+    t.last_km = 19.956;   /* 12.4 mi */
+    t.last_name = "drive-20261118-141344.csv";
+    t.today = "20261118";
+    t.have_economy = true;
+    t.economy = 14.06;
+    home_row_t r[HOME_ROWS];
+    home_top_rows(&t, r);
+    CHECK_EQ_STR(r[0].value, "Big Red");
+    CHECK_EQ_STR(r[0].detail, "2008 Honda Ridgeline");
+    CHECK_EQ_STR(r[1].value, "Off");
+    CHECK(r[1].lamp);
+    CHECK_EQ_INT(r[1].tone, HOME_TONE_NORMAL);
+    CHECK_EQ_STR(r[2].value, "None stored");
+    CHECK_EQ_STR(r[3].value, "123,456");
+    CHECK_EQ_STR(r[4].value, "12.4 mi");
+    CHECK_EQ_STR(r[4].detail, "today");
+    CHECK_EQ_STR(r[5].value, "14.1 mpg");
+    CHECK_EQ_STR(r[5].detail, "average");
+    CHECK_EQ_INT(r[5].tone, HOME_TONE_ECONOMY);
+    CHECK_EQ_STR(r[6].value, "ELM327 V2.3");
+    CHECK_EQ_STR(r[6].detail, "ISO 9141-2");
+
+    t.nickname = "";
+    t.cel_on = true;
+    t.have_mil_km = true;
+    t.mil_km = 11;        /* 7 mi */
+    t.codes = 2;
+    t.code_list = "P0171, P0174";
+    t.today = "20261119";
+    t.last_name = "drive-20260105-090000.csv";
+    t.last_km = 5000;
+    t.adapter_id = "";
+    t.protocol = 0;
+    t.metric = true;
+    home_top_rows(&t, r);
+    CHECK_EQ_STR(r[0].value, "2008 Honda Ridgeline");
+    CHECK_EQ_STR(r[0].detail, "");
+    CHECK_EQ_STR(r[1].value, "ON");
+    CHECK_EQ_INT(r[1].tone, HOME_TONE_AMBER);
+    CHECK_EQ_STR(r[1].detail, "for 11 km");
+    CHECK_EQ_STR(r[2].value, "2 stored");
+    CHECK_EQ_STR(r[2].detail, "P0171, P0174");
+    CHECK_EQ_STR(r[3].value, "198,683");
+    CHECK_EQ_STR(r[3].detail, "km");
+    CHECK_EQ_STR(r[4].value, "999.9 km");
+    CHECK_EQ_STR(r[4].detail, "1/5");
+    CHECK_EQ_STR(r[5].value, "14.1 L/100 km");
+    CHECK_EQ_STR(r[6].value, "Connected");
+    CHECK_EQ_STR(r[6].detail, "");
+    t.metric = false;
+    home_top_rows(&t, r);
+    CHECK_EQ_STR(r[1].detail, "for 7 mi");
+}
+
+static void test_home_group_digits(void)
+{
+    char a[24];
     home_group_digits(123456, a, sizeof a);
     CHECK_EQ_STR(a, "123,456");
     home_group_digits(999, a, sizeof a);
@@ -145,56 +185,15 @@ static void test_home_top_numbers(void)
     CHECK_EQ_STR(a, "0");
     home_group_digits(1234567, a, 6);   /* too small: cut, still terminated */
     CHECK_EQ_INT((int)strlen(a), 5);
-
-    home_top_t t;
-    memset(&t, 0, sizeof t);
-    home_top_odometer(&t, a, sizeof a);
-    CHECK_EQ_STR(a, "");
-    t.have_odo = true;
-    t.odo_km = 123456.5 * 1.609344;   /* 198,683.6 km */
-    home_top_odometer(&t, a, sizeof a);
-    CHECK_EQ_STR(a, "123,456");
-    CHECK_EQ_STR(home_top_dist_unit(&t), "mi");
-    t.metric = true;
-    home_top_odometer(&t, a, sizeof a);
-    CHECK_EQ_STR(a, "198,683");
-    CHECK_EQ_STR(home_top_dist_unit(&t), "km");
-
-    t.metric = false;
-    home_top_last(&t, a, sizeof a, b, sizeof b);
-    CHECK_EQ_STR(a, "");
-    CHECK_EQ_STR(b, "");
-    t.have_last = true;
-    t.last_km = 19.956;    /* 12.4 mi */
-    t.last_name = "drive-20261118-141344.csv";
-    t.today = "20261118";
-    home_top_last(&t, a, sizeof a, b, sizeof b);
-    CHECK_EQ_STR(a, "12.4");
-    CHECK_EQ_STR(b, "today");
-    t.today = "20261119";
-    t.last_name = "drive-20260105-090000.csv";
-    home_top_last(&t, a, sizeof a, b, sizeof b);
-    CHECK_EQ_STR(b, "1/5");
-    t.last_km = 5000;
-    home_top_last(&t, a, sizeof a, b, sizeof b);
-    CHECK_EQ_STR(a, "999.9");
-
-    home_top_economy(&t, a, sizeof a, b, sizeof b);
-    CHECK_EQ_STR(a, "");
-    t.have_economy = true;
-    t.economy = 17.84;
-    home_top_economy(&t, a, sizeof a, b, sizeof b);
-    CHECK_EQ_STR(a, "17.8");
-    CHECK_EQ_STR(b, "mpg average");
-    t.metric = true;
-    home_top_economy(&t, a, sizeof a, b, sizeof b);
-    CHECK_EQ_STR(b, "L/100 km average");
+    CHECK_EQ_STR(home_protocol_name(6), "CAN 11/500");
+    CHECK_EQ_STR(home_protocol_name(13), "");
 }
 
 void suite_ui(void)
 {
-    RUN_TEST(test_home_top_car_and_chips);
-    RUN_TEST(test_home_top_numbers);
+    RUN_TEST(test_home_top_rows_no_car);
+    RUN_TEST(test_home_top_rows_connected);
+    RUN_TEST(test_home_group_digits);
     RUN_TEST(test_home_rects_fit_and_dont_overlap);
     RUN_TEST(test_home_hit);
     RUN_TEST(test_home_text);

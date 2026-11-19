@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-18, HOME redesign: night theme, status bar, car card and LCD panels (gauge-boy-82l.11)
+**As of:** 2026-11-18, HOME v7: the 3DS system buttons, bars and status bar; info panel of fact rows (gauge-boy-82l.12, 82l.13)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -10,15 +10,15 @@ The arrow (→) shows where a button goes or what it does. On the bottom screen 
 Gauge Boy
 ├── Unsupported device screen        (Old 3DS only: tap or START exits)
 └── Safety notice                    (tap the touch screen to continue)
-    └── HOME                         (graphics, night theme. Top screen: 3DS-style status bar
-                                     (signal, Connected / Not connected, date, time, battery),
-                                     GAUGE BOY: OBD-II DELUXE, the car card (nickname, year make
-                                     model, CEL and code chips, protocol and adapter; "No car
-                                     yet" before one is known), ODOMETER and LAST DRIVE (distance,
-                                     today or the date, mileage-log average economy) in LCD
-                                     digits, the safety line)
-        ├── [Garage]                 → GARAGE (second line: nickname or model, "No car yet";
-        │                              BACK returns to HOME)
+    └── HOME                         (graphics, night theme, the 3DS system pieces. Top screen:
+                                     the HOME Menu's status bar (signal, Connected / Not
+                                     Connected pill, date, time, battery), the GAUGE BOY:
+                                     OBD-II DELUXE title row, and an info panel of fact rows:
+                                     Car, CEL (lamp, Off / ON and how far), Codes (count and
+                                     the first ones), Odometer (LCD digits), Last drive,
+                                     Economy (mileage-log average), Adapter (version and
+                                     protocol, or Not connected and the address))
+        ├── [Garage]                 → GARAGE (icon dims before a car is known; BACK returns to HOME)
         │   └── GARAGE               (no polling; top: one car's card: a picture frame (photo
         │       │                     in M5), nickname, year make model, VIN or "(set in
         │       │                     SETUP)", logged distance and drives, odometer, bests;
@@ -45,10 +45,11 @@ Gauge Boy
         │           ├── [EDIT]       the selected entry: the same questions, filled in with it
         │           ├── [DELETE]     the selected entry, after a second tap ("AGAIN")
         │           └── [BACK]       → GARAGE                                     [B]
-        ├── [Adapter]                → Wi-Fi guide (Connected in green; Not connected in red,
-        │                              outlined red until another button is tapped)
+        ├── [Adapter]                → Wi-Fi guide (green Wi-Fi icon when connected; red, crossed out,
+        │                              a red "!" badge and the focus ring when not)
         ├── [LIVE]                   → LIVE view list
-        ├── [DIAG]                   → DIAG (amber, reading "CEL ON", when the CEL is on)
+        ├── [DIAG]                   → DIAG (amber ring and icon when the CEL is on, a badge with
+        │                              the stored code count)
         ├── [TRIM]                   → TRIM (starts polling)
         ├── [TRACK]                  → TRACK
         │   ├── TRACK                (top: the modes, closed-course rules)

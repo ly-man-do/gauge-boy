@@ -1,7 +1,7 @@
 # CLAUDE.md: Gauge Boy: OBD-II Deluxe
 
-**Version:** 1.26.0
-**Matches project brief:** 1.21.0 (`docs/gaugeboy-brief.md`)
+**Version:** 1.27.0
+**Matches project brief:** 1.22.0 (`docs/gaugeboy-brief.md`)
 
 You are the developer on Gauge Boy, a homebrew New 3DS app that reads a car's OBD-II data over a Wi-Fi ELM327 adapter. The project brief is the source of truth for scope. If a request conflicts with the brief, ask the owner before acting.
 
@@ -48,12 +48,13 @@ Use Beads (`bd`) for all task tracking. Do not create markdown TODO lists, plan 
 - The name is written "Gauge Boy" (two words) in everything people read; files, folders and the repo use `gauge-boy`. C identifiers and include guards keep `GAUGEBOY_`.
 - SD card data folder: `sdmc:/3ds/gauge-boy/`.
 
-**Approved tools and dependencies (owner-approved in 1.1.0, 1.7.0 and 1.8.0):**
+**Approved tools and dependencies (owner-approved in 1.1.0, 1.7.0, 1.8.0 and 1.27.0):**
 - Host unit tests: a minimal hand-rolled assert harness in `tests/` (no third-party test framework).
 - ELM327 emulator: the Python `ELM327-emulator` package, dev-only (never shipped); its config lives in `tools/`.
 - `.cia` packaging: `makerom` and `bannertool`. The `.cia` title ID is chosen once (an M0 `needs-owner` issue) and never changed.
 - 3D modeling: Blender, dev-only (never shipped). Models are built by Blender Python scripts in `tools/` so they can be regenerated, and a `tools/` converter turns the export into C data for citro3d. Scripts follow the project's license (none for now) and must stay GPL-compatible, as Blender's API needs; Blender's license does not cover the models it makes.
 - QR codes: the Python `segno` package (BSD), dev and CI only (never shipped), pinned with a hash in `tools/requirements-release.txt`. `tools/make_qr.py` makes the README's stable install QR and each release's QR.
+- 3DS system UI extraction: `ctrtool` from 3DSGuy/Project_CTR (MIT), dev-only (never shipped). `tools/make_sysui.py` uses it on the owner's own decrypted HOME Menu and System Settings dumps (made with GodMode9; never committed) and writes the sprites to `gfx/`. `3dstool` was approved too but isn't needed.
 - Anything else still needs owner approval (section 9).
 
 ## 3. Code layout
@@ -90,12 +91,12 @@ docs/          Project brief, compatibility list
 
 ## 5. UI rules
 
-- Style: look and feel like a Nintendo 3DS game, with the palette in brief section 5b (warm orange backdrop, lime-green accent). Do not use the old reference image.
+- Style: look and feel like a Nintendo 3DS game, with the night-theme palette in brief section 5b (black, white and red; the 3DS system buttons in neutral greys). Do not use the old reference image.
 - Models: chunky, slightly toy-like low-poly models with colorful textures and vertex colors, and thin dark outlines on every model. Gauges are chunky, toy-like dials, not realistic tuner gauges.
 - Mascot car: a teal 1995 Suzuki Sidekick, with no maker names, badges or logos.
 - Music and sound effects: 3DS-game style (bright, catchy, playful); see brief section 5f.
 - Top screen: display only, stereoscopic 3D with layered gauges (housing, face, needle, glass). Depth follows the 3D slider; respect the max-depth setting.
-- Bottom screen: all navigation by touch. Buttons at least 40x40 px (exception: the HOME START Close bar, full width and 32 px tall). Menus: LIVE / DIAG / TRIM / TRACK / LOG / SETUP.
+- Bottom screen: all navigation by touch. Buttons at least 40x40 px (exception: the HOME START Close bar, full width and 38 px tall). Menus: LIVE / DIAG / TRIM / TRACK / LOG / SETUP.
 - Must hold 60 fps on the top screen with the 3D slider at maximum. Pre-render static layers; redraw only needles and digits each frame.
 - Physical buttons are optional shortcuts only; every function must be reachable by touch.
 - Labels are English only; no Japanese sub-labels or Japanese font.
@@ -115,7 +116,7 @@ docs/          Project brief, compatibility list
 
 - License: none for now (owner decision 2026-11-18; may be reviewed later). Don't add a LICENSE file or license headers. Every dependency and asset must still allow redistribution in a public repo, and its license and notices are kept (`CREDITS.md`, `docs/licenses/`). GPL code still can't be copied in.
 - "Gauge Boy" lettering and logo must be original and must not imitate the Game Boy logo, fonts or colors.
-- The 3DS-game look is built from original art only.
+- The 3DS system UI pieces (status bar, bottom bar, tabs, buttons, choices, sliders, dialogs) are Nintendo's own, from `tools/make_sysui.py` (owner decision 2026-11-18, risk accepted), credited in `CREDITS.md`. All other art is original.
 - Fonts: UI text uses the 3DS system font, loaded from the console at runtime with citro2d (owner decision 2026-11-18); never copy it, or any other system or commercial font, into the app, `romfs/` or the repo. Any font that ships must be open-licensed (e.g. SIL OFL).
 - Music and sounds: original, commissioned or CC0 / CC-BY. Record the source and license of every asset in `CREDITS.md`.
 - DTC descriptions: generic codes, plus manufacturer-specific codes per make (shown only when the car's make is known), both from Wal33D/dtc-database (MIT) by owner decision (2026-11-15, gauge-boy-bxf.7, bxf.12), pinned and generated by `tools/make_dtc_table.py`, credited in `CREDITS.md`. Don't swap or add sources without the owner.
@@ -143,6 +144,7 @@ docs/          Project brief, compatibility list
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.27.0 | 2026-11-18 | Matches brief 1.22.0: night theme only; Nintendo's system UI pieces are used (sections 5, 7); HOME Close bar 38 px; `ctrtool` approved (section 2) |
 | 1.26.0 | 2026-11-18 | Matches brief 1.21.0: UI text uses the 3DS system font, loaded at runtime and never shipped (section 7) |
 | 1.25.0 | 2026-11-18 | Matches brief 1.20.0: the MIT license is removed for now (sections 2, 7) |
 | 1.24.0 | 2026-11-18 | Matches brief 1.19.0: the FUN menu is TRACK (sections 5, 6); safety rules unchanged |

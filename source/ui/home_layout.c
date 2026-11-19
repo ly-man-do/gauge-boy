@@ -2,18 +2,18 @@
 
 #include <stddef.h>
 
-/* Mockup v4 (docs/mockups/home-v4.html): margins 6 px, gaps 5-6 px. */
-#define MARGIN   6
-#define STATUS_Y 5
-#define STATUS_H 40
-#define STATUS_W 151
-#define CARD_H   73
-#define ROW1_Y   50
-#define ROW2_Y   128
+/* Mockup v7 (docs/mockups/home-v7.html): margins 8 px. */
+#define STATUS_Y 6
+#define STATUS_H 34
+#define STATUS_W 148
+#define CARD_H   74
+#define ROW1_Y   45
+#define ROW2_Y   122
 
-/* The three columns: 99, 100 and 99 px wide. */
-static const int col_x[3] = { 6, 110, 215 };
-static const int col_w[3] = { 99, 100, 99 };
+/* The three columns, 98 px wide. */
+static const int col_x[3] = { 8, 111, 214 };
+static const int col_w[3] = { 98, 98, 98 };
+#define MARGIN   8
 
 static const struct {
     const char *label;

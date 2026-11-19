@@ -1,6 +1,6 @@
 # Project Brief: Gauge Boy: OBD-II Deluxe
 
-**Version:** 1.21.0
+**Version:** 1.22.0
 **Product name:** Gauge Boy: OBD-II Deluxe (short name: Gauge Boy)
 **Date:** 2026-11-15
 **Status:** Final (baseline). Later changes get a new version and a changelog entry.
@@ -98,13 +98,13 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 - **Models:** Chunky, slightly toy-like low-poly models with colorful textures and vertex colors, lit from the top left, with an optional shine highlight. Every model has thin dark outlines. Budgets: about 1,000 to 1,500 triangles for the mascot car (plus a low-detail version of about 300), about 200 to 400 per gauge, and under about 10,000 for the whole top-screen scene; textures usually 256x256 or smaller.
 - **Gauges:** Chunky, toy-like dials in the style of a 3DS game, not realistic tuner gauges: thick rounded bezels, bold numerals, a big needle and a glossy glass highlight.
 - **Digital readouts:** Bold, rounded digits on simple LCD-style panels.
-- **Controls (bottom screen):** Big, rounded, colorful buttons that visibly press in, each with an icon, plus toggles and sliders in the same style.
+- **Controls (bottom screen):** The 3DS's own system buttons (System Settings' buttons, choices, sliders and grey bottom bar), recolored to the night theme's neutral greys, each with a colored icon; they visibly press in.
 - **Lighting:** Consistent light source (top-left) across models and UI art.
 
 **Mascot car:** A teal toy version of a 1995 Suzuki Sidekick (a compact SUV with a boxy body, upright windshield, body-colored fender flares and bumpers with dark lower lips, and a spare tire on the tailgate), based on the shape of the real car: a chunky low-poly model with thin dark outlines and no maker names, badges or logos. It appears on the HOME menu icon and banner, spins in 3D on the top-screen title, drives through the attract mode and is the garage card picture until the user takes a photo.
 
 **Design language:**
-- **Colors:** Warm tan-orange backdrop (`#C58B4C`) with a darker tan (`#876B39`) for patterns and panel edges; near-black ink (`#1A1610`) for outlines and linework; lime green (`#8FD42A`, highlight `#C6F27A`, shadow `#5E9A1A`) as the main UI accent; teal (`#2BAE9F`, highlight `#7ADBCD`, shadow `#1A7A70`) for the mascot car; navy-to-blue glass (`#323868` to `#6C7AC8`); light neutrals for trim and panels. Signal colors stay for function only: amber for the CEL warning, red for redline, green for live values.
+- **Colors (night theme, like a lit dashboard; the only theme for now, day mode dropped):** black background (`#000000`) with a faint grid; white and light-grey text (`#F2F4F5`, `#C8C8C8`, `#9C9C9C`); red (`#E2302A`, light `#FF5A4E`) as the UI accent and focus ring; orange (`#FF8A2B`) for "OBD-II DELUXE"; the 3DS system buttons and bars in neutral greys (the HOME Menu's dark-theme rule, warm tint removed); menu icons in their own colors (LIVE red, DIAG orange, TRIM yellow, TRACK white checkered flag, LOG blue, SETUP grey). Signal colors stay for function: amber (`#F2A52B`) for the CEL, green (`#4FCB62`) for connected, red for redline and not connected. The mascot car stays teal (`#2BAE9F`).
 - **Type:** Text uses the 3DS system font (the Rodin-based font of the console's own menus), loaded from the console at runtime through citro2d; it is never copied into the app or the repo. Headings use the same font, larger. Live values use bold, LCD-style digits drawn by the app or set in an open-licensed font. Labels are in English only; there are no Japanese sub-labels.
 - **Gauges:** Mix of chunky analog dials, bar graphs and digital readouts; peak-hold markers; redline flash.
 - **Motion:** Bouncy, springy transitions; startup "sweep" where needles go to max and back; the selected item pulses.
@@ -119,16 +119,16 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 - Rendered with citro3d stereo (separate left and right eye images); the New 3DS speedup mode keeps both eyes at 60 fps.
 
 **Navigation (touch only):**
-- All menus are selected by tapping the bottom screen. Buttons are large (at least 40x40 px) so they work with a finger, not just the stylus. Exception: the HOME screen's START Close bar is full width but 32 px tall.
+- All menus are selected by tapping the bottom screen. Buttons are large (at least 40x40 px) so they work with a finger, not just the stylus. Exception: the HOME screen's START Close bar (System Settings' own bottom bar) is full width but 38 px tall.
 - Pressed buttons show a press-in animation, a click sound and a light-up state.
 - The top screen is display only; it never needs input.
 - Physical buttons are optional shortcuts only (for example B for back, L/R to switch gauge layouts); every function can be reached by touch.
 
 **Screen layout:**
-- **Top screen (400x240, 3D):** Main gauge cluster on the orange backdrop; selectable layouts (single big tach, 4-gauge grid, data list).
+- **Top screen (400x240, 3D):** The 3DS status bar (the HOME Menu's own, dark version) on top; main gauge cluster on the black night background; selectable layouts (single big tach, 4-gauge grid, data list).
 - **Bottom screen (320x240, touch):** Touch panel of big rounded buttons for LIVE (dash gauges) / DIAG (CEL codes) / TRIM (fuel trims) / TRACK (track modes) / LOG / SETUP, with sub-menus on the same panel. An amber CEL warning lamp on the panel lights when the CEL is on.
 
-**Brand and IP rule:** The app looks and feels like a 3DS game. All artwork, models, icons and the app logo are original. Fonts are either the console's own system font, loaded at runtime and never shipped, or open-licensed (e.g. SIL OFL) so they can ship in the public repo.
+**Brand and IP rule:** The app looks and feels like a 3DS game. The system UI pieces (status bar, bottom bar and tabs, buttons, choices, sliders, dialogs) are Nintendo's own, taken from the HOME Menu and System Settings on the owner's console by `tools/make_sysui.py` and shipped in the app (owner decision 2026-11-18; the owner accepts the takedown risk). Everything else (models, menu icons, the app logo, the mascot) is original. Fonts are either the console's own system font, loaded at runtime and never shipped, or open-licensed (e.g. SIL OFL) so they can ship in the public repo.
 
 **Theme system:** Colors and gauge styles live in a theme file on the SD card, so alternate color schemes can be added without code changes.
 
@@ -322,7 +322,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 | Claude Code marks hardware-dependent work as done without a real test | Bugs only found in the car | `needs-hardware` label; only the owner closes those issues |
 | Agent loses track of long-running work across sessions | Repeated or half-finished work | Beads as the single task list; `bd ready` at the start of every session |
 | UI looks too close to a real brand | Trademark complaints, repo takedown | Original logo and art only; no brand names or marks; fonts open-licensed or the console's own system font, never shipped |
-| 3DS-game look plus the Gauge Boy name reads as an official Nintendo app | Trademark complaint or repo takedown | Original models and art only; fonts open-licensed or the console's own system font, never shipped; nothing copied, traced or converted from Nintendo games; no Nintendo characters or UI elements; README disclaimer |
+| 3DS-game look plus the Gauge Boy name reads as an official Nintendo app | Trademark complaint or repo takedown | Original models, icons and logo; Nintendo's system UI pieces are used by owner decision (1.22.0) and the owner accepts the risk; fonts open-licensed or the console's own system font, never shipped; no Nintendo characters; README disclaimer |
 | Solo developer scope creep (3D models and art are time-consuming) | Delayed release | Keep text dashboard working first (M2) and finish the features before the visual style (logging is M3 and track modes M4; the visual style is M5, built on every screen at once); build one finished gauge in full detail before making the rest; stretch items stay out of 1.0 |
 | Track modes encourage street racing | Safety, reputation | Closed-course warning, no online leaderboards, Rev Sync locked unless stopped, no touch input needed while moving |
 | Slow OBD speed updates | Inaccurate timers | Poll speed only during timer runs; label results as estimates |
@@ -361,6 +361,7 @@ The 3DS has no Bluetooth and no USB host mode, so the connection has to go over 
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.22.0 | 2026-11-18 | Owner decisions: night theme only for now (day mode dropped): black, white and red, neutral-grey 3DS system buttons (section 5b colors); the 3DS system UI pieces (HOME Menu status bar, System Settings bottom bar, tabs, buttons, choices, sliders, dialogs) are Nintendo's own, extracted from the owner's console and shipped, risk accepted (sections 5b, 8); the HOME Close bar is 38 px tall; `ctrtool` approved as a dev-only extraction tool; `CLAUDE.md` updated to 1.27.0 |
 | 1.21.0 | 2026-11-18 | Owner decision: text uses the 3DS system font, loaded from the console at runtime and never shipped; other fonts stay open-licensed (sections 5b, 8); `CLAUDE.md` updated to 1.26.0 |
 | 1.20.0 | 2026-11-18 | Owner decision: the MIT license is removed for now (may be reviewed later); copies published before stay MIT; third-party licenses and notices are kept (sections 2, 5a, 10); `CLAUDE.md` updated to 1.25.0 |
 | 1.19.0 | 2026-11-18 | Owner request: the FUN menu is renamed TRACK, subtitle "Track modes" (sections 2, 5b, 5e, 5f, 8); the safety rules are unchanged; `CLAUDE.md` updated to 1.24.0 |

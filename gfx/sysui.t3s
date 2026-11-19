@@ -1,0 +1,14 @@
+--atlas -f rgba8888 -z auto --border=edge
+
+sysui/bar.png
+sysui/button_large.png
+sysui/button_medium.png
+sysui/sb_battery.png
+sysui/sb_cells.png
+sysui/sb_cells_low.png
+sysui/sb_pill_off.png
+sysui/sb_pill_on.png
+sysui/sb_signal_off.png
+sysui/sb_signal_on.png
+sysui/tab_left.png
+sysui/tab_right.png
