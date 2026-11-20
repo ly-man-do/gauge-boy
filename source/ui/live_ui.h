@@ -63,7 +63,14 @@ typedef enum {
     LIVE_HIT_STOP,       /* the toggle's left half */
     LIVE_HIT_RECORD,     /* its right half */
     LIVE_HIT_EDIT,       /* Custom only: Edit PIDs */
+    LIVE_HIT_PAGE,       /* more values than fit the top screen: the next page */
 } live_hit_t;
+
+/* The top screen shows a view's values 16 at a time (two columns of 8). */
+#define LIVE_ROWS_PAGE 16
+
+/* How many pages n values need (at least 1). */
+int live_row_pages(int n);
 
 /* The half circles show this much of themselves at the screen's edges, as on System
  * Settings' pages (the rest of the circle is off screen). Their touch zones are a
@@ -73,8 +80,9 @@ typedef enum {
 
 live_rect_t live_view_rect(live_hit_t what);
 
-/* What a touch on a PID view's bottom screen hits (Edit only on Custom). */
-live_hit_t live_view_hit(int px, int py, bool custom);
+/* What a touch on a PID view's bottom screen hits (Edit only on Custom; Page only when
+ * the values need more than one page). */
+live_hit_t live_view_hit(int px, int py, bool custom, bool paged);
 
 /* The Back tab, on either screen. */
 bool live_back_hit(int px, int py);

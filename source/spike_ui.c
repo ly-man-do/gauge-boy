@@ -114,6 +114,7 @@
 #define BTN_LIVE_VIEW    (-90) /* UI: LIVE view list (-90 - view) */
 #define BTN_LIVE_STOP    (-42) /* UI: LIVE graphics: the toggle's Stop half */
 #define BTN_LIVE_RECORD  (-43) /* UI: ... its Record half */
+#define BTN_LIVE_PAGE    (-44) /* UI: LIVE graphics: the top screen's next page of values */
 #define BTN_GUIDE        (-8)  /* UI: SETUP -> Wi-Fi guide */
 #define BTN_CLEAR_ASK    (-5)  /* UI: open the clear-codes dialog */
 #define BTN_CLEAR_CANCEL (-6)
@@ -1302,10 +1303,16 @@ static void guide_check(spike_t *s)
 }
 
 /* LIVE (worker): publish the poller and a status line. */
+static unsigned live_poll_gen;   /* the live_gen the worker's values are for */
+
 static void live_publish(const obd_live_t *lv, bool have, int protocol, uint64_t now,
                          const char *msg, bool ui_changed)
 {
     LightLock_Lock(&shared.lock);
+    if (shared.live_gen != live_poll_gen) {
+        lv = NULL;      /* the UI asked for other PIDs since: these values are the old view's */
+        have = false;
+    }
     if (lv != NULL) {
         shared.live = *lv;
         shared.live_rate = obd_live_rate(lv, now);
@@ -2009,6 +2016,7 @@ static void live_poll(spike_t *s)
     LightLock_Lock(&shared.lock);
     bool on = shared.live_on;
     unsigned gen = shared.live_gen;
+    live_poll_gen = gen;
     uint8_t pids[OBD_LIVE_MAX];
     uint32_t periods[OBD_LIVE_MAX];
     int n = shared.live_want_count;
@@ -2860,6 +2868,7 @@ typedef struct {
     bool miles_dialog;         /* ... its Delete question */
     int miles_scroll;          /* ... the list scrolled by, px */
     int pid_scroll;            /* LIVE's Custom PID picker (graphics): scrolled by, px */
+    int live_page;             /* LIVE view (graphics): the top screen's page of values */
 } ui_state_t;
 
 static bool home_gfx;          /* HOME drawn with citro2d (else the text layout) */
@@ -2988,6 +2997,7 @@ static void live_start_locked(const uint8_t *pids, const uint32_t *periods, int 
     shared.live_module = OBD_MODULE_ENGINE;   /* a view sets another after this */
     shared.live_on = true;
     shared.live_gen++;
+    shared.live_have = false;   /* no values from the old PIDs under the new view's title */
     shared.live_msg[0] = '\0';
     shared.live_ui_version++;
 }
@@ -3021,6 +3031,23 @@ static void live_dash_start(void)
     LightEvent_Signal(&shared.wake);
 }
 
+/* How many pages of values the LIVE view now on the top screen needs. */
+static int live_pages_now(void)
+{
+    static obd_live_t lv;
+    static live_row_t rows[LIVE_VIEW_MAX];
+    LightLock_Lock(&shared.lock);
+    lv = shared.live;
+    bool have = shared.live_have;
+    LightLock_Unlock(&shared.lock);
+    if (!have) {
+        return 1;
+    }
+    int n = live_view_rows(&lv, app_cfg->metric ? OBD_UNITS_METRIC : OBD_UNITS_US,
+                           (float)app_cfg->engine_dl / 10.0f, rows, LIVE_VIEW_MAX);
+    return live_row_pages(n);
+}
+
 static void live_select_view(ui_state_t *ui, int v)
 {
     uint8_t pids[OBD_LIVE_MAX];
@@ -3030,6 +3057,7 @@ static void live_select_view(ui_state_t *ui, int v)
                               OBD_LIVE_MAX);
     live_start_locked(pids, periods, n);
     shared.live_module = live_view_module(v);
+    ui->live_page = 0;
     if (strcmp(app_cfg->live_view, live_view_key(v)) != 0) {
         snprintf(app_cfg->live_view, sizeof app_cfg->live_view, "%s", live_view_key(v));
         ui->live_dirty = true;
@@ -5854,7 +5882,7 @@ static void draw_trim_top(int busy, bool connected)
     }
     spike_format_header(header, sizeof header, connected, busy);
     if (have && protocol != 0) {
-        snprintf(title, sizeof title, "TRIM  %s, %.1f requests/s", elm_protocol_name(protocol),
+        snprintf(title, sizeof title, "TRIM  %s, %.1f req/s", elm_protocol_short(protocol),
                  (double)rate);
     } else {
         snprintf(title, sizeof title, "TRIM  Fuel trims");
@@ -6131,7 +6159,7 @@ static void draw_live_dash_top(bool connected)
 }
 
 /* A LIVE view's top screen (citro2d): its title and values. */
-static void draw_live_view_top(int view, bool connected)
+static void draw_live_view_top(int view, int page, bool connected)
 {
     static obd_live_t lv;
     static live_row_t rows[LIVE_VIEW_MAX];
@@ -6149,7 +6177,7 @@ static void draw_live_view_top(int view, bool connected)
     title[k] = '\0';
     kit_status_t s;
     status_now(&s, connected);
-    live_draw_view_top(title, rows, n, connected, &s);
+    live_draw_view_top(title, rows, n, page, connected, &s);
 }
 
 /* DIAG (graphics): the shown page's list rows. */
@@ -6824,6 +6852,7 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
             { BTN_BACK, LIVE_HIT_BACK }, { BTN_PAGE_PREV, LIVE_HIT_PREV },
             { BTN_PAGE_NEXT, LIVE_HIT_NEXT }, { BTN_LIVE_STOP, LIVE_HIT_STOP },
             { BTN_LIVE_RECORD, LIVE_HIT_RECORD }, { BTN_LIVE_EDIT, LIVE_HIT_EDIT },
+            { BTN_LIVE_PAGE, LIVE_HIT_PAGE },
         };
         c.pressed = LIVE_HIT_NONE;
         for (unsigned i = 0; i < sizeof press / sizeof press[0]; i++) {
@@ -6834,6 +6863,8 @@ static void draw_bottom(const gb_config_t *cfg, const ui_state_t *ui, uint64_t n
         if (ui->live_held != LIVE_HIT_NONE) {
             c.pressed = ui->live_held_in ? (live_hit_t)ui->live_held : LIVE_HIT_NONE;
         }
+        c.pages = live_pages_now();
+        c.page = ui->live_page < c.pages ? ui->live_page : c.pages - 1;
         live_draw_view_bottom(&c);
         return;
     }
@@ -7636,7 +7667,7 @@ void spike_ui_run(void)
                       -1, false, 0, LIVE_HIT_NONE, false, 0, DIAG_HIT_NONE, false, 0, false,
                       false, TRIM_HIT_NONE, false, false, false, TRK_HIT_NONE, false, 0,
                       false, false, LOG_HIT_NONE, false, 0, SET_HIT_NONE, false, 0,
-                      false, false, GAR_HIT_NONE, false, false, false, 0, 0 };
+                      false, false, GAR_HIT_NONE, false, false, false, 0, 0, 0 };
     gm_vec_t gm_raw = { 0, 0, 0 };   /* G-METER: the latest sensor reading */
     live_menu_count();
     uint64_t notice_until = 0;
@@ -8048,7 +8079,8 @@ void spike_ui_run(void)
             } else if (gfx_touch && ui.screen == SCREEN_LIVE) {
                 /* As on the 3DS: held = pressed; the control acts when the finger
                  * lifts while still on it. */
-                ui.live_held = live_view_hit(tp.px, tp.py, ui.live_view == LIVE_VIEW_CUSTOM);
+                ui.live_held = live_view_hit(tp.px, tp.py, ui.live_view == LIVE_VIEW_CUSTOM,
+                                             live_pages_now() > 1);
                 ui.live_held_in = ui.live_held != LIVE_HIT_NONE;
                 bottom_dirty = true;
             } else if (item >= 0) {
@@ -8098,7 +8130,8 @@ void spike_ui_run(void)
             } else if (hidKeysHeld() & KEY_TOUCH) {
                 touchPosition tp;
                 hidTouchRead(&tp);
-                bool in = live_view_hit(tp.px, tp.py, ui.live_view == LIVE_VIEW_CUSTOM) == ui.live_held;
+                bool in = live_view_hit(tp.px, tp.py, ui.live_view == LIVE_VIEW_CUSTOM,
+                                        live_pages_now() > 1) == ui.live_held;
                 if (in != ui.live_held_in) {
                     ui.live_held_in = in;
                     bottom_dirty = true;
@@ -8112,6 +8145,7 @@ void spike_ui_run(void)
                     case LIVE_HIT_STOP:   action = BTN_LIVE_STOP;   tapped = true; break;
                     case LIVE_HIT_RECORD: action = BTN_LIVE_RECORD; tapped = true; break;
                     case LIVE_HIT_EDIT:   action = BTN_LIVE_EDIT;   tapped = true; break;
+                    case LIVE_HIT_PAGE:   action = BTN_LIVE_PAGE;   tapped = true; break;
                     default: break;
                     }
                     lifted = tapped;
@@ -8739,6 +8773,11 @@ void spike_ui_run(void)
                    !ui.garage_info && (down & KEY_Y) && !confirming) {
             ui.garage_info = true;
             bottom_full = true;
+        } else if (home_gfx && ui.screen == SCREEN_LIVE && (down & (KEY_UP | KEY_DOWN)) &&
+                   !confirming && live_pages_now() > 1) {
+            int pages = live_pages_now();
+            ui.live_page = (ui.live_page + ((down & KEY_DOWN) ? 1 : pages - 1)) % pages;
+            bottom_dirty = top_dirty = true;
         } else if (ui.screen == SCREEN_CAMERA && !ui.cam_shot && (down & KEY_A) && !confirming) {
             action = BTN_PHOTO_TAKE;
             tapped = true;
@@ -8826,6 +8865,12 @@ void spike_ui_run(void)
                 LightEvent_Signal(&shared.wake);
                 top_dirty = true;
                 break;
+            case BTN_LIVE_PAGE: {
+                int pages = live_pages_now();
+                ui.live_page = (ui.live_page + 1) % (pages > 0 ? pages : 1);
+                bottom_dirty = top_dirty = true;
+                break;
+            }
             case BTN_LIVE_EDIT:
                 ui.screen = SCREEN_LIVE_EDIT;
                 ui.page = 0;
@@ -9882,7 +9927,16 @@ void spike_ui_run(void)
                 drawn_live_version = live_version;
                 live_drawn_at = now;
             } else if (live_gfx) {
-                draw_live_view_top(ui.live_view, connected);
+                static int pages_drawn = 1;   /* the Page button comes and goes with the values */
+                int pages = live_pages_now();
+                if (ui.live_page >= pages) {
+                    ui.live_page = 0;
+                }
+                if (pages != pages_drawn) {
+                    pages_drawn = pages;
+                    bottom_dirty = true;
+                }
+                draw_live_view_top(ui.live_view, ui.live_page, connected);
                 drawn_live_version = live_version;
                 live_drawn_at = now;
             } else if (live_screen) {

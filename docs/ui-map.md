@@ -2,7 +2,7 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-19, the start screens in the new style (gauge-boy-82l.27)
+**As of:** 2026-11-19, LIVE pages past 16 values (gauge-boy-81o)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
@@ -128,9 +128,13 @@ Gauge Boy
         │   │                        LIVE view (starts polling). Transmission polls the
         │   │                        transmission module alone (CAN cars)
         │   ├── [B Back]             → HOME, stops polling                        [B]
-        │   └── LIVE view            (top: the view's name and its values, one or two columns)
+        │   └── LIVE view            (top: the view's name and its values, one or two columns,
+        │       │                    16 a page; "page n of m" under them when there are more;
+        │       │                    "Waiting for the first values..." until the view's own
+        │       │                    values arrive)
         │       │                    (bottom: "n PIDs, r a second" at the top; its controls
         │       │                    look pressed while held and act when the finger lifts)
+        │       ├── [Page n of m]    (more than 16 values) the top screen's next page  [Up/Down]
         │       ├── [<] [>]          half circles at the edges: previous / next view  [L/R]
         │       ├── ● REC m:ss       above the toggle while recording (the dot pulses)
         │       ├── [Stop | Record]  a toggle: Record records this view to

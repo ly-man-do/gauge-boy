@@ -6,6 +6,8 @@ All notable changes to Gauge Boy are recorded here. The format follows [Keep a C
 
 ### Changed
 
+- **The .cia's HOME Menu banner has rounded corners** (see-through, 14 px), as the top-screen picture shown when Gauge Boy is selected. The icon is unchanged.
+- **LIVE shows every value**: a view with more than 16 values (All on CAN cars) shows them 16 at a time; a Page button on the bottom screen (or Up / Down) turns the page, and "page n of m" shows under them. Before, the rest showed only as "+N more".
 - **The first screen has the new look**: the safety notice shows the Gauge Boy title and version, the notice in an amber panel with a warning sign and the unofficial-homebrew line, and a pulsing ring on the bottom screen with "Tap the touch screen to continue." The Old 3DS unsupported-device screen matches it. Both fall back to the text version if graphics can't start.
 - **LIVE's Custom PID picker has the new look**: Edit PIDs lists the car's PIDs as a scrolling list, each ✓ On or Off; a tap turns one on or off and the Custom view on the top screen follows at once. "n of 20 picked" sits beside Back; the page buttons are gone. Every screen is now drawn in the new style.
 - **GARAGE, TRIP and the MILEAGE log have a new look** (night theme, the 3DS's own system pieces): the Garage card shows the car's photo, nickname, car, VIN, the odometer in LCD digits, logged distance and bests, with half circles for the other cars and Nickname, Photo, Trip and Mileage Log buttons. Trip shows the trip in big LCD digits. The mileage log is a scrolling list; a fill-up opens its own page with Edit and Delete, and Delete asks first (no more tapping it twice). Garage and Trip have (Y) Info pages; New Entry is the (X) tab.
@@ -27,6 +29,7 @@ All notable changes to Gauge Boy are recorded here. The format follows [Keep a C
 
 ### Fixed
 
+- **LIVE no longer shows the old view's values under the new view's title** for a moment after switching views: it waits for the new view's first values. The text LIVE and TRIM screens use a short protocol name ("CAN 11-bit 500k, 14.4 req/s") so their title line isn't cut off.
 - **G-meter calibration works with the sensor's normal jitter**: at rest the 3DS motion sensor's numbers wobble a couple of units (about 0.005 g), and an idling engine shakes the mount a little more. CALIBRATE now averages a second of readings and only fails on real movement (a typical shake over 0.05 g, or one bump over 0.3 g), shows its progress, and says how much it shook if it fails. The sensor numbers on the top screen are smoothed so they hold still, and the session log records each calibration.
 
 ### Added

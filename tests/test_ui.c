@@ -203,17 +203,25 @@ static void test_live_list(void)
 
 static void test_live_view_hits(void)
 {
-    CHECK_EQ_INT(live_view_hit(30, 220, false), LIVE_HIT_BACK);
+    CHECK_EQ_INT(live_view_hit(30, 220, false, false), LIVE_HIT_BACK);
     CHECK(live_back_hit(30, 220));
     CHECK(!live_back_hit(300, 220));
-    CHECK_EQ_INT(live_view_hit(10, 100, false), LIVE_HIT_PREV);
-    CHECK_EQ_INT(live_view_hit(310, 100, false), LIVE_HIT_NEXT);
-    CHECK_EQ_INT(live_view_hit(100, 120, false), LIVE_HIT_STOP);
-    CHECK_EQ_INT(live_view_hit(220, 120, false), LIVE_HIT_RECORD);
-    CHECK_EQ_INT(live_view_hit(160, 170, false), LIVE_HIT_NONE);
-    CHECK_EQ_INT(live_view_hit(160, 170, true), LIVE_HIT_EDIT);
-    CHECK_EQ_INT(live_view_hit(160, 20, true), LIVE_HIT_NONE);
-    for (int a = LIVE_HIT_BACK; a <= LIVE_HIT_EDIT; a++) {   /* touch rule: 40x40 */
+    CHECK_EQ_INT(live_view_hit(10, 100, false, false), LIVE_HIT_PREV);
+    CHECK_EQ_INT(live_view_hit(310, 100, false, false), LIVE_HIT_NEXT);
+    CHECK_EQ_INT(live_view_hit(100, 120, false, false), LIVE_HIT_STOP);
+    CHECK_EQ_INT(live_view_hit(220, 120, false, false), LIVE_HIT_RECORD);
+    CHECK_EQ_INT(live_view_hit(160, 170, false, false), LIVE_HIT_NONE);
+    CHECK_EQ_INT(live_view_hit(160, 170, true, false), LIVE_HIT_EDIT);
+    CHECK_EQ_INT(live_view_hit(160, 20, true, false), LIVE_HIT_NONE);
+    /* Page: only when the values need more than one page, above the REC line. */
+    CHECK_EQ_INT(live_view_hit(160, 40, false, false), LIVE_HIT_NONE);
+    CHECK_EQ_INT(live_view_hit(160, 40, true, true), LIVE_HIT_PAGE);
+    CHECK_EQ_INT(live_row_pages(0), 1);
+    CHECK_EQ_INT(live_row_pages(16), 1);
+    CHECK_EQ_INT(live_row_pages(17), 2);
+    CHECK_EQ_INT(live_row_pages(28), 2);
+    CHECK_EQ_INT(live_row_pages(33), 3);
+    for (int a = LIVE_HIT_BACK; a <= LIVE_HIT_PAGE; a++) {   /* touch rule: 40x40 */
         live_rect_t r = live_view_rect((live_hit_t)a);
         CHECK(r.w >= 40 && (r.h >= 38));
         CHECK(r.x >= 0 && r.y >= 0 && r.x + r.w <= LIVE_SCREEN_W && r.y + r.h <= LIVE_SCREEN_H);

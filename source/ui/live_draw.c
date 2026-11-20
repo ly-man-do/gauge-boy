@@ -163,7 +163,7 @@ void live_draw_list(const char *const *names, int n, int scroll, int pressed, bo
 
 /* ---------- a PID view ---------- */
 
-void live_draw_view_top(const char *title, const live_row_t *rows, int n, bool connected,
+void live_draw_view_top(const char *title, const live_row_t *rows, int n, int page, bool connected,
                         const kit_status_t *s)
 {
     kit_begin(true, 20);
@@ -179,10 +179,14 @@ void live_draw_view_top(const char *title, const live_row_t *rows, int n, bool c
         return;
     }
 
-    /* Eight rows a column; past eight, two narrower columns split evenly (and a count
-     * of the rest). */
-    bool two = n > 8;
-    int shown = n > 16 ? 16 : n;
+    /* Up to 16 a page: eight rows a column; past eight, two narrower columns split
+     * evenly. More than 16: pages (the Page button on the bottom screen, or Up / Down). */
+    int pages = live_row_pages(n);
+    page = page < 0 ? 0 : page >= pages ? pages - 1 : page;
+    const live_row_t *pr = rows + page * LIVE_ROWS_PAGE;
+    int shown = n - page * LIVE_ROWS_PAGE;
+    shown = shown > LIVE_ROWS_PAGE ? LIVE_ROWS_PAGE : shown;
+    bool two = shown > 8;
     int per_col = two ? (shown + 1) / 2 : 8;
     float col_w = two ? 178 : 356, tag_w = two ? 76 : 108, val_w = two ? 46 : 64;
     for (int i = 0; i < shown; i++) {
@@ -190,19 +194,19 @@ void live_draw_view_top(const char *title, const live_row_t *rows, int n, bool c
         float x = 27 + col * col_w, top = 74 + row * 18.2f, mid = top + 9;
         kit_rrect(x, mid - 7, tag_w, 14, 4, KIT_TAG);
         char tag[24];
-        snprintf(tag, sizeof tag, "%s", rows[i].label);
+        snprintf(tag, sizeof tag, "%s", pr[i].label);
         /* Long labels lose letters at the end to fit their tag. */
         while (strlen(tag) > 1 && kit_text_width(tag, KIT_PX(10)) > tag_w - 8) {
             tag[strlen(tag) - 1] = '\0';
         }
         kit_text(tag, x + 6, mid - 6.5f, KIT_PX(10), KIT_TAG_INK, -1, true);
         float vx = x + tag_w + 8 + val_w;
-        kit_text(rows[i].value, vx, mid - 9, KIT_PX(15), KIT_INK, 1, true);
-        kit_text(rows[i].unit, vx + 8, mid - 6.5f, KIT_PX(11.5f), KIT_INK3, -1, false);
+        kit_text(pr[i].value, vx, mid - 9, KIT_PX(15), KIT_INK, 1, true);
+        kit_text(pr[i].unit, vx + 8, mid - 6.5f, KIT_PX(11.5f), KIT_INK3, -1, false);
     }
-    if (n > shown) {
-        char more[24];
-        snprintf(more, sizeof more, "+%d more", n - shown);
+    if (pages > 1) {
+        char more[32];
+        snprintf(more, sizeof more, "page %d of %d", page + 1, pages);
         text_at(more, 200, 236, 10.5f, KIT_INK3, 0);
     }
     kit_end();
@@ -250,6 +254,16 @@ void live_draw_view_bottom(const live_controls_t *c)
     kit_text("Stop", st.x + st.w / 2.0f, st.y + st.h / 2.0f - 30 * ls / 2, ls, KIT_INK, 0, true);
     kit_text("Record", rc.x + rc.w / 2.0f, rc.y + rc.h / 2.0f - 30 * ls / 2, ls, KIT_INK, 0, true);
 
+    if (c->pages > 1) {   /* the top screen's next page of values */
+        live_rect_t g = live_view_rect(LIVE_HIT_PAGE);
+        bool p = c->pressed == LIVE_HIT_PAGE;
+        kit_button(sysui_button_medium_idx, g.x, g.y, g.w, g.h, p);
+        char label[24];
+        snprintf(label, sizeof label, "Page %d of %d", c->page + 1, c->pages);
+        float s = KIT_PX(14);
+        kit_text(label, g.x + g.w / 2.0f, g.y + (p ? 1 : 0) + g.h / 2.0f - 30 * s / 2, s, KIT_INK, 0,
+                 true);
+    }
     if (c->custom) {
         live_rect_t e = live_view_rect(LIVE_HIT_EDIT);
         bool p = c->pressed == LIVE_HIT_EDIT;

@@ -113,6 +113,9 @@ const char *elm_status_str(elm_status_t status);
  * "ISO 15765-4 CAN (11 bit, 500 kbaud)". */
 const char *elm_protocol_name(int protocol);
 
+/* The same, short enough for a title line: "CAN 11-bit 500k", "ISO 9141-2". */
+const char *elm_protocol_short(int protocol);
+
 /* Copy raw adapter bytes as printable text for logs: CR -> \r, LF -> \n,
  * backslash -> \\, other non-printable bytes -> \xNN. Always
  * NUL-terminates (if out_len > 0) and ends with "..." when truncated.

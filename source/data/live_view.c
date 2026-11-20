@@ -52,8 +52,7 @@ int live_view_lines(const obd_live_t *lv, int protocol, float rate, obd_units_t 
     char line[96];
 
     if (protocol != 0) {
-        snprintf(line, sizeof line, "%s, %.1f requests/s", elm_protocol_name(protocol),
-                 (double)rate);
+        snprintf(line, sizeof line, "%s, %.1f req/s", elm_protocol_short(protocol), (double)rate);
     } else {
         snprintf(line, sizeof line, "Not polling");
     }

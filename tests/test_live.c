@@ -668,7 +668,12 @@ static void test_live_view_lines(void)
         CHECK_EQ_INT(live_view_rows(NULL, OBD_UNITS_US, 0.0f, rows, LIVE_VIEW_MAX), 0);
         CHECK_EQ_INT(live_view_rows(&lv, OBD_UNITS_US, 0.0f, rows, 1), 1);
     }
-    CHECK_EQ_STR(lines[0], "ISO 9141-2 (5 baud init), 1.9 requests/s");
+    CHECK_EQ_STR(lines[0], "ISO 9141-2, 1.9 req/s");
+    /* The longest, a CAN title line, fits LIVE's 50 columns with a view name. */
+    n = live_view_lines(&lv, 6, 14.4f, OBD_UNITS_US, 0.0f, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
+    CHECK_EQ_STR(lines[0], "CAN 11-bit 500k, 14.4 req/s");
+    CHECK(strlen("Transmission  ") + strlen(lines[0]) <= 49);
+    n = live_view_lines(&lv, 3, 1.9f, OBD_UNITS_US, 0.0f, LIVE_VIEW_COLS, lines, LIVE_VIEW_MAX);
     CHECK(has_line(n, "RPM         710 rpm          every 2 s"));
     CHECK(has_line(n, "MAP         8.9 inHg"));
     CHECK(has_line(n, "Speed       -                no data"));

@@ -96,6 +96,7 @@ live_rect_t live_view_rect(live_hit_t what)
     case LIVE_HIT_STOP:   r = (live_rect_t){ 54, 100, 106, 48 }; break;
     case LIVE_HIT_RECORD: r = (live_rect_t){ 160, 100, 106, 48 }; break;
     case LIVE_HIT_EDIT:   r = (live_rect_t){ 84, 156, 152, 40 }; break;
+    case LIVE_HIT_PAGE:   r = (live_rect_t){ 84, 24, 152, 40 }; break;
     default: break;
     }
     return r;
@@ -106,12 +107,18 @@ static bool in(live_rect_t r, int px, int py)
     return px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h;
 }
 
-live_hit_t live_view_hit(int px, int py, bool custom)
+int live_row_pages(int n)
+{
+    return n <= LIVE_ROWS_PAGE ? 1 : (n + LIVE_ROWS_PAGE - 1) / LIVE_ROWS_PAGE;
+}
+
+live_hit_t live_view_hit(int px, int py, bool custom, bool paged)
 {
     static const live_hit_t order[] = { LIVE_HIT_BACK, LIVE_HIT_PREV, LIVE_HIT_NEXT,
-                                        LIVE_HIT_STOP, LIVE_HIT_RECORD, LIVE_HIT_EDIT };
+                                        LIVE_HIT_STOP, LIVE_HIT_RECORD, LIVE_HIT_EDIT,
+                                        LIVE_HIT_PAGE };
     for (unsigned i = 0; i < sizeof order / sizeof order[0]; i++) {
-        if (order[i] == LIVE_HIT_EDIT && !custom) {
+        if ((order[i] == LIVE_HIT_EDIT && !custom) || (order[i] == LIVE_HIT_PAGE && !paged)) {
             continue;
         }
         if (in(live_view_rect(order[i]), px, py)) {

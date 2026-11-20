@@ -21,8 +21,9 @@ void live_draw_dash(const live_dash_t *d, bool cel_known, bool cel_on, const kit
 void live_draw_list(const char *const *names, int n, int scroll, int pressed, bool grip_pressed,
                     bool back_pressed);
 
-/* Top: a PID view's title ("ENGINE") and rows (n 0 = waiting for the first values). */
-void live_draw_view_top(const char *title, const live_row_t *rows, int n, bool connected,
+/* Top: a PID view's title ("ENGINE") and rows (n 0 = waiting for the first values), page
+ * page of them (LIVE_ROWS_PAGE a page). */
+void live_draw_view_top(const char *title, const live_row_t *rows, int n, int page, bool connected,
                         const kit_status_t *s);
 
 typedef struct {
@@ -31,6 +32,7 @@ typedef struct {
     bool recording;
     unsigned long long rec_ms;    /* time recorded */
     bool custom;                  /* Custom: the Edit PIDs button */
+    int page, pages;              /* the top screen's page of values (Page when pages > 1) */
     live_hit_t pressed;           /* the control held */
 } live_controls_t;
 

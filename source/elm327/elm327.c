@@ -500,6 +500,20 @@ const char *elm_protocol_name(int protocol)
     return names[protocol];
 }
 
+const char *elm_protocol_short(int protocol)
+{
+    static const char *const names[] = {
+        "Auto",          "J1850 PWM",      "J1850 VPW",       "ISO 9141-2",
+        "KWP 5-baud",    "KWP fast",       "CAN 11-bit 500k", "CAN 29-bit 500k",
+        "CAN 11-bit 250k", "CAN 29-bit 250k", "J1939 CAN",     "USER1 CAN",
+        "USER2 CAN",
+    };
+    if (protocol < 0 || protocol >= (int)(sizeof names / sizeof names[0])) {
+        return "Unknown";
+    }
+    return names[protocol];
+}
+
 size_t elm_escape_raw(const char *raw, size_t len, char *out, size_t out_len)
 {
     static const char hex[] = "0123456789ABCDEF";

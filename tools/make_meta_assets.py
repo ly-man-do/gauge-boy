@@ -5,7 +5,8 @@ All three are original: drawn and synthesized here with the Python standard
 library only, no fonts or third-party art. Output goes to meta/:
 
   meta/icon.png    48x48   HOME menu icon (.3dsx SMDH and .cia)
-  meta/banner.png  256x128 top-screen banner shown when the icon is selected
+  meta/banner.png  256x128 top-screen banner shown when the icon is selected (rounded,
+                   see-through corners)
   meta/banner.wav  short chime played with the banner
 
 Run from the repo root:  python3 tools/make_meta_assets.py
@@ -166,7 +167,9 @@ def draw_text(c, x, y, text, scale, color, slant=0.0):
 
 
 def write_png(path, rows):
+    """RGB rows, or RGBA rows (4 values a pixel) for a picture with see-through parts."""
     h, w = len(rows), len(rows[0])
+    color_type = 6 if len(rows[0][0]) == 4 else 2
     raw = b"".join(b"\x00" + bytes(v for p in row for v in p) for row in rows)
 
     def chunk(tag, data):
@@ -174,7 +177,7 @@ def write_png(path, rows):
         return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
 
     png = (b"\x89PNG\r\n\x1a\n"
-           + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+           + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, color_type, 0, 0, 0))
            + chunk(b"IDAT", zlib.compress(raw, 9))
            + chunk(b"IEND", b""))
     with open(path, "wb") as f:
@@ -188,6 +191,9 @@ def make_icon():
     return c.downsample()
 
 
+BANNER_RADIUS = 14   # the banner's rounded corners, px (owner request 2026-11-19)
+
+
 def make_banner():
     c = Canvas(256, 128)
     c.gradient(BG_TOP, BG_BOTTOM)
@@ -198,7 +204,28 @@ def make_banner():
     draw_text(c, tx, 46, title, 2.2, TEXT, slant=0.25)
     c.rect(tx, 66, text_width(title, 2.2), 2, ACCENT)
     draw_text(c, tx, 72, "OBD-II DELUXE", 1.5, ACCENT, slant=0.25)
-    return c.downsample()
+    return round_corners(c.downsample(), BANNER_RADIUS)
+
+
+def round_corners(rows, r):
+    """The picture with see-through rounded corners of radius r (alpha from 4 x 4
+    samples a pixel, so the curve is smooth)."""
+    h, w = len(rows), len(rows[0])
+    out = []
+    for y in range(h):
+        row = []
+        for x in range(w):
+            inside = 0
+            for sy in range(SS):
+                for sx in range(SS):
+                    px, py = x + (sx + 0.5) / SS, y + (sy + 0.5) / SS
+                    cx = min(max(px, r), w - r)   # the nearest point of the inner rectangle
+                    cy = min(max(py, r), h - r)
+                    if (px - cx) ** 2 + (py - cy) ** 2 <= r * r:
+                        inside += 1
+            row.append(rows[y][x] + (round(255 * inside / (SS * SS)),))
+        out.append(row)
+    return out
 
 
 def make_chime(path):
