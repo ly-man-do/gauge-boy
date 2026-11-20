@@ -1,0 +1,100 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Gauge Boy start screen mockup v1</title>
+<style>@font-face { font-family: "Rodin"; src: local("FOT-Rodin ProN DB"); }  body { margin: 0; padding: 20px; background: #202020; font-family: "Rodin", ui-rounded, "SF Pro Rounded", system-ui, sans-serif; color: #ddd; }
+  h1 { font-size: 17px; margin: 0 0 4px; font-weight: 600; font-family: system-ui }
+  p.note { margin: 0 0 10px; color: #aaa; font-size: 12.5px; max-width: 980px; line-height: 1.5; font-family: system-ui }
+  .zoom { margin: 0 0 16px; display: flex; gap: 6px; } .zoom button { background:#333;color:#ddd;border:1px solid #555;border-radius:6px;padding:4px 10px;font:12px system-ui;cursor:pointer } .zoom button.on{background:#E2302A;border-color:#E2302A;color:#fff}
+  #wrap { transform-origin: top left; }
+  .states { display: flex; gap: 36px; }
+  .ds { display: flex; flex-direction: column; align-items: center; gap: 22px; width: 400px; }
+  .lbl { align-self: flex-start; font: 600 11px system-ui; color: #bbb; margin-bottom: -10px; }
+  .scr { position: relative; overflow: hidden; background: #000; box-shadow: 0 0 0 5px #0d0d0d, 0 0 0 6px #3a3a3a; color: #F2F4F5; font-weight: 700; }
+  .top { width: 400px; height: 240px; } .bot { width: 320px; height: 240px; }
+  .grid { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0 18px, rgba(255,255,255,.035) 18px 20px), repeating-linear-gradient(90deg, transparent 0 18px, rgba(255,255,255,.035) 18px 20px); }
+  .title { position: absolute; left: 0; right: 0; top: 22px; height: 30px; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 20px; }
+  .dots { position: absolute; left: 18px; right: 18px; top: 59px; height: 3px; background: radial-gradient(circle, #555 1.2px, transparent 1.5px) 0 50% / 8px 3px repeat-x; }
+  .panel { position: absolute; left: 17px; width: 366px; border-radius: 6px; background: #121212; box-shadow: inset 0 0 0 1px #2C2C2C; box-sizing: border-box; padding: 6px 10px; }
+  .row { display: flex; align-items: baseline; height: 20.5px; gap: 8px; white-space: nowrap; }
+  .row.s { height: 15.5px }
+  .tag { width: 90px; flex: none; height: 14px; line-height: 14px; border-radius: 4px; background: #2E2E2E; color: #D6D6D6; font-size: 10px; padding-left: 6px; box-sizing: border-box; align-self: center }
+  .v { font-size: 14px; min-width: 64px; text-align: right } .v2 { font-size: 14px } .u { font-size: 11.5px; color: #9C9C9C; font-weight: 400 }
+  .note { font-size: 11px; color: #9C9C9C; font-weight: 400; margin-top: 10px }
+  .warn { font-size: 12.5px; line-height: 1.35; color: #E8E8E8; font-weight: 400; padding: 6px 4px }
+  .codehd { position: absolute; left: 0; right: 0; top: 23px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .big { font-size: 26px; color: #FF5A4E; letter-spacing: 1px }
+  .pill { font-size: 10px; padding: 2px 7px; border-radius: 4px; background: #2E2E2E; color: #D6D6D6 }
+  .pill.amber { background: #5a3d10; color: #F2A52B }
+  .desc { position: absolute; left: 0; right: 0; top: 57px; text-align: center; font-size: 14px }
+  .ffl { position: absolute; left: 20px; top: 86px; font-size: 10.5px; color: #9C9C9C; font-weight: 400 }
+  .nbtn { position: absolute; box-sizing: border-box; border-style: solid; border-width: 16px; border-image-slice: 16 fill; border-image-width: 16px; }
+  .nlab { position: absolute; display: flex; box-sizing: border-box; align-items: center; justify-content: center; gap: 7px; font-size: 14px; color: #F2F4F5; }
+  .nlab.red { color: #FF5A4E }
+  .nlab > span { display: contents }
+  .crow { position: absolute; display: flex; align-items: center; gap: 10px; padding-left: 16px; box-sizing: border-box; font-size: 12.5px; white-space: nowrap; overflow: hidden }
+  .crow b { font-size: 15px; letter-spacing: .5px } .crow span { color: #D0D0D0; font-weight: 400 }
+  .seln { filter: brightness(.82) }
+  .selbar { position: absolute; left: 24px; width: 4px; z-index: 2; border-radius: 2px; background: #E2302A; height: 22px; margin-top: 7px; }
+  .tab { position: absolute; bottom: 0; height: 30px; line-height: 30px; text-align: center; font-size: 17px; color: #F2F4F5; text-shadow: 0 -1px 0 #141414; }
+  .cap { display: inline-block; font-size: 9px; line-height: 13px; padding: 0 5px; border-radius: 4px; background: #F2F4F5; color: #6C6C6C; vertical-align: 3px; margin-right: 5px; text-shadow: none; font-weight: 400 }
+  .ring { display: inline-block; width: 13px; height: 13px; line-height: 13px; border: 1.5px solid #F2F4F5; border-radius: 50%; font-size: 9px; vertical-align: 2px; margin-right: 5px; font-weight: 400 }
+  .seg { position: absolute; left: 10px; top: 6px; width: 300px; height: 36px; display: flex; background: #5B5B5B; border-radius: 9px; padding: 3px; box-sizing: border-box; gap: 2px; box-shadow: inset 0 0 0 1px #3c3c3c; }
+  .sg { flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px; font-size: 12.5px; background: linear-gradient(#777, #5f5f5f); border-radius: 6px; position: relative }
+  .sg.on { background: linear-gradient(#E44037, #D0372F); }
+  .notch { position: absolute; top: 0; left: 50%; margin-left: -5px; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 5px solid #8c1814; }
+  .cnt { font-size: 10px; min-width: 15px; height: 15px; line-height: 15px; border-radius: 8px; background: rgba(0,0,0,.35); text-align: center; padding: 0 3px; box-sizing: border-box }
+  .empty { position: absolute; left: 0; right: 0; text-align: center; font-size: 15px }
+  .empty.sub { font-size: 11px; color: #9C9C9C; font-weight: 400; line-height: 1.5 }
+  .mon { position: absolute; left: 20px; width: 262px; height: 32px; border-radius: 8px; background: #1a1a1a; box-shadow: inset 0 0 0 1px #2C2C2C; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; box-sizing: border-box; font-size: 13px }
+  .st { font-size: 11.5px; font-weight: 700 } .st.ok { color: #4FCB62 } .st.no { color: #F2A52B }
+  .dlg { position: absolute; left: 20px; top: 30px; width: 280px; height: 100px; border-radius: 10px; background: linear-gradient(#3a3a3a, #2a2a2a); box-shadow: inset 0 0 0 1px #4a4a4a, 0 3px 8px rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 0 22px; box-sizing: border-box }
+  .dlgt { font-size: 15px; text-align: center; line-height: 1.4 }
+  .nbtn.danger { filter: sepia(1) saturate(9) hue-rotate(-40deg) brightness(.82) contrast(1.1) }
+  .states { flex-wrap: wrap; width: 1308px; row-gap: 34px }
+  .mon.sel { background: #262626; box-shadow: inset 0 0 0 2px #E2302A }
+  .mon b { font-size: 14px; letter-spacing: .5px; flex: none; width: 58px } .mon .d { flex: 1; font-size: 11px; color: #C8C8C8; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .mon.sel b { color: #FF5A4E }
+  .hint { position: absolute; left: 0; right: 0; text-align: center; font-size: 12px; color: #9C9C9C; font-weight: 400 }
+  .states { width: 1308px }
+  .sp { position: absolute; left: 17px; width: 366px; border-radius: 6px; background: #121212; box-shadow: inset 0 0 0 1px #2C2C2C }
+  .cap2 { position: absolute; left: 0; right: 0; text-align: center; font-size: 11px; color: #9C9C9C; font-weight: 400 }
+  .big { position: absolute; left: 0; right: 0; text-align: center }
+  .kv { position: absolute; font-size: 11px; color: #9C9C9C; font-weight: 400; white-space: nowrap }
+  .kv b { color: #F2F4F5; font-size: 14px; font-weight: 700 }
+  .rank { position: absolute; width: 34px; height: 34px; border-radius: 9px; text-align: center; line-height: 34px; font-size: 24px; color: #000; background: #4FCB62 }
+  .chip { position: absolute; height: 15px; line-height: 15px; border-radius: 4px; padding: 0 6px; font-size: 10px; background: #2E2E2E; color: #D6D6D6 }
+  .stk { position: absolute; width: 88px; height: 46px; border-radius: 8px; background: #161616; box-shadow: inset 0 0 0 1px #2C2C2C; font-size: 9.5px; text-align: center; box-sizing: border-box; padding-top: 27px; color: #E8E8E8; line-height: 1.05 }
+  .stk.off { color: #6a6a6a }
+  .stk i { position: absolute; left: 33px; top: 4px; width: 22px; height: 22px; border-radius: 50%; font-style: normal; line-height: 22px; font-size: 13px; color: #000 }
+  .redbtn { position: absolute; border-radius: 10px; box-shadow: inset 0 0 0 2px rgba(0,0,0,.25) }
+  .dlg2 { position: absolute; left: 20px; top: 24px; width: 280px; height: 112px; border-radius: 10px; background: #303030; box-shadow: inset 0 0 0 1px #4a4a4a, 0 3px 8px rgba(0,0,0,.6); box-sizing: border-box; padding: 12px 18px; font-size: 12.5px; line-height: 1.38; text-align: center }
+  .stat { position: absolute; left: 0; right: 0; text-align: center; font-size: 12px }
+  .dlg3 { position: absolute; left: 20px; top: 24px; width: 280px; height: 112px; border-radius: 10px; background: #303030; box-shadow: inset 0 0 0 1px #4a4a4a, 0 3px 8px rgba(0,0,0,.6); box-sizing: border-box; padding: 0 18px; font-size: 13px; line-height: 1.4; display: flex; align-items: center; justify-content: center; text-align: center }
+  .info { position: absolute; left: 14px; top: 8px; width: 292px; height: 186px; border-radius: 6px; background: #121212; box-shadow: inset 0 0 0 1px #2C2C2C; box-sizing: border-box; padding: 9px 12px; font-size: 11px; font-weight: 400; color: #E0E0E0; line-height: 1.38 }
+  .info p { margin: 0 0 7px } .info h4 { margin: 0 0 6px; font-size: 12px; color: #F2F4F5 }
+  .srow { position: absolute; left: 14px; width: 292px; height: 36px; display: flex; align-items: center; box-sizing: border-box; padding: 0 14px; font-size: 14px; gap: 8px }
+  .srow .val { margin-left: auto; font-size: 12px; color: #C8C8C8; font-weight: 400 }
+  .srow .chev { font-size: 14px; color: #9C9C9C }
+  .logl { position: absolute; left: 24px; font-size: 10px; color: #C8C8C8; font-weight: 400; font-family: ui-monospace, Menlo, monospace; white-space: nowrap }
+.pulse { animation: pulse 2.4s ease-in-out infinite } @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }</style></head><body>
+<h1>Gauge Boy start screen, mockup v1 (night)</h1>
+<p class="note">The first screen: the safety notice (the brief's required text) under the HOME title, in an amber panel with a warning sign; the bottom says to tap, with a slowly pulsing ring. On an Old 3DS or 2DS, the unsupported-device screen in the same style. No status bar yet (the app hasn't started).</p>
+<div class="zoom"><button data-z="1">1x</button><button data-z="2" class="on">2x</button></div>
+<div id="wrap"><div class="states"><div class="ds"><div class="lbl">Start: the safety notice; a tap anywhere continues (the ring pulses)</div>
+<div class="scr top"><div class="grid"></div><div style="position:absolute;left:0;right:0;top:24px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:20px">
+  <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAABKUlEQVR42mNgGAWUgk9fviYA8Xogvg/E/6H4PlQsgRKDA9AMxYVBagJINXw+zICbt+/8b2pq/h8QEPBfS0sLjEFskBhIDsmi+SQZ/uz5C7AhMENxYZAakFqiLIEGC1gDsotxYVcDvf97vJ3/l0eGI1sSgM8CcJgT43JzXZ3/1wPd//+P8vs/xckGrAcWJ/hSCzhcSTEcRIP4IHGkOEnAZgEo2f0vLSsjaMF6Dwew4Z/CfeCGgzBIL9SC9TiDx9nZGafBoHhZm5oANzzI2BBFHqQXZzDBkhsuw/v6J8CT5I/lizAMh2GYGpItOHDoEFwziI1LHT4L8AYRsg9AbGxqCAURwUgGxQG+/EEokuHJFORCcjDeZIocTBTi+/hysgEQN1CIDUYruREGAAV54iU7mKbkAAAAAElFTkSuQmCC" style="width:24px;height:24px">GAUGE BOY: <span style="color:#FF8A2B">OBD-II DELUXE</span></div>
+  <div class="dots"></div><div style="position:absolute;right:20px;top:4px;font-size:10px;color:#7a7a7a;font-weight:400">version 0.5.0</div><div class="panel" style="top:72px;height:120px"></div><svg width="34" height="30" style="position:absolute;left:33px;top:86px"><polygon points="17,2 32,28 2,28" fill="#F2A52B"/><rect x="15.5" y="10" width="3" height="10" rx="1" fill="#000"/><rect x="15.5" y="22" width="3" height="3" rx="1" fill="#000"/></svg>
+  <div style="position:absolute;left:80px;top:86px;font-size:18px;color:#F2A52B">SAFETY NOTICE</div>
+  <div style="position:absolute;left:80px;top:114px;width:290px;font-size:14px;line-height:1.45">Not for use by the driver while driving. Use it parked, or let a passenger operate it.</div>
+  <div class="cap2" style="top:210px">Unofficial homebrew. Not made, endorsed or supported by Nintendo.</div></div>
+<div class="scr bot"><div class="grid"></div><div class="pulse" style="position:absolute;left:130px;top:56px;width:60px;height:60px;border-radius:50%;border:3px solid #F2F4F5;box-sizing:border-box"></div><div style="position:absolute;left:150px;top:76px;width:20px;height:20px;border-radius:50%;background:#F2F4F5"></div><div class="big" style="top:136px;font-size:17px;color:#F2F4F5;letter-spacing:0">Tap the touch screen to continue.</div></div></div><div class="ds"><div class="lbl">An Old 3DS or 2DS: unsupported, then it exits</div>
+<div class="scr top"><div class="grid"></div><div style="position:absolute;left:0;right:0;top:24px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:20px">
+  <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAABKUlEQVR42mNgGAWUgk9fviYA8Xogvg/E/6H4PlQsgRKDA9AMxYVBagJINXw+zICbt+/8b2pq/h8QEPBfS0sLjEFskBhIDsmi+SQZ/uz5C7AhMENxYZAakFqiLIEGC1gDsotxYVcDvf97vJ3/l0eGI1sSgM8CcJgT43JzXZ3/1wPd//+P8vs/xckGrAcWJ/hSCzhcSTEcRIP4IHGkOEnAZgEo2f0vLSsjaMF6Dwew4Z/CfeCGgzBIL9SC9TiDx9nZGafBoHhZm5oANzzI2BBFHqQXZzDBkhsuw/v6J8CT5I/lizAMh2GYGpItOHDoEFwziI1LHT4L8AYRsg9AbGxqCAURwUgGxQG+/EEokuHJFORCcjDeZIocTBTi+/hysgEQN1CIDUYruREGAAV54iU7mKbkAAAAAElFTkSuQmCC" style="width:24px;height:24px">GAUGE BOY: <span style="color:#FF8A2B">OBD-II DELUXE</span></div>
+  <div class="dots"></div><div style="position:absolute;right:20px;top:4px;font-size:10px;color:#7a7a7a;font-weight:400">version 0.5.0</div><div class="panel" style="top:72px;height:100px"></div>
+  <div style="position:absolute;left:32px;top:84px;font-size:18px;color:#FF5A4E">Unsupported device</div>
+  <div style="position:absolute;left:32px;top:112px;width:336px;font-size:14px;line-height:1.45">Gauge Boy needs a New 3DS, New 3DS XL or New 2DS XL.</div></div>
+<div class="scr bot"><div class="grid"></div><div class="big" style="top:96px;font-size:16px;color:#F2F4F5;letter-spacing:0">Tap the touch screen or</div><div class="big" style="top:120px;font-size:16px;color:#F2F4F5;letter-spacing:0">press <span class="cap" style="font-size:11px;vertical-align:2px">START</span> to exit.</div></div></div></div></div>
+<script>
+const wrap = document.getElementById('wrap');
+function setZ(z) { wrap.style.transform = 'scale(' + z + ')'; wrap.style.height = (560 * z) + 'px'; wrap.style.width = (872 * z) + 'px';
+  document.querySelectorAll('.zoom button').forEach(b => b.classList.toggle('on', b.dataset.z == z)); }
+document.querySelectorAll('.zoom button').forEach(b => b.onclick = () => setZ(+b.dataset.z)); setZ(1);
+</script></body></html>

@@ -2,14 +2,17 @@
 
 Every screen and button in the app as it is now. Kept up to date with each UI change (`CLAUDE.md` section 5).
 
-**As of:** 2026-11-19, LIVE's Custom PID picker as a list (gauge-boy-82l.26)
+**As of:** 2026-11-19, the start screens in the new style (gauge-boy-82l.27)
 
 The arrow (→) shows where a button goes or what it does. On the bottom screen everything is reached by touch; the physical buttons in brackets are optional shortcuts.
 
 ```
 Gauge Boy
-├── Unsupported device screen        (Old 3DS only: tap or START exits)
-└── Safety notice                    (tap the touch screen to continue)
+├── Unsupported device screen        (Old 3DS / 2DS only: the HOME title, "Unsupported device" and
+│                                     which consoles it needs; tap or START exits)
+└── Safety notice                    (top: the HOME title and version, the amber SAFETY NOTICE panel,
+                                     the unofficial line; bottom: a pulsing ring, tap the touch
+                                     screen to continue)
     └── HOME                         (graphics, night theme, the 3DS system pieces. Top screen:
                                      the HOME Menu's status bar (signal, Connected / Not
                                      Connected pill, date, time, battery), the GAUGE BOY:
