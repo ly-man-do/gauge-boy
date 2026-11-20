@@ -4,6 +4,8 @@ All notable changes to Gauge Boy are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
+The version is now 0.5.0 (owner decision 2026-11-19, for the UI polish work; the M3 to M5 epics are still open).
+
 ### Changed
 
 - **The .cia's HOME Menu banner has rounded corners** (see-through, 14 px), as the top-screen picture shown when Gauge Boy is selected. The icon is unchanged.

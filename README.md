@@ -12,7 +12,7 @@ A homebrew app for the New Nintendo 3DS family that connects to a car's OBD-II p
 
 ## Status
 
-**Early development: M2 live data done (0.2.0), M3 logging next.** The current release reads the car and its live data: **DIAG** shows the check engine light, readiness monitors, stored / pending / permanent codes with plain-English descriptions and the VIN, and clears codes behind a confirmation; **LIVE** shows the car's sensors in task-focused views with their refresh rates, battery voltage and manifold vacuum or boost; **TRIM** shows fuel trims for both banks. Gauge Boy finds the car by itself after connecting and shows its make, model and year. Everything is still on text screens except HOME: logging (M3) comes next, then the track modes (M4), then the toy-like 3D gauges and the rest of the visual style (M5, UI polish), done once all the screens exist.
+**Early development: version 0.5.0.** Gauge Boy reads the car and its live data, logs drives, and has the track modes and the Garage (with a photo of your car from the 3DS camera). Every screen now has the new look: the 3DS's own system buttons and bars in a night theme. **DIAG** shows the check engine light, readiness monitors, stored / pending / permanent codes with plain-English descriptions and clears codes behind a confirmation; **LIVE** shows the car's sensors in task-focused views and a Dashboard; **TRIM** shows fuel trims for both banks; **LOG** records and graphs drives. The toy-like 3D gauges, the mascot car and audio come next (M5 to M6).
 
 | Milestone | Version | Scope |
 |---|---|---|

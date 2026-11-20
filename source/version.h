@@ -3,7 +3,7 @@
 
 /* Semantic version: M0 = 0.0.x, M1 = 0.1.x ... M7 = 1.0.0. */
 #define GB_VERSION_MAJOR 0
-#define GB_VERSION_MINOR 2
+#define GB_VERSION_MINOR 5
 #define GB_VERSION_PATCH 0
 
 #define GB_STR_(x) #x
